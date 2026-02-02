@@ -161,6 +161,20 @@ body {
     position: relative;
     z-index: 1;
 }
+.geocoder-container {
+    flex: 1;
+}
+.input-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+}
+.input-actions .icon-btn {
+    width: 36px;
+    height: 36px;
+    margin: 0; /* Remove horizontal margins */
+}
+
 /* Fix: Ensure the first dropdown appears on top of the second input */
 .location-input-wrapper:nth-child(1) { z-index: 20; }
 .location-input-wrapper:nth-child(2) { z-index: 10; }
@@ -232,6 +246,31 @@ body {
     margin-top: 16px;
 }
 .nav-btn-large:hover { background-color: #27ae60; }
+
+/* Style for the "Add Destination" button to be less prominent */
+#add-destination-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px; /* Further reduced padding */
+    margin-bottom: 12px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    background-color: #f1f3f4;
+    color: var(--text-secondary);
+    border: 1px dashed var(--border-color);
+    transition: all 0.2s;
+    font-size: 0.85rem;
+    min-height: 32px;
+}
+#add-destination-btn:hover {
+    background-color: #e8e8e8;
+    border-style: solid;
+    color: var(--text-primary);
+}
 
 /* 6. Directions & Stats */
 #stats-container {
@@ -522,8 +561,14 @@ body.nav-mode .map-controls-stack {
 
 /* Reverse Button */
 .reverse-btn {
-    margin-right: 8px;
+    margin-right: 0;
     border-style: dashed;
+    color: var(--accent-blue);
+}
+
+/* Round Trip Button */
+.round-trip-btn {
+    margin-right: 0;
     color: var(--accent-blue);
 }
 
@@ -592,6 +637,24 @@ body.nav-mode .map-controls-stack {
     font-size: 20px;
     cursor: pointer;
     text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Route Card UI */
+.route-card {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    transition: all 0.2s ease;
+    position: relative;
+}
+.route-card:hover {
+    border-color: var(--accent-blue);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.route-card.selected {
+    border: 2px solid var(--accent-blue);
+    background-color: rgba(26, 115, 232, 0.03);
 }
 
 /* Route Planning Options */
