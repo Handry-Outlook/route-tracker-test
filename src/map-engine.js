@@ -132,7 +132,7 @@ export const addRouteMarkers = (map, waypoints, onDragEnd) => {
  * Fetches route alternatives from Mapbox API
  * Returns an array of route objects (does not draw them)
  */
-export const fetchRouteAlternatives = async (coordinates) => {
+export const fetchRouteAlternatives = async (coordinates, options = {}) => {
     try {
         // Safety check for invalid coordinates
         if (!coordinates || coordinates.length < 2 || coordinates.some(c => !c)) return null;
@@ -141,7 +141,11 @@ export const fetchRouteAlternatives = async (coordinates) => {
         const coordString = coordinates.map(c => c.join(',')).join(';');
 
         // Base URL
-        const baseUrl = `https://api.mapbox.com/directions/v5/mapbox/cycling/${coordString}?geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`;
+        let baseUrl = `https://api.mapbox.com/directions/v5/mapbox/cycling/${coordString}?geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`;
+
+        if (options.bearings) {
+            baseUrl += `&bearings=${options.bearings}`;
+        }
 
         // Strategy: Fetch standard alternatives + variations to maximize options
         // 1. Standard (alternatives=true)

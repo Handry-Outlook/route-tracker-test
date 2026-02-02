@@ -9,6 +9,7 @@ import { MAPBOX_TOKEN } from './config.js';
 let currentUser = null;
 let currentRouteData = null;
 let waypoints = [null, null]; // Array to hold coordinates for multi-stop routes
+let currentFeatures = [null, null]; // Store full GeoJSON features for favorites
 let geocoders = [];
 let userLocation = null;
 let watchId = null;
@@ -31,7 +32,10 @@ let mockIntervalId = null; // To track simulated movement on HTTP
 let currentMapStyle = 'mapbox://styles/mapbox/navigation-night-v1'; // Default
 let lastWeatherFetchDist = 0; // Track distance for weather throttling
 const WEATHER_FETCH_INTERVAL_KM = 25; // Fetch weather every 25km during animation
-let inactivityTimer = null; // Timer to track user inactivity
+
+let recentLocations = []; // Track history for bearing calculation
+let lastKnownHeading = 0;
+let isRerouting = false;
 
 const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -41,36 +45,72 @@ const GEO_OPTIONS = {
 
 const map = initMap('map');
 
-// --- INACTIVITY TRACKING ---
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+// --- HISTORY HELPERS ---
+const addToHistory = (feature) => {
+    if (!feature || !feature.place_name) return;
+    try {
+        let history = JSON.parse(localStorage.getItem('location_history') || '[]');
+        // Remove duplicates (by id or place_name)
+        history = history.filter(item => item.id !== feature.id && item.place_name !== feature.place_name);
+        // Add new item to start
+        history.unshift(feature);
+        // Limit to 5 items
+        if (history.length > 5) history.pop();
+        localStorage.setItem('location_history', JSON.stringify(history));
+    } catch (e) {
+        console.error("Error saving history:", e);
+    }
+};
 
-function stopTrackingDueToInactivity() {
-    if (isNavigating) {
-        console.log("Stopping navigation due to inactivity.");
-        speak("Stopping navigation due to inactivity.");
-        toggleNavigation(); // This will handle UI and state changes.
-    }
-}
+const getFavorites = () => JSON.parse(localStorage.getItem('location_favorites') || '[]');
 
-function resetInactivityTimer() {
-    if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
+const toggleFavorite = (index, btn) => {
+    const feature = currentFeatures[index];
+    if (!feature) return;
+
+    let favs = getFavorites();
+    const existingIdx = favs.findIndex(f => f.place_name === feature.place_name);
+
+    if (existingIdx > -1) {
+        favs.splice(existingIdx, 1); // Remove
+        btn.classList.remove('active');
+        btn.innerHTML = `<i data-feather="star"></i>`;
+    } else {
+        favs.push(feature); // Add
+        btn.classList.add('active');
+        btn.innerHTML = `<i data-feather="star" fill="currentColor"></i>`;
     }
-    // Only set a new timer if navigation is active.
-    if (isNavigating) {
-        inactivityTimer = setTimeout(stopTrackingDueToInactivity, INACTIVITY_TIMEOUT);
+    localStorage.setItem('location_favorites', JSON.stringify(favs));
+    if (feather) feather.replace();
+};
+
+const searchLocal = (query) => {
+    try {
+        const favorites = getFavorites().map(item => {
+            if (!item.properties) item.properties = {};
+            item.properties.maki = 'star'; 
+            item.place_name = '⭐ ' + item.place_name.replace('⭐ ', ''); // Visual cue
+            return item;
+        });
+
+        const history = JSON.parse(localStorage.getItem('location_history') || '[]');
+        const historyItems = history.map(item => {
+            if (!item.properties) item.properties = {};
+            item.properties.maki = 'clock'; 
+            return item;
+        });
+
+        const all = [...favorites, ...historyItems];
+        return all.filter(item => item.place_name.toLowerCase().includes(query.toLowerCase()));
+    } catch (e) {
+        return [];
     }
-}
+};
 
 
 document.addEventListener('DOMContentLoaded', () => {
     injectCustomStyles();
     initTheme();
-
-    // Setup inactivity listeners
-    ['click', 'mousemove', 'keypress', 'touchstart'].forEach(event => {
-        document.addEventListener(event, resetInactivityTimer, { passive: true });
-    });
 
     // --- AUTH ---
     const loginBtn = document.getElementById('login-btn');
@@ -230,6 +270,26 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     document.getElementById('directions-tab').parentNode.appendChild(weatherTabContent);
 
+    // --- INJECT FAVORITES TAB ---
+    const favTabBtn = document.createElement('button');
+    favTabBtn.className = 'tab-btn';
+    favTabBtn.dataset.tab = 'favorites';
+    favTabBtn.innerHTML = 'Favorites';
+    favTabBtn.addEventListener('click', () => {
+        switchTab('favorites');
+        loadFavoritesList();
+    });
+    tabContainer.appendChild(favTabBtn);
+
+    const favTabContent = document.createElement('div');
+    favTabContent.id = 'favorites-tab';
+    favTabContent.className = 'tab-content';
+    favTabContent.innerHTML = `
+        <div class="title-container"><h3>Favorite Locations</h3></div>
+        <div id="favorites-list" class="favorites-list"></div>
+    `;
+    document.getElementById('directions-tab').parentNode.appendChild(favTabContent);
+
     // --- INJECT COLLAPSE BUTTON (Mobile) ---
     if (tabContainer) {
         const collapseBtn = document.createElement('button');
@@ -279,6 +339,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const startWrapper = document.querySelector('.location-input-wrapper');
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'input-actions';
+    
+    // Add Star Button for Start
+    const starBtnStart = document.createElement('button');
+    starBtnStart.className = 'icon-btn star-btn';
+    starBtnStart.innerHTML = `<i data-feather="star"></i>`;
+    starBtnStart.title = "Save to Favorites";
+    starBtnStart.onclick = (e) => toggleFavorite(0, e.currentTarget);
+    actionsDiv.appendChild(starBtnStart);
     startWrapper.appendChild(actionsDiv);
 
     // Move existing locate-me-btn into the stack
@@ -300,6 +368,18 @@ document.addEventListener('DOMContentLoaded', () => {
     roundTripBtn.title = "Round Trip";
     roundTripBtn.onclick = makeRoundTrip;
     actionsDiv.appendChild(roundTripBtn);
+
+    // Add Actions for Destination (End)
+    const endWrapper = document.querySelectorAll('.location-input-wrapper')[1];
+    const endActionsDiv = document.createElement('div');
+    endActionsDiv.className = 'input-actions';
+    const starBtnEnd = document.createElement('button');
+    starBtnEnd.className = 'icon-btn star-btn';
+    starBtnEnd.innerHTML = `<i data-feather="star"></i>`;
+    starBtnEnd.title = "Save to Favorites";
+    starBtnEnd.onclick = (e) => toggleFavorite(1, e.currentTarget);
+    endActionsDiv.appendChild(starBtnEnd);
+    endWrapper.appendChild(endActionsDiv);
 
     document.getElementById('add-destination-btn').addEventListener('click', addDestination);
     document.getElementById('plan-btn').addEventListener('click', calculateRoute);
@@ -610,12 +690,32 @@ function createGeocoder(containerId, placeholder, index) {
         placeholder: placeholder,
         collapsed: false,
         clearOnBlur: false,
-        marker: false // We handle markers manually
+        marker: false, // We handle markers manually
+        localGeocoder: searchLocal,
+        localGeocoderOnly: false
     });
 
     // When a result is selected
     geocoder.on('result', async (e) => {
+        addToHistory(e.result);
+        currentFeatures[index] = e.result; // Store feature for favorites
         const coords = e.result.center; // [lng, lat]
+
+        // Lock dropdown
+        const wrapper = document.getElementById(containerId).closest('.location-input-wrapper');
+        if (wrapper) wrapper.classList.add('location-set');
+
+        // Update Star Button State
+        const container = document.getElementById(containerId);
+        if (container && container.parentElement) {
+            const btn = container.parentElement.querySelector('.star-btn');
+            if (btn) {
+                const isFav = getFavorites().some(f => f.place_name === e.result.place_name);
+                btn.classList.toggle('active', isFav);
+                btn.innerHTML = isFav ? `<i data-feather="star" fill="currentColor"></i>` : `<i data-feather="star"></i>`;
+                if (feather) feather.replace();
+            }
+        }
 
         waypoints[index] = coords;
 
@@ -644,6 +744,20 @@ function createGeocoder(containerId, placeholder, index) {
     // When cleared
     geocoder.on('clear', () => {
         waypoints[index] = null;
+        currentFeatures[index] = null;
+        // Unlock dropdown
+        const wrapper = document.getElementById(containerId).closest('.location-input-wrapper');
+        if (wrapper) wrapper.classList.remove('location-set');
+
+        const container = document.getElementById(containerId);
+        if (container && container.parentElement) {
+            const btn = container.parentElement.querySelector('.star-btn');
+            if (btn) {
+                btn.classList.remove('active');
+                btn.innerHTML = `<i data-feather="star"></i>`;
+                if (feather) feather.replace();
+            }
+        }
         const validWaypoints = waypoints.filter(w => w);
         addRouteMarkers(map, validWaypoints, handleMarkerDrag);
 
@@ -653,6 +767,14 @@ function createGeocoder(containerId, placeholder, index) {
             // (call your existing reset functions here)
         }
     });
+
+    // Unlock on typing
+    if (geocoder._inputEl) {
+        geocoder._inputEl.addEventListener('input', () => {
+            const wrapper = document.getElementById(containerId).closest('.location-input-wrapper');
+            if (wrapper) wrapper.classList.remove('location-set');
+        });
+    }
 
     // Append to DOM
     const container = document.getElementById(containerId);
@@ -667,6 +789,7 @@ function addDestination() {
     const destinationList = document.getElementById('destination-list');
     const newIndex = waypoints.length;
     waypoints.push(null);
+    currentFeatures.push(null);
 
     const wrapper = document.createElement('div');
     wrapper.className = 'location-input-wrapper';
@@ -676,21 +799,55 @@ function addDestination() {
     wrapper.appendChild(container);
     destinationList.appendChild(wrapper);
 
+    // Add Actions (Star Button)
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'input-actions';
+    const starBtn = document.createElement('button');
+    starBtn.className = 'icon-btn star-btn';
+    starBtn.innerHTML = `<i data-feather="star"></i>`;
+    starBtn.title = "Save to Favorites";
+    starBtn.onclick = (e) => toggleFavorite(newIndex, e.currentTarget);
+    actionsDiv.appendChild(starBtn);
+    wrapper.appendChild(actionsDiv);
+
     const geocoder = new MapboxGeocoder({
         accessToken: MAPBOX_TOKEN,
         mapboxgl: mapboxgl,
         placeholder: `Choose destination #${newIndex}...`,
-        marker: false
+        marker: false,
+        localGeocoder: searchLocal
     });
 
     container.appendChild(geocoder.onAdd(map));
     geocoders.push(geocoder);
 
     geocoder.on('result', (e) => {
+        addToHistory(e.result);
+        currentFeatures[newIndex] = e.result;
+
+        wrapper.classList.add('location-set');
+        
+        const isFav = getFavorites().some(f => f.place_name === e.result.place_name);
+        starBtn.classList.toggle('active', isFav);
+        starBtn.innerHTML = isFav ? `<i data-feather="star" fill="currentColor"></i>` : `<i data-feather="star"></i>`;
+        if (feather) feather.replace();
+
         waypoints[newIndex] = e.result.center;
         addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
     });
-    geocoder.on('clear', () => { waypoints[newIndex] = null; });
+    geocoder.on('clear', () => { 
+        waypoints[newIndex] = null; 
+        currentFeatures[newIndex] = null;
+        wrapper.classList.remove('location-set');
+        starBtn.classList.remove('active');
+        starBtn.innerHTML = `<i data-feather="star"></i>`;
+        if (feather) feather.replace();
+    });
+
+    if (geocoder._inputEl) {
+        geocoder._inputEl.addEventListener('input', () => wrapper.classList.remove('location-set'));
+    }
+    if (feather) feather.replace();
 }
 
 function insertIntermediateWaypoint(coords) {
@@ -700,6 +857,7 @@ function insertIntermediateWaypoint(coords) {
     
     // 2. Update Data Arrays
     waypoints.splice(insertIndex, 0, coords);
+    currentFeatures.splice(insertIndex, 0, null); // Placeholder
     
     // 3. Update UI (Insert Input Field)
     const destinationList = document.getElementById('destination-list');
@@ -715,11 +873,23 @@ function insertIntermediateWaypoint(coords) {
     // Insert before the final destination input
     destinationList.insertBefore(wrapper, lastWrapper);
 
+    // Add Actions (Star Button)
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'input-actions';
+    const starBtn = document.createElement('button');
+    starBtn.className = 'icon-btn star-btn';
+    starBtn.innerHTML = `<i data-feather="star"></i>`;
+    starBtn.title = "Save to Favorites";
+    starBtn.onclick = (e) => toggleFavorite(insertIndex, e.currentTarget);
+    actionsDiv.appendChild(starBtn);
+    wrapper.appendChild(actionsDiv);
+
     const geocoder = new MapboxGeocoder({
         accessToken: MAPBOX_TOKEN,
         mapboxgl: mapboxgl,
         placeholder: `Via point...`,
-        marker: false
+        marker: false,
+        localGeocoder: searchLocal
     });
 
     container.appendChild(geocoder.onAdd(map));
@@ -727,11 +897,34 @@ function insertIntermediateWaypoint(coords) {
     // Sync Geocoder List
     geocoders.splice(insertIndex, 0, geocoder);
 
+    // Save to history when used
+    geocoder.on('result', (e) => {
+        addToHistory(e.result);
+        currentFeatures[insertIndex] = e.result;
+
+        wrapper.classList.add('location-set');
+
+        const isFav = getFavorites().some(f => f.place_name === e.result.place_name);
+        starBtn.classList.toggle('active', isFav);
+        starBtn.innerHTML = isFav ? `<i data-feather="star" fill="currentColor"></i>` : `<i data-feather="star"></i>`;
+        if (feather) feather.replace();
+
+        waypoints[insertIndex] = e.result.center;
+        addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
+        calculateRoute();
+    });
+
+    if (geocoder._inputEl) {
+        geocoder._inputEl.addEventListener('input', () => wrapper.classList.remove('location-set'));
+    }
+    
+    if (feather) feather.replace();
+
     // 4. Trigger Route Recalculation
     calculateRoute();
 }
 
-async function calculateRoute() {
+async function calculateRoute(options = {}) {
     const planBtn = document.getElementById('plan-btn');
     const originalContent = planBtn.innerHTML;
 
@@ -741,12 +934,17 @@ async function calculateRoute() {
             return alert("Please select at least a start and end point.");
         }
 
+        // Auto-zoom to fit all waypoints
+        const bounds = new mapboxgl.LngLatBounds();
+        validWaypoints.forEach(pt => bounds.extend(pt));
+        map.fitBounds(bounds, { padding: 100, maxZoom: 15 });
+
         planBtn.disabled = true;
         planBtn.innerHTML = `<i data-feather="loader" class="spin-anim"></i> Planning...`;
         if (feather) feather.replace();
 
         // 1. Fetch Alternatives
-        const routes = await fetchRouteAlternatives(validWaypoints);
+        const routes = await fetchRouteAlternatives(validWaypoints, options);
         
         if (!routes || routes.length === 0) return;
 
@@ -845,6 +1043,7 @@ async function calculateRoute() {
 
 function resetRoutePlanner() {
     waypoints = [null, null];
+    currentFeatures = [null, null];
     geocoders.forEach(g => g.clear());
 
     const destinationList = document.getElementById('destination-list');
@@ -852,6 +1051,7 @@ function resetRoutePlanner() {
         <div class="location-input-wrapper">
             <div id="geocoder-start" class="geocoder-container"></div>
             <div class="input-actions">
+                <button class="icon-btn star-btn" title="Save to Favorites" onclick="toggleFavorite(0, this)"><i data-feather="star"></i></button>
                 <button class="icon-btn locate-me-btn" title="Use current location"><i data-feather="crosshair"></i></button>
                 <button class="icon-btn reverse-btn" title="Reverse Route" onclick="reverseRoute()">
                     <i data-feather="refresh-cw"></i>
@@ -863,6 +1063,9 @@ function resetRoutePlanner() {
         </div>
         <div class="location-input-wrapper">
             <div id="geocoder-end" class="geocoder-container"></div>
+            <div class="input-actions">
+                <button class="icon-btn star-btn" title="Save to Favorites" onclick="toggleFavorite(1, this)"><i data-feather="star"></i></button>
+            </div>
         </div>
     `;
     geocoders = [];
@@ -902,6 +1105,10 @@ function reverseRoute() {
     const tempCoords = waypoints[0];
     waypoints[0] = waypoints[1];
     waypoints[1] = tempCoords;
+    
+    const tempFeat = currentFeatures[0];
+    currentFeatures[0] = currentFeatures[1];
+    currentFeatures[1] = tempFeat;
 
     // 2. Swap Input Values (Visual)
     const inputStart = geocoders[0]._inputEl;
@@ -911,6 +1118,23 @@ function reverseRoute() {
     // We set values directly to avoid triggering double searches
     inputStart.value = inputEnd.value;
     inputEnd.value = tempText;
+
+    if (inputStart.value) inputStart.closest('.location-input-wrapper').classList.add('location-set');
+    else inputStart.closest('.location-input-wrapper').classList.remove('location-set');
+    if (inputEnd.value) inputEnd.closest('.location-input-wrapper').classList.add('location-set');
+    else inputEnd.closest('.location-input-wrapper').classList.remove('location-set');
+
+    // 3. Update Star Buttons
+    const startBtn = document.querySelectorAll('.star-btn')[0];
+    const endBtn = document.querySelectorAll('.star-btn')[1];
+    
+    const isStartFav = currentFeatures[0] && getFavorites().some(f => f.place_name === currentFeatures[0].place_name);
+    const isEndFav = currentFeatures[1] && getFavorites().some(f => f.place_name === currentFeatures[1].place_name);
+    
+    if (startBtn) { startBtn.classList.toggle('active', isStartFav); startBtn.innerHTML = isStartFav ? `<i data-feather="star" fill="currentColor"></i>` : `<i data-feather="star"></i>`; }
+    if (endBtn) { endBtn.classList.toggle('active', isEndFav); endBtn.innerHTML = isEndFav ? `<i data-feather="star" fill="currentColor"></i>` : `<i data-feather="star"></i>`; }
+    
+    if (feather) feather.replace();
 
     // 3. Recalculate if we have a route
     if (waypoints[0] && waypoints[1]) calculateRoute();
@@ -930,6 +1154,9 @@ function makeRoundTrip() {
     if (geocoders[0] && geocoders[lastIndex]) {
         const startInput = geocoders[0]._inputEl || document.querySelector('#geocoder-start input');
         if (startInput) geocoders[lastIndex].setInput(startInput.value);
+        if (geocoders[lastIndex]._inputEl) {
+            geocoders[lastIndex]._inputEl.closest('.location-input-wrapper').classList.add('location-set');
+        }
     }
 
     addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
@@ -1663,6 +1890,9 @@ const loadSavedList = async () => {
                 geocoders.forEach(g => g.clear());
                 waypoints.forEach((wp, i) => {
                     if (geocoders[i]) geocoders[i].setInput(i === 0 ? "Saved Start" : i === waypoints.length - 1 ? "Saved Dest" : "Saved Stop");
+                    if (geocoders[i] && geocoders[i]._inputEl) {
+                        geocoders[i]._inputEl.closest('.location-input-wrapper').classList.add('location-set');
+                    }
                 });
 
                 switchTab('directions');
@@ -1701,6 +1931,9 @@ function locateUser() {
         const address = data.features[0]?.place_name || "Current Location";
 
         geocoders[0].setInput(address);
+        if (geocoders[0]._inputEl) {
+            geocoders[0]._inputEl.closest('.location-input-wrapper').classList.add('location-set');
+        }
         map.flyTo({ center: [longitude, latitude], zoom: 14 });
         addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
     };
@@ -1936,7 +2169,6 @@ function startLiveTracking() {
 
     speak("Starting navigation.");
     isNavigating = true;
-    resetInactivityTimer(); // Start/reset the inactivity timer
 
     // Check if user is near the start point
     const checkProximity = (pos) => {
@@ -2042,6 +2274,8 @@ function manualReroute() {
 }
 
 function handlePositionUpdate(userPos, heading, speed) {
+    lastKnownHeading = heading;
+
     // Update User Marker
     if (!userMarker) {
         const el = document.createElement('div');
@@ -2063,6 +2297,25 @@ function handlePositionUpdate(userPos, heading, speed) {
             cameraOptions.bearing = heading; // Rotate map to match device movement
         }
         map.easeTo(cameraOptions);
+    }
+
+    // --- OFF-ROUTE DETECTION & REROUTING ---
+    // Track history for bearing calculation (Trend)
+    const now = Date.now();
+    recentLocations.push({ coords: userPos, timestamp: now });
+    // Keep last 10s of history
+    recentLocations = recentLocations.filter(l => now - l.timestamp < 10000);
+
+    if (isNavigating && currentRouteData && !isRerouting) {
+        const routeLine = turf.lineString(currentRouteData.geometry.coordinates);
+        const pt = turf.point(userPos);
+        // Check distance to route line
+        const dist = turf.pointToLineDistance(pt, routeLine, { units: 'kilometers' });
+        
+        if (dist > 0.05) { // > 50 meters off-track
+            console.log(`Off-route detected (${(dist*1000).toFixed(0)}m). Rerouting...`);
+            performAutomaticReroute(userPos);
+        }
     }
 
     // --- AUTO THEME SWITCHING (Nav Mode) ---
@@ -2111,6 +2364,50 @@ function handlePositionUpdate(userPos, heading, speed) {
                 lastSpokenStepIndex = index;
             }
         });
+    }
+}
+
+async function performAutomaticReroute(userPos) {
+    isRerouting = true;
+    speak("Rerouting...");
+
+    // Update start point to current location
+    waypoints[0] = userPos;
+    if (geocoders[0]) geocoders[0].setInput("Current Location");
+
+    // Calculate Bearing based on trend (past 4 seconds)
+    let bearing = 0;
+    const targetTime = Date.now() - 4000;
+    // Find closest point in history to targetTime
+    const prevItem = recentLocations.reduce((prev, curr) => 
+        Math.abs(curr.timestamp - targetTime) < Math.abs(prev.timestamp - targetTime) ? curr : prev
+    , recentLocations[0]);
+
+    if (prevItem && turf.distance(prevItem.coords, userPos, {units: 'meters'}) > 5) {
+        bearing = turf.bearing(prevItem.coords, userPos);
+        bearing = (bearing + 360) % 360; // Normalize to 0-360
+    } else if (lastKnownHeading !== null && lastKnownHeading !== undefined) {
+         bearing = lastKnownHeading;
+    }
+
+    // Format for Mapbox: "angle,tolerance"
+    // We apply this bearing constraint ONLY to the start point.
+    const bearingStr = `${Math.round(bearing)},45`;
+    const validWps = waypoints.filter(w => w);
+    // Param format: "90,45;;;" (semicolon for each subsequent waypoint)
+    const bearingsParam = bearingStr + ';' + Array(validWps.length - 1).fill('').join(';');
+
+    // Update UI to show activity
+    const navInstr = document.getElementById('nav-instr');
+    if (navInstr) navInstr.innerHTML = `<i data-feather="loader" class="spin-anim"></i> Rerouting...`;
+    if (feather) feather.replace();
+
+    try {
+        await calculateRoute({ bearings: bearingsParam });
+    } catch (e) {
+        console.error("Reroute failed", e);
+    } finally {
+        isRerouting = false;
     }
 }
 
@@ -2240,12 +2537,6 @@ function stopLiveTracking() {
     mockIntervalId = null;
     isNavigating = false;
     lastSpokenStepIndex = -1;
-
-    // Clear the inactivity timer
-    if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-        inactivityTimer = null;
-    }
 }
 
 // --- THEME & SHARING ---
@@ -2389,6 +2680,9 @@ async function checkUrlForRoute() {
             
             waypoints.forEach((wp, i) => {
                 if (geocoders[i]) geocoders[i].setInput(i === 0 ? "Shared Start" : i === waypoints.length - 1 ? "Shared Dest" : "Shared Stop");
+                if (geocoders[i] && geocoders[i]._inputEl) {
+                    geocoders[i]._inputEl.closest('.location-input-wrapper').classList.add('location-set');
+                }
             });
 
             addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
@@ -2417,6 +2711,9 @@ async function checkUrlForRoute() {
                 const data = await res.json();
                 if (data.features && data.features[0] && geocoders[index]) {
                     geocoders[index].setInput(data.features[0].place_name);
+                    if (geocoders[index]._inputEl) {
+                        geocoders[index]._inputEl.closest('.location-input-wrapper').classList.add('location-set');
+                    }
                 }
             } catch (e) { console.error("Reverse geocode failed", e); }
         };
@@ -2433,6 +2730,8 @@ async function checkUrlForRoute() {
         // Update Geocoders visually (reverse geocoding optional but good)
         geocoders[0].setInput(start);
         geocoders[1].setInput(end);
+        if (geocoders[0]._inputEl) geocoders[0]._inputEl.closest('.location-input-wrapper').classList.add('location-set');
+        if (geocoders[1]._inputEl) geocoders[1]._inputEl.closest('.location-input-wrapper').classList.add('location-set');
 
         addRouteMarkers(map, waypoints, handleMarkerDrag);
         calculateRoute();
@@ -2930,4 +3229,111 @@ async function captureRouteSnapshot() {
         };
         img.src = dataURL;
     });
+}
+
+function loadFavoritesList() {
+    const list = document.getElementById('favorites-list');
+    if (!list) return;
+    
+    const favorites = getFavorites();
+    
+    if (favorites.length === 0) {
+        list.innerHTML = '<p class="empty-state">No favorite locations yet.<br><small>Star locations in the search bar to add them here.</small></p>';
+        return;
+    }
+
+    list.innerHTML = '';
+    favorites.forEach((fav, index) => {
+        const div = document.createElement('div');
+        div.className = 'saved-route-item';
+
+        const contentDiv = document.createElement('div');
+        contentDiv.style.flex = '1';
+        const title = fav.text || fav.place_name.split(',')[0];
+        contentDiv.innerHTML = `
+            <div style="font-weight:600;">${title}</div>
+            <div style="font-size:0.8em; color:var(--text-secondary);">${fav.place_name}</div>
+        `;
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.display = 'flex';
+        actionsDiv.style.gap = '4px';
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-route-btn';
+        delBtn.innerHTML = '<i data-feather="trash-2"></i>';
+        delBtn.title = "Remove Favorite";
+        delBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (confirm(`Remove "${title}" from favorites?`)) {
+                removeFavorite(index);
+            }
+        };
+
+        div.appendChild(contentDiv);
+        div.appendChild(actionsDiv);
+        actionsDiv.appendChild(delBtn);
+
+        div.onclick = () => {
+            switchTab('plan');
+
+            // Set as Destination (Last Waypoint)
+            const destIndex = waypoints.length - 1;
+            
+            if (geocoders[destIndex]) {
+                geocoders[destIndex].setInput(fav.place_name);
+                if (geocoders[destIndex]._inputEl) {
+                    geocoders[destIndex]._inputEl.closest('.location-input-wrapper').classList.add('location-set');
+                }
+            }
+            waypoints[destIndex] = fav.center;
+            currentFeatures[destIndex] = fav;
+
+            // Update Star Button
+            const wrappers = document.querySelectorAll('.location-input-wrapper');
+            if (wrappers[destIndex]) {
+                const starBtn = wrappers[destIndex].querySelector('.star-btn');
+                if (starBtn) {
+                    starBtn.classList.add('active');
+                    starBtn.innerHTML = `<i data-feather="star" fill="currentColor"></i>`;
+                    if (feather) feather.replace();
+                }
+            }
+
+            if (!waypoints[0]) {
+                locateUser();
+            } else {
+                addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
+                calculateRoute();
+            }
+            map.flyTo({ center: fav.center, zoom: 14 });
+        };
+
+        list.appendChild(div);
+    });
+    if (feather) feather.replace();
+}
+
+function removeFavorite(index) {
+    let favs = getFavorites();
+    favs.splice(index, 1);
+    localStorage.setItem('location_favorites', JSON.stringify(favs));
+    loadFavoritesList();
+    updateStarButtons();
+}
+
+function updateStarButtons() {
+    const favs = getFavorites();
+    document.querySelectorAll('.star-btn').forEach((btn, i) => {
+        const feature = currentFeatures[i];
+        if (feature) {
+            const isFav = favs.some(f => f.place_name === feature.place_name);
+            btn.classList.toggle('active', isFav);
+            btn.innerHTML = isFav ? `<i data-feather="star" fill="currentColor"></i>` : `<i data-feather="star"></i>`;
+        } else {
+             btn.classList.remove('active');
+             btn.innerHTML = `<i data-feather="star"></i>`;
+        }
+    });
+    if (feather) feather.replace();
 }
