@@ -256,23 +256,54 @@ body {
 /* 6. Directions & Stats */
 #stats-container {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 16px;
     margin-bottom: 16px;
 }
+/* Improved Stats Container – Perfectly Uniform Boxes */
+#stats-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
 .stat-box {
     background: #f8f9fa;
-    padding: 12px;
+    padding: 14px 12px;
     border-radius: 8px;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 90px; /* Increased slightly for better breathing room */
+    height: 90px; /* Fixed height to force absolute uniformity */
+    overflow: hidden; /* Prevent any overflow from breaking layout */
 }
+
 .stat-box .label {
-    font-size: 0.8rem;
+    font-size: 0.75rem; /* Slightly smaller to reduce wrapping needs */
     color: var(--text-secondary);
+    margin-bottom: 6px;
+    line-height: 1.3;
+    word-wrap: break-word;
+    
+    /* Clamp to exactly 2 lines max – prevents height variation */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    
+    /* Extra safety for very long labels */
+    max-height: 2.6em;
 }
+
 .stat-box .value {
-    font-size: 1.2rem;
+    font-size: 1.35rem;
     font-weight: 700;
+    line-height: 1;
+    margin-top: auto; /* Pushes value to bottom if label is short */
 }
 #weather-summary {
     text-align: center;
@@ -423,7 +454,18 @@ body {
     height: 18px;
     stroke-width: 2.5;
 }
-
+.map-controls-stack {
+    position: absolute;
+    right: 15px;
+    bottom: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 11;
+    pointer-events: none;
+    transition: bottom 0.3s ease-in-out;  /* Add this line */
+}
+/* 10. Mobile Responsive */
 /* 10. Mobile Responsive */
 @media (max-width: 768px) {
     #sidebar {
@@ -451,8 +493,15 @@ body {
         max-height: 40vh;
     }
 
+    /* --- FIXED: Only hide header when collapsed --- */
+    #sidebar:not(.expanded) .header {
+        display: none;
+    }
+    /* Remove or comment out the old unconditional rule */
+    /* .header { display: none; } */
+
     /* Only show tabs in phone mode */
-    .header { display: none; }
+    /* (title already reduced below) */
 
     .panel-content {
         padding: 16px;
