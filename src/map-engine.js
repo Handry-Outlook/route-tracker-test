@@ -146,8 +146,18 @@ export const drawWindRoute = async (map, coordinates, options = {}) => {
             url += '&exclude=motorway';
         }
 
-        const query = await fetch(url);
-        const json = await query.json();
+        // Add timeout to prevent hanging on poor mobile connections
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const json = await response.json();
 
         if (!json.routes || json.routes.length === 0) {
             throw new Error("No route found");
@@ -218,7 +228,16 @@ export const drawWindRoute = async (map, coordinates, options = {}) => {
 
     } catch (error) {
         console.error("Routing Error:", error);
-        alert("Failed to find a cycling route. Try locations on the same continent!");
+
+        let alertMessage = "Failed to calculate route – check your internet connection and try again.";
+
+        if (error.message === "No route found") {
+            alertMessage = "No cycling route found between these points. Try closer locations or ensure they’re connected by roads/bike paths.";
+        } else if (error.name === "AbortError") {
+            alertMessage = "Route calculation timed out – your connection may be slow. Try again.";
+        }
+
+        alert(alertMessage);
         return null;
     }
 };

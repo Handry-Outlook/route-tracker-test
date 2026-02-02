@@ -66,7 +66,7 @@ function resetInactivityTimer() {
 document.addEventListener('DOMContentLoaded', () => {
     injectCustomStyles();
     initTheme();
-    
+
     // Setup inactivity listeners
     ['click', 'mousemove', 'keypress', 'touchstart'].forEach(event => {
         document.addEventListener(event, resetInactivityTimer, { passive: true });
@@ -240,16 +240,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const sidebar = document.getElementById('sidebar');
             const isExpanded = sidebar.classList.toggle('expanded');
 
-            // When expanded, show 'collapse' icon. When collapsed, show 'expand' icon.
-            collapseBtn.innerHTML = isExpanded ? `<i data-feather="chevron-down"></i>` : `<i data-feather="chevron-down"></i>`;
+            // Correct icon: chevron-up when collapsed (pull up to expand), chevron-down when expanded (pull down to collapse)
+            collapseBtn.innerHTML = isExpanded
+                ? `<i data-feather="chevron-down"></i>`
+                : `<i data-feather="chevron-up"></i>`;
             if (feather) feather.replace();
 
+            // Dynamically adjust the control stack position
+            const controlsStack = document.querySelector('.map-controls-stack');
+            if (controlsStack) {
+                if (isExpanded) {
+                    controlsStack.style.bottom = 'calc(40vh + 20px)';
+                } else {
+                    controlsStack.style.bottom = 'calc(50px + 20px)';
+                }
+            }
+
             if (!isExpanded) {
-                // If we just collapsed it, deactivate all tabs to be clean
+                // Collapsed: deactivate tabs for clean state
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             } else {
-                // If we just expanded and no tab is active, activate the default 'plan' tab.
+                // Expanded: activate default tab if none active
                 if (!document.querySelector('.tab-btn.active')) {
                     switchTab('plan');
                 }
@@ -369,15 +381,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (newStyle !== currentMapStyle) {
                 currentMapStyle = newStyle;
                 map.setStyle(newStyle);
-                // Note: map.setStyle triggers 'style.load', where we restore layers
             }
+            // User manually chose a style → enable auto-switch only if it's a navigation style
+            usesNavigationStyle = newStyle.includes('navigation');
             styleMenu.classList.remove('active');
         });
     });
 
     styleBtnContainer.appendChild(styleMenu);
     styleBtnContainer.appendChild(styleBtn);
-    controlsStack.appendChild(styleBtnContainer);
+    //controlsStack.appendChild(styleBtnContainer);
 
     // Weather Layer Button
     const weatherBtn = document.createElement('button');
@@ -537,24 +550,63 @@ function switchTab(tabId) {
     }
 }
 
+// Add or update the createGeocoder function (likely already exists in app.js – replace or merge with this version)
 function createGeocoder(containerId, placeholder, index) {
     const geocoder = new MapboxGeocoder({
         accessToken: MAPBOX_TOKEN,
         mapboxgl: mapboxgl,
         placeholder: placeholder,
-        marker: false
+        collapsed: false,
+        clearOnBlur: false,
+        marker: false // We handle markers manually
     });
 
-    document.getElementById(containerId).appendChild(geocoder.onAdd(map));
+    // When a result is selected
+    geocoder.on('result', async (e) => {
+        const coords = e.result.center; // [lng, lat]
 
-    geocoder.on('result', (e) => {
-        waypoints[index] = e.result.center;
-        addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
+        waypoints[index] = coords;
+
+        // Update markers immediately
+        const validWaypoints = waypoints.filter(w => w);
+        addRouteMarkers(map, validWaypoints, handleMarkerDrag);
+
+        // Auto-calculate route if both start and end are set
+        if (validWaypoints.length >= 2) {
+            // Optional: add a small debounce to prevent rapid double-calls
+            clearTimeout(window.autoRouteTimeout);
+            window.autoRouteTimeout = setTimeout(async () => {
+                // Show loading state (you can customize this)
+                document.body.style.cursor = 'wait';
+                const planBtn = document.getElementById('plan-route-btn');
+                if (planBtn) planBtn.disabled = true;
+
+                await calculateRoute(); // Your existing function that calls drawWindRoute, updates stats, elevation, wind impact, etc.
+
+                document.body.style.cursor = 'default';
+                if (planBtn) planBtn.disabled = false;
+            }, 300);
+        }
     });
 
+    // When cleared
     geocoder.on('clear', () => {
         waypoints[index] = null;
+        const validWaypoints = waypoints.filter(w => w);
+        addRouteMarkers(map, validWaypoints, handleMarkerDrag);
+
+        if (validWaypoints.length < 2) {
+            clearRoute(map);
+            // Reset stats, elevation chart, wind meters, etc.
+            // (call your existing reset functions here)
+        }
     });
+
+    // Append to DOM
+    const container = document.getElementById(containerId);
+    if (container) {
+        container.appendChild(geocoder.onAdd(map));
+    }
 
     return geocoder;
 }
@@ -774,7 +826,6 @@ async function handleRouteSelection(route, isNew = false) {
         }
         timeStat.innerHTML = `<span class="label">Schedule</span><div class="value" style="font-size:0.9rem">${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>`;
 
-        // Add Distance Stat
         let distStat = document.getElementById('dist-stat');
         if (!distStat) {
             distStat = document.createElement('div');
@@ -788,6 +839,26 @@ async function handleRouteSelection(route, isNew = false) {
             }
         }
         distStat.innerHTML = `<span class="label">Distance</span><div class="value">${distKm.toFixed(2)} km</div>`;
+
+        // === NEW: Add placeholders for async stats (ascent & calories) ===
+        if (!document.getElementById('elev-stat')) {
+            const elevStat = document.createElement('div');
+            elevStat.className = 'stat-box';
+            elevStat.id = 'elev-stat';
+            elevStat.innerHTML = `<span class="label">Ascent</span><div class="value" id="elev-val">-- m</div>`;
+            stats.appendChild(elevStat);
+        }
+
+        if (!document.getElementById('cal-stat')) {
+            const calStat = document.createElement('div');
+            calStat.className = 'stat-box';
+            calStat.id = 'cal-stat';
+            calStat.innerHTML = `<span class="label">Est. Burn</span><div class="value" id="cal-val">--</div>`;
+            stats.appendChild(calStat);
+        }
+
+        // === NEW: Set 4-column grid immediately (layout is now stable) ===
+        stats.style.gridTemplateColumns = '1fr 1fr 1fr 1fr';
     };
 
     paceInput.onchange = updateTimeStats;
@@ -870,39 +941,40 @@ async function handleRouteSelection(route, isNew = false) {
     const updateElevation = async () => {
         const elevationData = await getElevationProfile(map, route.geometry);
 
-        // If all elevations are 0, it's a strong sign the terrain data failed to load,
-        // despite the async fix. We treat it as an error to avoid showing a flat line at 0m.
         const allZero = elevationData.every(d => d.elevation === 0);
         if (elevationData.length < 2 || allZero) {
             elevContainer.innerHTML = '<p class="empty-state">No elevation data available for this route.<br><small>Try zooming in or enabling 3D terrain.</small></p>';
+
+            // Still update stats with fallback values
+            if (document.getElementById('elev-val')) document.getElementById('elev-val').innerText = '0 m';
+            const distKm = currentRouteData.distance / 1000;
+            const fallbackCalories = Math.round(distKm * 25);
+            if (document.getElementById('cal-val')) document.getElementById('cal-val').innerText = `${fallbackCalories} kcal`;
             return;
         }
 
-        // --- Calories Estimator ---
+        // --- Ascent (total positive gain) ---
         let cumulativeGain = 0;
-        const elevations = elevationData.map(d => d.elevation).filter(e => e != null);
+        const elevations = elevationData.map(d => d.elevation);
         for (let i = 1; i < elevations.length; i++) {
             if (elevations[i] > elevations[i - 1]) {
                 cumulativeGain += (elevations[i] - elevations[i - 1]);
             }
         }
+
+        // --- Calories ---
         const distKm = currentRouteData.distance / 1000;
         const calories = Math.round((distKm * 25) + (cumulativeGain * 1.5));
 
-        const statsContainer = document.getElementById('stats-container');
-        statsContainer.style.gridTemplateColumns = '1fr 1fr 1fr 1fr';
-
-        let calDiv = document.getElementById('cal-stat');
-        if (!calDiv) {
-            calDiv = document.createElement('div');
-            calDiv.className = 'stat-box';
-            calDiv.id = 'cal-stat';
-            calDiv.innerHTML = `<span class="label">Est. Burn</span><div class="value" id="cal-val">--</div>`;
-            statsContainer.appendChild(calDiv);
+        // Update async stat values (no layout change)
+        if (document.getElementById('elev-val')) {
+            document.getElementById('elev-val').innerText = `+${Math.round(cumulativeGain)} m`;
         }
-        document.getElementById('cal-val').innerText = `${calories} kcal`;
+        if (document.getElementById('cal-val')) {
+            document.getElementById('cal-val').innerText = `${calories} kcal`;
+        }
 
-        renderElevationChart(elevationData);
+        renderElevationChart(elevationData, cumulativeGain); // pass ascent if you want to use it in chart
     };
 
     // Critical fix: Always wait for 'idle' after the route fitBounds animation completes.
@@ -1866,6 +1938,7 @@ function toggleTheme() {
     // Optional: Switch Map Style (Requires redrawing route if active)
     const style = isDark ? 'mapbox://styles/mapbox/navigation-night-v1' : 'mapbox://styles/mapbox/navigation-day-v1';
     currentMapStyle = style; // Sync global state
+    let usesNavigationStyle = true; // Tracks whether current style is a navigation style (day/night)
     map.setStyle(style);
 
     map.once('style.load', () => {
@@ -1917,7 +1990,7 @@ async function withLoading(element, asyncFn) {
     element.style.pointerEvents = 'none';
     element.innerHTML = `<i data-feather="loader" class="spin-anim"></i>`;
     if (feather) feather.replace();
-    try { await asyncFn(); } 
+    try { await asyncFn(); }
     catch (e) { console.error(e); alert("Action failed."); }
     finally {
         element.innerHTML = originalContent;
