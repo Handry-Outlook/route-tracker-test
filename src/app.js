@@ -1058,6 +1058,13 @@ function startLiveTracking() {
             if (distKm > 0.2) { // User is > 200m away from start
                 if (confirm("You are not at the start. Reroute from current location?")) {
                     waypoints[0] = userPos;
+
+                    // Fix: Ensure destination is preserved if global waypoints are empty (e.g. loaded from saved route)
+                    if (!waypoints[1] && currentRouteData) {
+                        const coords = currentRouteData.geometry.coordinates;
+                        waypoints[1] = coords[coords.length - 1];
+                    }
+
                     if (geocoders[0]) geocoders[0].setInput("Current Location");
                     calculateRoute();
                 }
