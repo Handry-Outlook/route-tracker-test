@@ -24,6 +24,7 @@ let remoteMarker = null;
 let metOfficeTimestamps = [];
 let lastLogicalWeatherUrl = null;
 let lastBlobUrl = null;
+let compassMode = 'north'; // 'north' | 'heading'
 
 const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -148,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <span class="compass-label w">W</span>
         <i data-feather="compass"></i>
     `;
-    compassBtn.title = "Reset North";
+    compassBtn.title = "Toggle: North Up / Heading Up";
     controlsStack.appendChild(compassBtn);
 
     // Sync icon rotation with map bearing
@@ -158,7 +159,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     compassBtn.addEventListener('click', () => {
-        map.easeTo({ bearing: 0, pitch: 0 });
+        if (compassMode === 'north') {
+            compassMode = 'heading';
+            compassBtn.classList.add('active-heading');
+            // Map will update bearing on next GPS update
+        } else {
+            compassMode = 'north';
+            compassBtn.classList.remove('active-heading');
+            map.easeTo({ bearing: 0, pitch: 0 });
+        }
     });
 
     // Weather Layer Button
@@ -213,6 +222,16 @@ document.addEventListener('DOMContentLoaded', () => {
     navBtn.title = "Follow User";
     navBtn.onclick = toggleNavigation;
     controlsStack.appendChild(navBtn);
+
+    // Recalculate Button (Dynamically Created)
+    const recalcBtn = document.createElement('button');
+    recalcBtn.id = 'recalc-btn';
+    recalcBtn.className = 'map-overlay-btn';
+    recalcBtn.style.display = 'none'; // Hidden until navigation starts
+    recalcBtn.innerHTML = `<i data-feather="refresh-cw"></i>`;
+    recalcBtn.title = "Recalculate Route";
+    recalcBtn.onclick = manualReroute;
+    controlsStack.appendChild(recalcBtn);
 
     // Add Theme Toggle to Header
     const header = document.querySelector('.header');
@@ -377,6 +396,8 @@ function resetRoutePlanner() {
     document.getElementById('clear-route-btn').style.display = 'none';
     const navBtn = document.getElementById('nav-btn');
     if (navBtn) navBtn.style.display = 'none';
+    const recalcBtn = document.getElementById('recalc-btn');
+    if (recalcBtn) recalcBtn.style.display = 'none';
     stopRouteAnimation();
 
     // Remove elevation chart if exists
@@ -1036,8 +1057,27 @@ function initTrackingMode(sessionId) {
 
 // --- NAVIGATION ---
 function toggleNavigation() {
+    // Resume if paused (minimized)
+    if (isNavigating && !document.body.classList.contains('nav-mode')) {
+        document.body.classList.add('nav-mode');
+        initNavigationOverlays();
+        const btn = document.getElementById('realtime-nav-btn');
+        if (btn) btn.innerHTML = `<i data-feather="navigation"></i> Stop Navigation`;
+        return;
+    }
+
     isNavigating = !isNavigating;
     document.getElementById('nav-btn').classList.toggle('active', isNavigating);
+    
+    const recalcBtn = document.getElementById('recalc-btn');
+    if (recalcBtn) recalcBtn.style.display = isNavigating ? 'flex' : 'none';
+
+    // Toggle Navigation Mode UI (Fullscreen style)
+    document.body.classList.toggle('nav-mode', isNavigating);
+    if (isNavigating) {
+        initNavigationOverlays();
+    }
+
     if (isNavigating) startLiveTracking();
     else stopLiveTracking();
 }
@@ -1057,6 +1097,7 @@ function startLiveTracking() {
             
             if (distKm > 0.2) { // User is > 200m away from start
                 if (confirm("You are not at the start. Reroute from current location?")) {
+                    speak("Rerouting...");
                     waypoints[0] = userPos;
 
                     // Fix: Ensure destination is preserved if global waypoints are empty (e.g. loaded from saved route)
@@ -1085,7 +1126,7 @@ function startLiveTracking() {
     }, GEO_OPTIONS);
 
     watchId = navigator.geolocation.watchPosition(pos => {
-        handlePositionUpdate([pos.coords.longitude, pos.coords.latitude]);
+        handlePositionUpdate([pos.coords.longitude, pos.coords.latitude], pos.coords.heading);
     }, err => {
         console.warn("Watch Position Error:", err);
         // Stop watching if permission is denied or insecure origin to prevent loop
@@ -1103,7 +1144,47 @@ function startLiveTracking() {
     }, GEO_OPTIONS);
 }
 
-function handlePositionUpdate(userPos) {
+function manualReroute() {
+    if (!navigator.geolocation) return alert("Geolocation not supported");
+    
+    speak("Rerouting...");
+
+    // Show loading in Nav UI
+    if (document.body.classList.contains('nav-mode')) {
+        document.getElementById('nav-instr').innerHTML = `<i data-feather="loader" class="spin-anim"></i> Rerouting...`;
+        if (feather) feather.replace();
+    }
+
+    const onLocationFound = (pos) => {
+        const userPos = [pos.coords.longitude, pos.coords.latitude];
+        waypoints[0] = userPos;
+        
+        // Ensure destination exists
+        if (!waypoints[1] && currentRouteData) {
+            const coords = currentRouteData.geometry.coordinates;
+            waypoints[1] = coords[coords.length - 1];
+        }
+        
+        if (geocoders[0]) geocoders[0].setInput("Current Location");
+        calculateRoute();
+    };
+    
+    navigator.geolocation.getCurrentPosition(onLocationFound, err => {
+        console.warn("Reroute location error:", err);
+        if (err.code === 1) {
+             if (err.message.includes("secure origin")) {
+                console.warn("⚠️ Secure Origin Error. Bypassing with Mock Location.");
+                onLocationFound({ coords: { longitude: -0.1276, latitude: 51.5072 } });
+                return;
+            }
+            alert("Location permission denied.");
+        } else {
+            alert("Could not get location for reroute.");
+        }
+    }, GEO_OPTIONS);
+}
+
+function handlePositionUpdate(userPos, heading) {
     // Update User Marker
     if (!userMarker) {
         const el = document.createElement('div');
@@ -1120,7 +1201,16 @@ function handlePositionUpdate(userPos) {
 
     // Follow user if navigating
     if (isNavigating) {
-        map.easeTo({ center: userPos, zoom: 18, pitch: 50 });
+        const cameraOptions = { center: userPos, zoom: 18, pitch: 50 };
+        if (compassMode === 'heading' && heading !== null && heading !== undefined) {
+            cameraOptions.bearing = heading;
+        }
+        map.easeTo(cameraOptions);
+    }
+
+    // Update Navigation Dashboard UI
+    if (isNavigating && currentRouteData) {
+        updateNavigationDashboard(userPos);
     }
 
     // Voice Instructions
@@ -1137,6 +1227,71 @@ function handlePositionUpdate(userPos) {
             }
         });
     }
+}
+
+function initNavigationOverlays() {
+    if (document.getElementById('nav-overlay-top')) return;
+
+    // Top Banner (Instructions)
+    const topOverlay = document.createElement('div');
+    topOverlay.id = 'nav-overlay-top';
+    topOverlay.innerHTML = `
+        <div class="nav-distance-large" id="nav-next-dist">0 m</div>
+        <div class="nav-instruction-large" id="nav-instr">Locating...</div>
+    `;
+    document.body.appendChild(topOverlay);
+
+    // Bottom Bar (Stats & Exit)
+    const bottomOverlay = document.createElement('div');
+    bottomOverlay.id = 'nav-overlay-bottom';
+    bottomOverlay.innerHTML = `
+        <div class="nav-stats-group">
+            <div class="nav-stat-item">
+                <span class="nav-stat-value" id="nav-time-rem">--</span>
+                <span class="nav-stat-label">min</span>
+            </div>
+            <div class="nav-stat-item">
+                <span class="nav-stat-value" id="nav-dist-rem">--</span>
+                <span class="nav-stat-label">km</span>
+            </div>
+        </div>
+        <div style="display:flex;">
+            <button id="pause-nav-btn">Pause</button>
+            <button id="exit-nav-btn">Exit</button>
+        </div>
+    `;
+    document.body.appendChild(bottomOverlay);
+
+    document.getElementById('pause-nav-btn').onclick = () => {
+        document.body.classList.remove('nav-mode');
+        const btn = document.getElementById('realtime-nav-btn');
+        if (btn) btn.innerHTML = `<i data-feather="navigation"></i> Resume Navigation`;
+    };
+    document.getElementById('exit-nav-btn').onclick = toggleNavigation;
+}
+
+function updateNavigationDashboard(userPos) {
+    if (!currentRouteData || !currentRouteData.legs) return;
+    
+    const steps = currentRouteData.legs[0].steps;
+    // Determine next step (simple logic: step after the last spoken one)
+    let nextStepIndex = lastSpokenStepIndex + 1;
+    if (nextStepIndex >= steps.length) nextStepIndex = steps.length - 1;
+    
+    const nextStep = steps[nextStepIndex];
+    if (nextStep && nextStep.maneuver) {
+        document.getElementById('nav-instr').innerText = nextStep.maneuver.instruction;
+        const distToTurn = turf.distance(userPos, nextStep.maneuver.location, { units: 'kilometers' });
+        document.getElementById('nav-next-dist').innerText = distToTurn < 1 ? `${(distToTurn * 1000).toFixed(0)} m` : `${distToTurn.toFixed(1)} km`;
+    }
+
+    // Update Remaining Stats (Approximate straight line to end for performance)
+    const endPoint = currentRouteData.geometry.coordinates[currentRouteData.geometry.coordinates.length - 1];
+    const totalDistKm = turf.distance(userPos, endPoint, { units: 'kilometers' });
+    const pace = parseFloat(document.getElementById('user-pace')?.value) || 20;
+    
+    document.getElementById('nav-dist-rem').innerText = totalDistKm.toFixed(1);
+    document.getElementById('nav-time-rem').innerText = Math.round((totalDistKm / pace) * 60);
 }
 
 function stopLiveTracking() {
