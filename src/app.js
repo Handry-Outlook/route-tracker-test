@@ -31,6 +31,7 @@ let mockIntervalId = null; // To track simulated movement on HTTP
 let currentMapStyle = 'mapbox://styles/mapbox/navigation-night-v1'; // Default
 let lastWeatherFetchDist = 0; // Track distance for weather throttling
 const WEATHER_FETCH_INTERVAL_KM = 25; // Fetch weather every 25km during animation
+let inactivityTimer = null; // Timer to track user inactivity
 
 const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -40,9 +41,37 @@ const GEO_OPTIONS = {
 
 const map = initMap('map');
 
+// --- INACTIVITY TRACKING ---
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+function stopTrackingDueToInactivity() {
+    if (isNavigating) {
+        console.log("Stopping navigation due to inactivity.");
+        speak("Stopping navigation due to inactivity.");
+        toggleNavigation(); // This will handle UI and state changes.
+    }
+}
+
+function resetInactivityTimer() {
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+    }
+    // Only set a new timer if navigation is active.
+    if (isNavigating) {
+        inactivityTimer = setTimeout(stopTrackingDueToInactivity, INACTIVITY_TIMEOUT);
+    }
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
     injectCustomStyles();
     initTheme();
+    
+    // Setup inactivity listeners
+    ['click', 'mousemove', 'keypress', 'touchstart'].forEach(event => {
+        document.addEventListener(event, resetInactivityTimer, { passive: true });
+    });
+
     // --- AUTH ---
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
@@ -205,12 +234,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tabContainer) {
         const collapseBtn = document.createElement('button');
         collapseBtn.className = 'collapse-btn-mobile';
-        collapseBtn.innerHTML = `<i data-feather="chevron-down"></i>`;
+        collapseBtn.innerHTML = `<i data-feather="chevron-up"></i>`; // Show 'expand' icon initially
         collapseBtn.onclick = (e) => {
             e.stopPropagation();
-            document.getElementById('sidebar').classList.remove('expanded');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const sidebar = document.getElementById('sidebar');
+            const isExpanded = sidebar.classList.toggle('expanded');
+
+            // When expanded, show 'collapse' icon. When collapsed, show 'expand' icon.
+            collapseBtn.innerHTML = isExpanded ? `<i data-feather="chevron-down"></i>` : `<i data-feather="chevron-down"></i>`;
+            if (feather) feather.replace();
+
+            if (!isExpanded) {
+                // If we just collapsed it, deactivate all tabs to be clean
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            } else {
+                // If we just expanded and no tab is active, activate the default 'plan' tab.
+                if (!document.querySelector('.tab-btn.active')) {
+                    switchTab('plan');
+                }
+            }
         };
         tabContainer.appendChild(collapseBtn);
         if (feather) feather.replace();
@@ -687,13 +730,15 @@ async function handleRouteSelection(route, isNew = false) {
     }
 
     // Add Realtime Navigation Button (Google Maps Style)
-    if (!document.getElementById('realtime-nav-btn')) {
+    const tabContainer = document.querySelector('.tab-container');
+    if (tabContainer && !document.getElementById('realtime-nav-btn')) {
         const navBtn = document.createElement('button');
         navBtn.id = 'realtime-nav-btn';
         navBtn.className = 'primary-btn nav-btn-large';
         navBtn.innerHTML = `<i data-feather="navigation"></i> Start Navigation`;
         navBtn.onclick = toggleNavigation;
-        document.getElementById('directions-list').parentNode.insertBefore(navBtn, document.getElementById('directions-list'));
+        // Place it before the tabs container
+        tabContainer.parentNode.insertBefore(navBtn, tabContainer);
     }
 
     // --- Update Time Stats ---
@@ -1380,8 +1425,8 @@ async function startLiveSessionUI() {
 
                 renderLinkBox("Live Tracking Link", url);
 
-                // Force start navigation/tracking if not already
-                if (!isNavigating) toggleNavigation();
+                // Force start navigation/tracking if not already - REMOVED per user request
+                // if (!isNavigating) toggleNavigation();
                 resolve();
             } catch (e) {
                 console.error("Error starting live session:", e);
@@ -1490,6 +1535,7 @@ function startLiveTracking() {
 
     speak("Starting navigation.");
     isNavigating = true;
+    resetInactivityTimer(); // Start/reset the inactivity timer
 
     // Check if user is near the start point
     const checkProximity = (pos) => {
@@ -1793,6 +1839,12 @@ function stopLiveTracking() {
     mockIntervalId = null;
     isNavigating = false;
     lastSpokenStepIndex = -1;
+
+    // Clear the inactivity timer
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+    }
 }
 
 // --- THEME & SHARING ---
@@ -1865,7 +1917,7 @@ async function withLoading(element, asyncFn) {
     element.style.pointerEvents = 'none';
     element.innerHTML = `<i data-feather="loader" class="spin-anim"></i>`;
     if (feather) feather.replace();
-    try { await asyncFn(); }
+    try { await asyncFn(); } 
     catch (e) { console.error(e); alert("Action failed."); }
     finally {
         element.innerHTML = originalContent;
