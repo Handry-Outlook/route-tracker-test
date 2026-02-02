@@ -1,8 +1,8 @@
-import { auth, googleProvider, saveRouteToCloud, fetchAllRoutes, deleteRouteFromCloud, createLiveSession, updateLiveSession, subscribeToLiveSession, updateRouteName } from './firebase.js';
+import { auth, googleProvider, saveRouteToCloud, fetchAllRoutes, deleteRouteFromCloud, createLiveSession, updateLiveSession, subscribeToLiveSession, updateRouteName, saveSharedRoute, fetchSharedRoute } from './firebase.js';
 import { onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { fetchWindAtLocation, fetchRouteForecast } from './weather-api.js';
 import { calculateWindImpact } from './geo-logic.js';
-import { initMap, drawWindRoute, drawStaticRoute, addRouteMarkers, clearRoute, getElevationProfile, playRouteAnimation, stopRouteAnimation, toggleTraffic, toggleWeather, setAnimationSpeed, togglePause, updateMetOfficeLayer, toggleTerrain, restoreWeather } from './map-engine.js';
+import { initMap, fetchRouteAlternatives, drawStaticRoute, addRouteMarkers, clearRoute, getElevationProfile, playRouteAnimation, stopRouteAnimation, toggleTraffic, toggleWeather, setAnimationSpeed, togglePause, updateMetOfficeLayer, toggleTerrain, restoreWeather } from './map-engine.js';
 import { MAPBOX_TOKEN } from './config.js';
 
 // --- GLOBAL STATE ---
@@ -275,6 +275,15 @@ document.addEventListener('DOMContentLoaded', () => {
     geocoders.push(createGeocoder('geocoder-start', 'Choose a starting point...', 0));
     geocoders.push(createGeocoder('geocoder-end', 'Choose a destination...', 1));
 
+    // Create Actions Container for vertical stacking
+    const startWrapper = document.querySelector('.location-input-wrapper');
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'input-actions';
+    startWrapper.appendChild(actionsDiv);
+
+    // Move existing locate-me-btn into the stack
+    const locateBtn = startWrapper.querySelector('.locate-me-btn');
+    if (locateBtn) actionsDiv.appendChild(locateBtn);
 
     // Add Reverse Button
     const reverseBtn = document.createElement('button');
@@ -282,7 +291,15 @@ document.addEventListener('DOMContentLoaded', () => {
     reverseBtn.innerHTML = `<i data-feather="refresh-cw"></i>`;
     reverseBtn.title = "Reverse Route";
     reverseBtn.onclick = reverseRoute;
-    document.querySelector('.location-input-wrapper').appendChild(reverseBtn);
+    actionsDiv.appendChild(reverseBtn);
+
+    // Add Round Trip Button
+    const roundTripBtn = document.createElement('button');
+    roundTripBtn.className = 'icon-btn round-trip-btn';
+    roundTripBtn.innerHTML = `<i data-feather="repeat"></i>`;
+    roundTripBtn.title = "Round Trip";
+    roundTripBtn.onclick = makeRoundTrip;
+    actionsDiv.appendChild(roundTripBtn);
 
     document.getElementById('add-destination-btn').addEventListener('click', addDestination);
     document.getElementById('plan-btn').addEventListener('click', calculateRoute);
@@ -493,12 +510,23 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initRouteOptionsUI() {
-    const container = document.getElementById('destination-list');
+    const existing = document.querySelector('.route-options-container');
+    if (existing) existing.remove();
+
     const optionsDiv = document.createElement('div');
     optionsDiv.className = 'route-options-container';
     optionsDiv.innerHTML = `
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:var(--text-secondary);" title="The cycling profile avoids motorways by default;">
+            <input type="checkbox" id="avoid-highways" checked disabled> Avoid Highways
+        </label>
         <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:var(--text-secondary);">
-            <input type="checkbox" id="avoid-highways"> Avoid Highways
+            <input type="checkbox" id="avoid-aroads"> Avoid A-Roads
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:var(--text-secondary);">
+            <input type="checkbox" id="prefer-cyclelanes"> Maximise Use of Cycle Lanes
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:var(--text-secondary);">
+            <input type="checkbox" id="prefer-scenic"> 🌳 Scenic Route (Parks & Greenways)
         </label>
         
         <div class="time-selector">
@@ -514,12 +542,36 @@ function initRouteOptionsUI() {
             <input type="number" id="user-pace" class="pace-input" value="20" min="5" max="50"> km/h
         </div>
     `;
-    container.appendChild(optionsDiv);
 
-    // Set default time to now
+    // --- ROBUST WAY TO FIND THE ADD DESTINATION BUTTON ---
+    const destList = document.getElementById('destination-list');
+    let addDestBtn = document.getElementById('add-destination-btn');
+
+    if (!addDestBtn) {
+        // Fallback: search by visible text (matches "+ Add Destination" or "Add Destination")
+        addDestBtn = Array.from(document.querySelectorAll('button')).find(btn => 
+            btn.textContent.trim().includes('Add Destination')
+        );
+    }
+
+    // --- ENFORCE LAYOUT: List -> Button -> Options ---
+    if (destList && addDestBtn) {
+        // Ensure button is immediately after the list (moves it if necessary)
+        destList.after(addDestBtn);
+        // Ensure options are immediately after the button
+        addDestBtn.after(optionsDiv);
+    } else if (destList) {
+        // Fallback: just append options after list if button is missing
+        destList.after(optionsDiv);
+    }
+
+    // Default time setup (unchanged)
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    document.getElementById('route-time').value = now.toISOString().slice(0, 16);
+    const timeInput = document.getElementById('route-time');
+    if (timeInput) {
+        timeInput.value = now.toISOString().slice(0, 16);
+    }
 }
 
 function switchTab(tabId) {
@@ -641,6 +693,44 @@ function addDestination() {
     geocoder.on('clear', () => { waypoints[newIndex] = null; });
 }
 
+function insertIntermediateWaypoint(coords) {
+    // 1. Determine insertion index (before the last destination)
+    // If we only have Start(0) and End(1), we insert at 1.
+    const insertIndex = waypoints.length - 1;
+    
+    // 2. Update Data Arrays
+    waypoints.splice(insertIndex, 0, coords);
+    
+    // 3. Update UI (Insert Input Field)
+    const destinationList = document.getElementById('destination-list');
+    const wrappers = destinationList.getElementsByClassName('location-input-wrapper');
+    const lastWrapper = wrappers[wrappers.length - 1]; // The destination input
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'location-input-wrapper';
+    const container = document.createElement('div');
+    container.className = 'geocoder-container';
+    wrapper.appendChild(container);
+    
+    // Insert before the final destination input
+    destinationList.insertBefore(wrapper, lastWrapper);
+
+    const geocoder = new MapboxGeocoder({
+        accessToken: MAPBOX_TOKEN,
+        mapboxgl: mapboxgl,
+        placeholder: `Via point...`,
+        marker: false
+    });
+
+    container.appendChild(geocoder.onAdd(map));
+    
+    // Sync Geocoder List
+    geocoders.splice(insertIndex, 0, geocoder);
+
+    // 4. Trigger Route Recalculation
+    calculateRoute();
+}
+
 async function calculateRoute() {
     const planBtn = document.getElementById('plan-btn');
     const originalContent = planBtn.innerHTML;
@@ -655,11 +745,95 @@ async function calculateRoute() {
         planBtn.innerHTML = `<i data-feather="loader" class="spin-anim"></i> Planning...`;
         if (feather) feather.replace();
 
-        const avoidHighways = document.getElementById('avoid-highways')?.checked || false;
-        const route = await drawWindRoute(map, validWaypoints, { avoidHighways });
-        if (route) {
-            switchTab('directions'); // Switch first so chart can render correctly
-            handleRouteSelection(route, true);
+        // 1. Fetch Alternatives
+        const routes = await fetchRouteAlternatives(validWaypoints);
+        
+        if (!routes || routes.length === 0) return;
+
+        // PREPARE TERRAIN FOR BATCH ELEVATION CALCS
+        // We enable terrain once here to avoid toggling it on/off for every route option
+        const previousTerrain = map.getTerrain();
+        let terrainResetNeeded = false;
+        if (!previousTerrain || previousTerrain.exaggeration === 0) {
+            map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1 });
+            await new Promise(resolve => map.once('idle', resolve));
+            terrainResetNeeded = true;
+        }
+
+        // 2. Get Preferences
+        const avoidARoads = document.getElementById('avoid-aroads')?.checked || false;
+        const preferScenic = document.getElementById('prefer-scenic')?.checked || false;
+        
+        // 3. Fetch Weather for Scoring (Start Point)
+        const start = validWaypoints[0];
+        const weather = await fetchWindAtLocation(start[1], start[0]);
+        const windBearing = weather ? weather.bearing : 0;
+
+        // 4. Score & Rank Routes
+        const scoredRoutes = await Promise.all(routes.map(async (r, index) => {
+            // Wind Score
+            const windScore = calculateRouteWindScore(r.geometry, windBearing);
+            
+            // Detailed Road Analysis (Cycle Lanes, A-Roads, Motorways)
+            const stats = analyzeRouteCharacteristics(r);
+            
+            // Elevation Gain (Async Calculation)
+            const profile = await getElevationProfile(map, r.geometry);
+            let ascent = 0;
+            if (profile && profile.length > 0) {
+                const elevs = profile.map(p => p.elevation);
+                for(let i=1; i<elevs.length; i++) {
+                    if(elevs[i] > elevs[i-1]) ascent += (elevs[i] - elevs[i-1]);
+                }
+            }
+
+            // --- ADVANCED SCORING ALGORITHM ---
+            let score = 50; // Base score
+            
+            // 1. WIND FACTOR (0-100 impact)
+            // Tailwind is a huge plus, headwind is a major drag.
+            score += (windScore.percentage - 50); // +/- 50 pts based on wind
+            
+            // 2. INFRASTRUCTURE (Cycle Lanes)
+            // We want to maximize this.
+            score += (stats.cycleLanePct * 0.5); // Up to +50 pts
+
+            // 2b. SCENIC SCORE
+            // If scenic is requested, heavily weight green areas
+            if (preferScenic) score += (stats.scenicScore * 2);
+            
+            // 3. ROAD DANGER (A-Roads & Motorways)
+            // Heavy penalty for A-roads.
+            score -= (stats.aRoadPct * 1.5); 
+            score -= (stats.motorwayPct * 5); // Huge penalty for motorways
+            
+            // 4. EFFORT (Ascent)
+            // Penalize climbing: -1 pt per 10m climbed
+            score -= (ascent / 10);
+
+            // 5. EFFICIENCY (Time)
+            const fastestDuration = Math.min(...routes.map(rt => rt.duration));
+            const durationDiffMins = (r.duration - fastestDuration) / 60;
+            score -= (durationDiffMins * 2); // -2 pts per minute slower
+
+            // User Preferences
+            if (avoidARoads && stats.aRoadPct > 5) score -= 50; // Strict penalty
+
+            return { ...r, windScore, stats, ascent, score, originalIndex: index };
+        }));
+
+        // Restore Terrain State
+        if (terrainResetNeeded) {
+            if (previousTerrain) map.setTerrain(previousTerrain);
+            else map.setTerrain(null);
+        }
+
+        // Sort by Score (Descending)
+        scoredRoutes.sort((a, b) => b.score - a.score);
+
+        if (scoredRoutes.length > 0) {
+            switchTab('directions');
+            handleRouteSelection(scoredRoutes[0], true, scoredRoutes);
             document.getElementById('clear-route-btn').style.display = 'block';
         }
     } finally {
@@ -677,10 +851,15 @@ function resetRoutePlanner() {
     destinationList.innerHTML = `
         <div class="location-input-wrapper">
             <div id="geocoder-start" class="geocoder-container"></div>
-            <button class="icon-btn reverse-btn" title="Reverse Route" onclick="reverseRoute()">
-                <i data-feather="refresh-cw"></i>
-            </button>
-            <button class="icon-btn locate-me-btn" title="Use current location"><i data-feather="crosshair"></i></button>
+            <div class="input-actions">
+                <button class="icon-btn locate-me-btn" title="Use current location"><i data-feather="crosshair"></i></button>
+                <button class="icon-btn reverse-btn" title="Reverse Route" onclick="reverseRoute()">
+                    <i data-feather="refresh-cw"></i>
+                </button>
+                <button class="icon-btn round-trip-btn" title="Round Trip">
+                    <i data-feather="repeat"></i>
+                </button>
+            </div>
         </div>
         <div class="location-input-wrapper">
             <div id="geocoder-end" class="geocoder-container"></div>
@@ -690,6 +869,7 @@ function resetRoutePlanner() {
     geocoders.push(createGeocoder('geocoder-start', 'Choose a starting point...', 0));
     geocoders.push(createGeocoder('geocoder-end', 'Choose a destination...', 1));
     initRouteOptionsUI(); // Re-add options
+    document.querySelector('.round-trip-btn').addEventListener('click', makeRoundTrip);
     document.querySelector('.locate-me-btn').addEventListener('click', locateUser);
 
     clearRoute(map);
@@ -709,6 +889,9 @@ function resetRoutePlanner() {
     poiMarkers = [];
 
     document.getElementById('save-btn').style.display = 'none';
+    const mobileSaveBtn = document.getElementById('mobile-save-btn');
+    if (mobileSaveBtn) mobileSaveBtn.remove();
+
     switchTab('plan');
 }
 
@@ -733,12 +916,121 @@ function reverseRoute() {
     if (waypoints[0] && waypoints[1]) calculateRoute();
 }
 
-async function handleRouteSelection(route, isNew = false) {
+function makeRoundTrip() {
+    if (!waypoints[0]) return alert("Please select a starting point first.");
+
+    // Ensure we have at least 2 waypoints (Start + End)
+    if (waypoints.length < 2) waypoints.push(null);
+
+    // Set the last waypoint to be the same as the first
+    const lastIndex = waypoints.length - 1;
+    waypoints[lastIndex] = [...waypoints[0]]; // Copy coordinates
+
+    // Update UI
+    if (geocoders[0] && geocoders[lastIndex]) {
+        const startInput = geocoders[0]._inputEl || document.querySelector('#geocoder-start input');
+        if (startInput) geocoders[lastIndex].setInput(startInput.value);
+    }
+
+    addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
+    calculateRoute();
+}
+
+async function handleRouteSelection(route, isNew = false, allOptions = null) {
     currentRouteData = route;
     document.getElementById('nav-btn').style.display = 'block';
     stopRouteAnimation(); // Stop any previous animation
+    drawStaticRoute(map, route.geometry); // Draw the selected route
+
     if (isNew && currentUser) {
         document.getElementById('save-btn').style.display = 'block';
+
+        // FIX: Add a visible Save button to the Directions tab for mobile users
+        let mobileSaveBtn = document.getElementById('mobile-save-btn');
+        if (!mobileSaveBtn) {
+            mobileSaveBtn = document.createElement('button');
+            mobileSaveBtn.id = 'mobile-save-btn';
+            mobileSaveBtn.className = 'primary-btn';
+            mobileSaveBtn.style.marginTop = '12px';
+            mobileSaveBtn.style.backgroundColor = '#2ecc71'; // Green to stand out
+            mobileSaveBtn.innerHTML = `<i data-feather="save"></i> Save to Cloud`;
+            mobileSaveBtn.onclick = handleSaveButtonClick;
+            
+            // Insert after the stats container so it's easily accessible
+            const stats = document.getElementById('stats-container');
+            if (stats && stats.parentNode) {
+                stats.parentNode.insertBefore(mobileSaveBtn, stats.nextSibling);
+            }
+        }
+        mobileSaveBtn.style.display = 'flex';
+    }
+
+    // --- RENDER ROUTE OPTIONS (If available) ---
+    const list = document.getElementById('directions-list');
+    list.innerHTML = ''; // Clear previous
+
+    if (allOptions && allOptions.length > 1) {
+        const optionsContainer = document.createElement('div');
+        optionsContainer.className = 'route-options-list';
+        optionsContainer.style.marginBottom = '16px';
+        optionsContainer.style.display = 'flex'; // Keep flex
+        optionsContainer.style.flexDirection = 'column'; // Vertical stack
+        optionsContainer.style.gap = '12px';
+        optionsContainer.style.paddingBottom = '8px';
+
+        allOptions.forEach((opt, idx) => {
+            const isSelected = opt === route;
+            const btn = document.createElement('div');
+            btn.className = `route-card ${isSelected ? 'selected' : ''}`;
+            btn.style.cursor = 'pointer';
+            
+            const distKm = (opt.distance / 1000).toFixed(1);
+            const timeMins = Math.round(opt.duration / 60);
+            
+            // Color Coding Helper
+            const getScoreColor = (val, highIsGood = true) => {
+                if (highIsGood) return val >= 70 ? '#2ecc71' : val >= 40 ? '#f39c12' : '#e74c3c';
+                return val <= 10 ? '#2ecc71' : val <= 30 ? '#f39c12' : '#e74c3c';
+            };
+
+            const windColor = getScoreColor(opt.windScore.percentage, true);
+            const cycleColor = getScoreColor(opt.stats.cycleLanePct, true);
+            const roadColor = getScoreColor(opt.stats.aRoadPct, false);
+            // Add Ascent Color (Green < 50m, Orange < 150m, Red > 150m)
+            const ascentColor = opt.ascent < 50 ? '#2ecc71' : opt.ascent < 150 ? '#f39c12' : '#e74c3c';
+
+            btn.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="font-weight:700; font-size:1rem; color:var(--text-primary);">${idx === 0 ? '★ Recommended' : `Option ${idx + 1}`}</span>
+                    <span style="font-size:1rem; font-weight:700;">${timeMins} min</span>
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:10px;">
+                    ${distKm} km total distance
+                </div>
+                
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-size:0.75rem; background:#f8f9fa; padding:8px; border-radius:8px;">
+                    <div title="Wind Favorability" style="display:flex; align-items:center; gap:6px;">
+                        <span style="width:8px; height:8px; border-radius:50%; background:${windColor};"></span>
+                        <span>Wind ${opt.windScore.percentage}%</span>
+                    </div>
+                    <div title="Cycle Lane Coverage" style="display:flex; align-items:center; gap:6px;">
+                        <span style="width:8px; height:8px; border-radius:50%; background:${cycleColor};"></span>
+                        <span>Cycle ${opt.stats.cycleLanePct}%</span>
+                    </div>
+                    <div title="A-Road Exposure" style="display:flex; align-items:center; gap:6px;">
+                        <span style="width:8px; height:8px; border-radius:50%; background:${roadColor};"></span>
+                        <span>A-Road ${opt.stats.aRoadPct}%</span>
+                    </div>
+                    <div title="Total Ascent" style="display:flex; align-items:center; gap:6px;">
+                        <span style="width:8px; height:8px; border-radius:50%; background:${ascentColor};"></span>
+                        <span>Climb ${Math.round(opt.ascent)}m</span>
+                    </div>
+                </div>
+            `;
+            btn.onclick = () => handleRouteSelection(opt, false, allOptions);
+            optionsContainer.appendChild(btn);
+        });
+        list.appendChild(optionsContainer);
     }
 
     // --- POPULATE SHARE TAB ---
@@ -1054,9 +1346,6 @@ async function handleRouteSelection(route, isNew = false) {
 
     if (feather) feather.replace();
 
-    const list = document.getElementById('directions-list');
-    list.innerHTML = '';
-
     if (route.legs && route.legs.length > 0) {
         route.legs[0].steps.forEach((step, index) => {
             const [lng, lat] = step.maneuver.location;
@@ -1354,12 +1643,43 @@ const loadSavedList = async () => {
         div.appendChild(actionsDiv);
 
         div.onclick = async () => {
-            const geo = JSON.parse(r.geometry);
-            const routeWaypoints = [geo.coordinates[0], geo.coordinates[geo.coordinates.length - 1]];
-            const freshRoute = await drawWindRoute(map, routeWaypoints);
-            if (freshRoute) {
-                switchTab('directions'); // Switch first so chart can render correctly
-                handleRouteSelection(freshRoute, false);
+            // FIX: Load EXACT route if available, otherwise fallback to recalculation
+            if (r.legs && r.savedWaypoints) {
+                // 1. Restore Route Object
+                const routeObj = {
+                    geometry: JSON.parse(r.geometry),
+                    distance: r.distance,
+                    duration: r.duration || 0,
+                    legs: JSON.parse(r.legs),
+                    weight_name: 'saved',
+                    weight: 0
+                };
+
+                // 2. Restore Waypoints & Markers
+                waypoints = JSON.parse(r.savedWaypoints);
+                addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
+                
+                // 3. Update UI Inputs (Generic labels since we don't save address text)
+                geocoders.forEach(g => g.clear());
+                waypoints.forEach((wp, i) => {
+                    if (geocoders[i]) geocoders[i].setInput(i === 0 ? "Saved Start" : i === waypoints.length - 1 ? "Saved Dest" : "Saved Stop");
+                });
+
+                switchTab('directions');
+                handleRouteSelection(routeObj, false);
+            } else {
+                // Legacy: Recalculate based on geometry
+                const geo = JSON.parse(r.geometry);
+                const routeWaypoints = [geo.coordinates[0], geo.coordinates[geo.coordinates.length - 1]];
+                
+                // FIX: Update global waypoints so sharing works for legacy routes
+                waypoints = routeWaypoints;
+
+                const freshRoutes = await fetchRouteAlternatives(routeWaypoints);
+                if (freshRoutes && freshRoutes.length > 0) {
+                    switchTab('directions');
+                    handleRouteSelection(freshRoutes[0], false);
+                }
             }
         };
         list.appendChild(div);
@@ -1368,6 +1688,8 @@ const loadSavedList = async () => {
 
 function locateUser() {
     if (!navigator.geolocation) return alert("Geolocation not supported.");
+
+    if (geocoders[0]) geocoders[0].setInput("Locating...");
 
     const onLocationFound = async (position) => {
         const { longitude, latitude } = position.coords;
@@ -1414,11 +1736,18 @@ async function handleSaveButtonClick() {
     const weather = await fetchWindAtLocation(start[1], start[0]);
     const score = calculateRouteWindScore(currentRouteData.geometry, weather?.bearing || 0);
 
+    // OPTIMIZATION: Compress legs to avoid Firestore 1MB limit
+    const compressedLegs = compressRouteLegs(currentRouteData.legs);
+
+    // FIX: Save full route details to ensure exact reload
     const data = {
         userId: currentUser.uid,
         name: routeName,
         geometry: JSON.stringify(currentRouteData.geometry),
         distance: currentRouteData.distance,
+        duration: currentRouteData.duration,
+        legs: JSON.stringify(compressedLegs), // Save compressed turn-by-turn info
+        savedWaypoints: JSON.stringify(waypoints),   // Save exact stops
         tailwindScore: score.percentage,
         rating: score.rating
     };
@@ -1945,17 +2274,43 @@ function toggleTheme() {
 
         // Redraw route if exists
         if (currentRouteData) {
-            drawWindRoute(map, currentRouteData.geometry.coordinates);
+            drawStaticRoute(map, currentRouteData.geometry);
         }
     });
 }
 
-function showLinkUI(route) {
-    const coords = route.geometry.coordinates;
-    const start = coords[0].join(',');
-    const end = coords[coords.length - 1].join(',');
-    const url = `${window.location.origin}${window.location.pathname}?start=${start}&end=${end}`;
-    renderLinkBox("Route Link", url);
+async function showLinkUI(route) {
+    const container = document.getElementById('share-output-area');
+    // Show loading state
+    container.innerHTML = `<div style="padding:15px; text-align:center; color:var(--text-secondary);"><i data-feather="loader" class="spin-anim"></i> Saving route to cloud...</div>`;
+    if (feather) feather.replace();
+
+    try {
+        // OPTIMIZATION: Compress legs to avoid Firestore 1MB limit
+        const compressedLegs = compressRouteLegs(route.legs);
+
+        // Prepare exact route data
+        const data = {
+            name: "Shared Route",
+            geometry: JSON.stringify(route.geometry),
+            distance: route.distance,
+            duration: route.duration,
+            legs: JSON.stringify(compressedLegs || []), 
+            savedWaypoints: JSON.stringify(waypoints),
+        };
+
+        // Save to "shared_routes" collection
+        const shareId = await saveSharedRoute(data);
+
+        // Generate ID-based URL
+        const baseUrl = window.location.href.split('?')[0].split('#')[0];
+        const url = `${baseUrl}?share_id=${shareId}`;
+        
+        renderLinkBox("Shared Route Link (100% Identical)", url);
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = `<p style="color:#e74c3c; text-align:center;">Failed to generate link. Route may be too long.</p>`;
+    }
 }
 
 function renderLinkBox(label, url) {
@@ -2001,10 +2356,77 @@ async function withLoading(element, asyncFn) {
 
 async function checkUrlForRoute() {
     const params = new URLSearchParams(window.location.search);
+    const shareId = params.get('share_id');
+    const routeParam = params.get('route');
     const start = params.get('start');
     const end = params.get('end');
 
-    if (start && end) {
+    if (shareId) {
+        // --- LOAD EXACT SHARED ROUTE ---
+        const data = await fetchSharedRoute(shareId);
+        if (data) {
+            // 1. Restore Route Object
+            const routeObj = {
+                geometry: JSON.parse(data.geometry),
+                distance: data.distance,
+                duration: data.duration || 0,
+                legs: JSON.parse(data.legs),
+                weight_name: 'shared',
+                weight: 0
+            };
+
+            // 2. Restore Waypoints
+            if (data.savedWaypoints) {
+                waypoints = JSON.parse(data.savedWaypoints);
+            } else {
+                const geo = routeObj.geometry;
+                waypoints = [geo.coordinates[0], geo.coordinates[geo.coordinates.length - 1]];
+            }
+
+            // 3. Update UI Inputs
+            geocoders.forEach(g => g.clear());
+            while (geocoders.length < waypoints.length) addDestination();
+            
+            waypoints.forEach((wp, i) => {
+                if (geocoders[i]) geocoders[i].setInput(i === 0 ? "Shared Start" : i === waypoints.length - 1 ? "Shared Dest" : "Shared Stop");
+            });
+
+            addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
+            switchTab('directions');
+            handleRouteSelection(routeObj, false);
+            return;
+        }
+    } else if (routeParam) {
+        const points = routeParam.split(';');
+        if (points.length < 2) return;
+
+        // 1. Set Start & End (always exist on load)
+        waypoints[0] = points[0].split(',').map(Number);
+        waypoints[1] = points[1].split(',').map(Number);
+
+        // 2. Add intermediate destinations if any
+        for (let i = 2; i < points.length; i++) {
+            addDestination(); // Adds a new slot at end of waypoints/geocoders arrays
+            waypoints[i] = points[i].split(',').map(Number);
+        }
+
+        // 3. Update UI Texts (Reverse Geocoding)
+        const updateInput = async (index, coords) => {
+            try {
+                const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${coords[0]},${coords[1]}.json?access_token=${MAPBOX_TOKEN}`);
+                const data = await res.json();
+                if (data.features && data.features[0] && geocoders[index]) {
+                    geocoders[index].setInput(data.features[0].place_name);
+                }
+            } catch (e) { console.error("Reverse geocode failed", e); }
+        };
+
+        await Promise.all(waypoints.map((wp, i) => updateInput(i, wp)));
+
+        addRouteMarkers(map, waypoints, handleMarkerDrag);
+        calculateRoute();
+
+    } else if (start && end) {
         waypoints[0] = start.split(',').map(Number);
         waypoints[1] = end.split(',').map(Number);
 
@@ -2396,6 +2818,75 @@ async function computeRouteWindImpact(geometry) {
         head: Math.round((headM / totalM) * 100),
         cross: Math.round((crossM / totalM) * 100)
     };
+}
+
+function analyzeRouteCharacteristics(route) {
+    let totalDist = route.distance || 1; // Avoid div by 0
+    let aRoadDist = 0;
+    let motorwayDist = 0;
+    let cycleDist = 0;
+    let scenicDist = 0;
+
+    if (route.legs) {
+        route.legs.forEach(leg => {
+            leg.steps.forEach(step => {
+                const d = step.distance;
+                const name = step.name || "";
+                const ref = step.ref || "";
+                
+                // Check for A-Roads (e.g., "A1", "A406")
+                if (/\bA\d+\b/.test(ref) || /\bA\d+\b/.test(name)) {
+                    aRoadDist += d;
+                }
+
+                // Check for Motorways (e.g., "M1", "M25")
+                if (/\bM\d+\b/.test(ref) || /\bM\d+\b/.test(name)) {
+                    motorwayDist += d;
+                }
+
+                // Check for Cycle-friendly keywords
+                const lowerName = name.toLowerCase();
+                const lowerRef = ref.toLowerCase();
+                if (lowerName.includes('cycle') || lowerName.includes('path') || 
+                    lowerName.includes('greenway') || lowerName.includes('towpath') || 
+                    lowerRef.includes('ncn')) {
+                    cycleDist += d;
+                }
+
+                // Check for Scenic keywords (Parks, Forests, Water)
+                if (lowerName.includes('park') || lowerName.includes('forest') || 
+                    lowerName.includes('wood') || lowerName.includes('common') ||
+                    lowerName.includes('trail') || lowerName.includes('river') ||
+                    lowerName.includes('canal') || lowerName.includes('lake')) {
+                    scenicDist += d;
+                }
+            });
+        });
+    }
+
+    return {
+        aRoadPct: Math.round((aRoadDist / totalDist) * 100),
+        motorwayPct: Math.round((motorwayDist / totalDist) * 100),
+        cycleLanePct: Math.round((cycleDist / totalDist) * 100),
+        scenicScore: Math.round((scenicDist / totalDist) * 100)
+    };
+}
+
+// Helper to reduce route object size for Firestore (1MB limit)
+function compressRouteLegs(legs) {
+    if (!legs) return [];
+    return legs.map(leg => ({
+        ...leg,
+        steps: leg.steps.map(step => {
+            // Exclude heavy properties to save space
+            // intersections: array of every intersection passed (huge)
+            // geometry: step-specific geometry (redundant with main route geometry)
+            // voiceInstructions/bannerInstructions: verbose text
+            const { intersections, geometry, voiceInstructions, bannerInstructions, ...rest } = step;
+            return rest;
+        }),
+        annotation: undefined
+    }));
 }
 async function captureRouteSnapshot() {
     if (!currentRouteData) return;

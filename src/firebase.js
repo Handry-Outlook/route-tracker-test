@@ -1,6 +1,6 @@
 // src/firebase.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc, setDoc, onSnapshot, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 import { firebaseConfig } from './config.js'; 
@@ -103,6 +103,36 @@ export const updateRouteName = async (routeId, newName) => {
     } catch (e) {
         console.error("❌ Error renaming route:", e);
         throw e;
+    }
+};
+
+/**
+ * Saves a temporary shared route to Firestore
+ */
+export const saveSharedRoute = async (routeData) => {
+    try {
+        const docRef = await addDoc(collection(db, "shared_routes"), {
+            ...routeData,
+            timestamp: new Date()
+        });
+        return docRef.id;
+    } catch (e) {
+        console.error("❌ Error sharing route:", e);
+        throw e;
+    }
+};
+
+/**
+ * Fetches a shared route by ID
+ */
+export const fetchSharedRoute = async (routeId) => {
+    try {
+        const docRef = doc(db, "shared_routes", routeId);
+        const docSnap = await getDoc(docRef);
+        return docSnap.exists() ? docSnap.data() : null;
+    } catch (e) {
+        console.error("❌ Error fetching shared route:", e);
+        return null;
     }
 };
 

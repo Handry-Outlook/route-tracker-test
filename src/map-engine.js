@@ -129,9 +129,10 @@ export const addRouteMarkers = (map, waypoints, onDragEnd) => {
 };
 
 /**
- * Fetches and draws a HIGH-RESOLUTION route
+ * Fetches route alternatives from Mapbox API
+ * Returns an array of route objects (does not draw them)
  */
-export const drawWindRoute = async (map, coordinates, options = {}) => {
+export const fetchRouteAlternatives = async (coordinates) => {
     try {
         // Safety check for invalid coordinates
         if (!coordinates || coordinates.length < 2 || coordinates.some(c => !c)) return null;
@@ -139,92 +140,82 @@ export const drawWindRoute = async (map, coordinates, options = {}) => {
         // Convert array of coordinates to "lng,lat;lng,lat" string for Mapbox API
         const coordString = coordinates.map(c => c.join(',')).join(';');
 
-        // PRO TIP: overview=full gives high resolution, steps=true gives turn-by-turn
-        let url = `https://api.mapbox.com/directions/v5/mapbox/cycling/${coordString}?geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`;
+        // Base URL
+        const baseUrl = `https://api.mapbox.com/directions/v5/mapbox/cycling/${coordString}?geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`;
 
-        if (options.avoidHighways) {
-            url += '&exclude=motorway';
+        // Strategy: Fetch standard alternatives + variations to maximize options
+        // 1. Standard (alternatives=true)
+        // 2. Exclude Ferries (often forces a bridge/tunnel route)
+        // 3. Exclude Tolls (rare for bikes, but can trigger different paths)
+        const queries = [
+            `${baseUrl}&alternatives=true`,
+            `${baseUrl}&exclude=ferry`,
+            `${baseUrl}&exclude=toll`
+        ];
+
+        // STRATEGY: "Jitter" Points to force more alternatives
+        // If simple Start -> End route, we calculate offset midpoints to force the router
+        // to look at paths to the left and right of the direct line.
+        if (coordinates.length === 2) {
+            const start = coordinates[0];
+            const end = coordinates[1];
+            const dist = turf.distance(start, end); // km
+
+            // Only jitter if route is substantial (> 2km)
+            if (dist > 2) {
+                const mid = turf.midpoint(start, end);
+                const bearing = turf.bearing(start, end);
+                const offset = Math.min(dist * 0.2, 15); // 20% offset, max 15km
+
+                const p1 = turf.destination(mid, offset, bearing + 90);
+                const p2 = turf.destination(mid, offset, bearing - 90);
+
+                // Add forced-waypoint queries (we disable alternatives=true for these to save processing)
+                const jitterUrl = (pt) => `https://api.mapbox.com/directions/v5/mapbox/cycling/${start.join(',')};${pt.geometry.coordinates.join(',')};${end.join(',')}?geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`;
+                
+                queries.push(jitterUrl(p1));
+                queries.push(jitterUrl(p2));
+            }
         }
 
         // Add timeout to prevent hanging on poor mobile connections
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-        const response = await fetch(url, { signal: controller.signal });
+        // Execute requests in parallel
+        const responses = await Promise.all(queries.map(url => 
+            fetch(url, { signal: controller.signal })
+                .then(r => r.ok ? r.json() : null)
+                .catch(e => null) // Ignore individual failures
+        ));
+        
         clearTimeout(timeoutId);
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
+        let allRoutes = [];
+        responses.forEach(json => {
+            if (json && json.routes) {
+                allRoutes.push(...json.routes);
+            }
+        });
 
-        const json = await response.json();
-
-        if (!json.routes || json.routes.length === 0) {
+        if (allRoutes.length === 0) {
             throw new Error("No route found");
         }
 
-        const routeData = json.routes[0];
-        const routeGeoJSON = routeData.geometry;
+        // Deduplicate routes based on distance/duration signature
+        const uniqueRoutes = [];
+        const seenSignatures = new Set();
 
-        // CLEANUP: If a route already exists, remove it
-        if (map.getSource('route')) {
-            map.removeLayer('route-line');
-            if (map.getLayer('route-line-casing')) map.removeLayer('route-line-casing');
-            map.removeSource('route');
-        }
-
-        // Add the route as a source
-        map.addSource('route', {
-            'type': 'geojson',
-            'data': {
-                'type': 'Feature',
-                'properties': {},
-                'geometry': routeGeoJSON
+        allRoutes.forEach(r => {
+            // Signature: Distance (rounded to 50m) + Duration (rounded to 30s)
+            const sig = `${Math.round(r.distance / 50)}_${Math.round(r.duration / 30)}`;
+            if (!seenSignatures.has(sig)) {
+                seenSignatures.add(sig);
+                uniqueRoutes.push(r);
             }
         });
 
-        // 1. Add Casing Layer (White Outline for visibility)
-        map.addLayer({
-            'id': 'route-line-casing',
-            'type': 'line',
-            'source': 'route',
-            'layout': { 'line-join': 'round', 'line-cap': 'round' },
-            'paint': {
-                'line-color': '#ffffff',
-                'line-width': 10
-            }
-        });
-
-        // Draw the line with a "Glow" effect
-        map.addLayer({
-            'id': 'route-line',
-            'type': 'line',
-            'source': 'route',
-            'layout': {
-                'line-join': 'round',
-                'line-cap': 'round'
-            },
-            'paint': {
-                'line-color': '#0096ff', // Brighter Blue
-                'line-width': 6,
-                'line-opacity': 0.8
-            }
-        });
-
-        // "Fly" the map to fit the whole route using the Bounding Box
-        const routeCoords = routeGeoJSON.coordinates;
-        const bounds = new mapboxgl.LngLatBounds(routeCoords[0], routeCoords[0]);
-
-        for (const coord of routeCoords) {
-            bounds.extend(coord);
-        }
-
-        map.fitBounds(bounds, {
-            padding: 80, // More padding looks more professional
-            duration: 2000 // Smooth 2-second flight
-        });
-
-        return routeData;
+        return uniqueRoutes;
 
     } catch (error) {
         console.error("Routing Error:", error);
@@ -238,7 +229,7 @@ export const drawWindRoute = async (map, coordinates, options = {}) => {
         }
 
         alert(alertMessage);
-        return null;
+        return [];
     }
 };
 
@@ -605,4 +596,4 @@ export const updateMetOfficeLayer = (map, blobUrl, bbox) => {
             coordinates: coordinates
         });
     }
-};
+};  // It will reappear on the next animation frame update or needs manual re-adding here if static.
