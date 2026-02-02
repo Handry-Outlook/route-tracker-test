@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handry Outlook | Pro Route Planner</title>
+
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
+    <link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+
+</head>
+<body>
+
+    <div id="sidebar" class="floating-panel">
+        <div class="panel-content">
+            <div class="header">
+                <div class="title-container">
+                    <h1>Handry Outlook</h1>
+                    <p class="subtitle">Wind-Optimized Routing</p>
+                </div>
+                <div id="auth-container">
+                    <button id="login-btn" class="auth-btn"><i data-feather="log-in"></i> Login</button>
+                    <div id="user-profile" style="display: none;">
+                        <img id="user-avatar" src="" alt="User Avatar">
+                        <button id="logout-btn" class="auth-btn"><i data-feather="log-out"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-container">
+                <button class="tab-btn active" data-tab="plan">Route</button>
+                <button class="tab-btn" data-tab="directions">Directions</button>
+                <button class="tab-btn" data-tab="saved">Saved</button>
+            </div>
+
+            <div id="plan-tab" class="tab-content active">
+                <div id="route-planner">
+                    <div id="destination-list">
+                        <div class="location-input-wrapper">
+                            <div id="geocoder-start" class="geocoder-container"></div>
+                            <button class="icon-btn locate-me-btn" title="Use current location"><i data-feather="crosshair"></i></button>
+                        </div>
+                        <div class="location-input-wrapper">
+                            <div id="geocoder-end" class="geocoder-container"></div>
+                        </div>
+                    </div>
+                    <div class="route-actions">
+                        <button id="add-destination-btn" class="secondary-btn"><i data-feather="plus"></i> Add Destination</button>
+                        <button id="plan-btn" class="primary-btn">Calculate Route</button>
+                    </div>
+                     <button id="clear-route-btn" class="secondary-btn" style="display: none;"><i data-feather="x"></i> Clear</button>
+                </div>
+            </div>
+            
+            <div id="directions-tab" class="tab-content">
+                <div id="stats-container" class="stats-container">
+                    <div class="stat-box">
+                        <span class="label">Tailwind</span>
+                        <span id="tw-val" class="value">--%</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="label">Headwind</span>
+                        <span id="hw-val" class="value">--%</span>
+                    </div>
+                </div>
+                <div id="weather-summary">
+                    <p id="weather-desc">Create or Select a route to view weather data</p>
+                </div>
+                <div id="directions-list" class="instructions-container"></div>
+                <button id="save-btn" class="primary-btn" style="display:none;"><i data-feather="save"></i> Save Route</button>
+            </div>
+
+            <div id="saved-tab" class="tab-content">
+                <div id="saved-routes-list" class="saved-routes-container">
+                    <p class="empty-state">Log in to see saved routes.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="map">
+        <button id="recenter-btn" class="map-overlay-btn" style="display:none;"><i data-feather="compass"></i></button>
+        <button id="nav-btn" class="map-overlay-btn" style="display:none; bottom: 80px;"><i data-feather="navigation"></i></button>
+    </div>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf/turf.min.js"></script>
+    
+    <script type="module" src="src/app.js"></script>
+    <script>
+      feather.replace()
+    </script>
+</html>

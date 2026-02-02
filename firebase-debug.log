@@ -1,0 +1,30 @@
+[debug] [2026-02-01T13:08:10.512Z] ----------------------------------------------------------------------
+[debug] [2026-02-01T13:08:10.515Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Handry\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js projects:list
+[debug] [2026-02-01T13:08:10.515Z] CLI Version:   14.24.1
+[debug] [2026-02-01T13:08:10.515Z] Platform:      win32
+[debug] [2026-02-01T13:08:10.516Z] Node Version:  v20.18.0
+[debug] [2026-02-01T13:08:10.516Z] Time:          Sun Feb 01 2026 13:08:10 GMT+0000 (Greenwich Mean Time)
+[debug] [2026-02-01T13:08:10.516Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-02-01T13:08:10.518Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-02-01T13:08:10.560Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-02-01T13:08:10.561Z] > authorizing via signed-in user (geoglowdeveloper@gmail.com)
+[debug] [2026-02-01T13:08:10.563Z] Checked if tokens are valid: false, expires at: 1762601515171
+[debug] [2026-02-01T13:08:10.563Z] Checked if tokens are valid: false, expires at: 1762601515171
+[debug] [2026-02-01T13:08:10.564Z] > refreshing access token with scopes: []
+[debug] [2026-02-01T13:08:10.565Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-02-01T13:08:10.565Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-02-01T13:08:10.635Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-02-01T13:08:10.636Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-02-01T13:08:10.644Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=1000
+[debug] [2026-02-01T13:08:10.789Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-02-01T13:08:10.789Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-02-01T13:08:11.104Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2026-02-01T13:08:11.104Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[info] ┌──────────────────────┬───────────────┬────────────────┬──────────────────────┐
+│ Project Display Name │ Project ID    │ Project Number │ Resource Location ID │
+├──────────────────────┼───────────────┼────────────────┼──────────────────────┤
+│ geoglow              │ geoglow-101a9 │ 182068782149   │ [Not specified]      │
+└──────────────────────┴───────────────┴────────────────┴──────────────────────┘
+[info] 
+[info] 1 project(s) total.

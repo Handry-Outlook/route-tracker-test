@@ -1,0 +1,12 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Routes can only be read or created by their owner.
+    // Updates and deletes are disallowed for this version.
+    match /routes/{routeId} {
+      allow read, create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false; 
+    }
+  }
+}

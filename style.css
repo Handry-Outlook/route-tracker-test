@@ -1,0 +1,647 @@
+/* 1. Global Variables & Modern Resets */
+:root {
+    --bg-color: #fff;
+    --panel-bg: #fff;
+    --text-primary: #212121;
+    --text-secondary: #5f6368;
+    --accent-blue: #1a73e8;
+    --accent-blue-dark: #1662c8;
+    --border-color: #dadce0;
+    --shadow: 0 4px 16px rgba(0,0,0,0.12);
+    --icon-color: #5f6368;
+}
+
+body.dark-mode {
+    --bg-color: #121212;
+    --panel-bg: #1e1e1e;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --border-color: #333;
+    --shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    display: flex;
+}
+
+/* 2. Map & Floating Panel Layout */
+#map {
+    flex-grow: 1;
+    height: 100vh;
+}
+
+#sidebar {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    width: 380px;
+    max-height: calc(100vh - 30px);
+    background: var(--panel-bg);
+    border-radius: 16px;
+    z-index: 10;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.panel-content {
+    padding: 20px;
+    overflow-y: auto;
+}
+
+/* 3. Header & Auth */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+.title-container h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.subtitle {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#auth-container {
+    display: flex;
+    align-items: center;
+}
+
+.auth-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+#user-profile img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+/* 4. Tabs */
+.tab-container {
+    display: flex;
+    background: #f1f3f4;
+    padding: 4px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    gap: 4px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 8px 0;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+    background: var(--panel-bg);
+    color: var(--accent-blue);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    font-weight: 600;
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* 5. Route Planner & Inputs */
+#destination-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.location-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    z-index: 1;
+}
+/* Fix: Ensure the first dropdown appears on top of the second input */
+.location-input-wrapper:nth-child(1) { z-index: 20; }
+.location-input-wrapper:nth-child(2) { z-index: 10; }
+
+.mapboxgl-ctrl-geocoder {
+    width: 100%;
+    max-width: none;
+    box-shadow: none;
+}
+.mapboxgl-ctrl-geocoder input {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    height: 44px;
+    transition: border-color 0.2s;
+}
+
+.icon-btn {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--icon-color);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.route-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.primary-btn, .secondary-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.1s, box-shadow 0.2s;
+}
+.primary-btn {
+    background-color: var(--accent-blue);
+    color: white;
+}
+.primary-btn:hover { background-color: var(--accent-blue-dark); }
+.primary-btn:active { transform: scale(0.98); }
+
+.secondary-btn {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+#clear-route-btn {
+    margin-top: 10px;
+    color: var(--accent-red);
+    border-color: var(--accent-red);
+}
+
+/* Realtime Navigation Button */
+.nav-btn-large {
+    background-color: #2ecc71; /* Google Maps Green */
+    color: white;
+    font-size: 1.1rem;
+    padding: 16px;
+    margin-top: 16px;
+}
+.nav-btn-large:hover { background-color: #27ae60; }
+
+/* 6. Directions & Stats */
+#stats-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.stat-box {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+}
+.stat-box .label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+.stat-box .value {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+#weather-summary {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+.instructions-container {
+    max-height: 400px;
+    overflow-y: auto;
+}
+.direction-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid #f1f3f4;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.direction-step:hover {
+    background: #f8f9fa;
+}
+.step-info {
+    flex: 1;
+}
+.step-instr {
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+}
+.step-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+.sv-link {
+    color: var(--accent-blue);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.sv-link .feather {
+    width: 12px;
+    height: 12px;
+}
+
+/* Elevation Chart */
+#elevation-container {
+    margin-bottom: 16px;
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 8px;
+    min-height: 200px; /* Increased for axes */
+}
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+#elevation-canvas {
+    width: 100%;
+    height: 160px;
+    display: block;
+    background: rgba(0,0,0,0.02); /* Subtle background to confirm visibility */
+    border-radius: 4px;
+    cursor: crosshair;
+}
+
+/* 7. Saved Routes */
+.saved-route-item {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.saved-route-item:hover { background-color: #f1f3f4; }
+.empty-state { text-align: center; padding: 20px; color: var(--text-secondary); }
+
+.delete-route-btn {
+    background: none;
+    border: none;
+    color: #e74c3c;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+.delete-route-btn:hover {
+    background: rgba(231, 76, 60, 0.1);
+}
+.delete-route-btn .feather {
+    width: 16px;
+    height: 16px;
+}
+
+/* 8. Map Overlays */
+.map-controls-stack {
+    position: absolute;
+    right: 15px;
+    bottom: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 11; /* Ensure above sidebar */
+    pointer-events: none; /* Allow clicks to pass through container gaps */
+}
+
+.map-overlay-btn {
+    position: relative; /* Reset absolute positioning */
+    background: var(--panel-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, background 0.2s;
+    pointer-events: auto;
+}
+.map-overlay-btn.active { background-color: var(--accent-blue); color: white; }
+.map-overlay-btn:hover { transform: scale(1.05); }
+
+/* Override IDs if they have inline styles or specific ID rules */
+#recenter-btn, #nav-btn {
+    position: relative !important;
+    bottom: auto !important;
+    right: auto !important;
+    top: auto !important;
+    left: auto !important;
+    margin: 0;
+}
+
+/* 9. Feather Icons */
+.feather {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.5;
+}
+
+/* 10. Mobile Responsive */
+@media (max-width: 768px) {
+    #sidebar {
+        width: 100%;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        border-radius: 12px 12px 0 0;
+        max-height: 50vh;
+    }
+    .panel-content { padding: 16px; }
+    .title-container h1 { font-size: 1.1rem; }
+
+    /* Move controls to top-right on mobile to avoid bottom sheet */
+    .map-controls-stack {
+        bottom: auto;
+        top: 80px;
+    }
+}
+
+/* Animation Marker */
+.animation-marker {
+    width: 20px;
+    height: 20px;
+    background-color: #f39c12;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(0,0,0,0.4);
+}
+
+/* Animation Controls */
+#animation-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+#animation-controls button {
+    flex: 1;
+}
+.speed-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* Dark Mode Toggle */
+.theme-toggle {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+/* User Location Marker (Blue Dot) */
+.user-marker {
+    width: 20px;
+    height: 20px;
+    background-color: #4285F4;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+}
+
+/* Reverse Button */
+.reverse-btn {
+    margin-right: 8px;
+    border-style: dashed;
+    color: var(--accent-blue);
+}
+
+/* Compass Icon */
+#compass-icon {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    background: var(--panel-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.1s ease-out;
+    color: var(--accent-red);
+    pointer-events: auto;
+}
+
+.compass-label {
+    position: absolute;
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--text-secondary);
+    pointer-events: none;
+    line-height: 1;
+}
+.compass-label.n { top: 3px; left: 50%; transform: translateX(-50%); color: var(--accent-red); }
+.compass-label.s { bottom: 3px; left: 50%; transform: translateX(-50%); }
+.compass-label.e { right: 3px; top: 50%; transform: translateY(-50%); }
+.compass-label.w { left: 3px; top: 50%; transform: translateY(-50%); }
+
+#compass-icon .feather {
+    width: 16px;
+    height: 16px;
+}
+
+/* POI Controls */
+.poi-container {
+    margin-bottom: 16px;
+    background: #f8f9fa;
+    padding: 8px 12px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.poi-buttons {
+    display: flex;
+    gap: 8px;
+}
+.poi-btn {
+    background: white;
+    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.poi-btn:hover { background: #eee; }
+
+.poi-marker {
+    font-size: 20px;
+    cursor: pointer;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Route Planning Options */
+.route-options-container {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 8px;
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.time-selector {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.time-selector select, .time-selector input {
+    padding: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+.pace-input {
+    width: 60px;
+}
+
+/* Loading Animation */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.spin-anim {
+    animation: spin 1s linear infinite;
+}
+
+/* Share Tab Styles */
+.share-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+}
+.share-card {
+    background: #f8f9fa;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    min-height: 100px;
+}
+.share-card:hover {
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+}
+.share-card i {
+    width: 32px;
+    height: 32px;
+    color: var(--accent-blue);
+}
+.share-card span {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.link-box {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    width: 100%;
+}
+.link-box input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    background: #fff;
+    color: var(--text-primary);
+}
+.copy-btn {
+    padding: 8px 16px;
+    background: var(--accent-blue);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+.copy-btn:hover { background: var(--accent-blue-dark); }
