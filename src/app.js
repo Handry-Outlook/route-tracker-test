@@ -25,6 +25,7 @@ let metOfficeTimestamps = [];
 let lastLogicalWeatherUrl = null;
 let lastBlobUrl = null;
 let compassMode = 'north'; // 'north' | 'heading'
+let isMuted = false;
 
 const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -1126,7 +1127,7 @@ function startLiveTracking() {
     }, GEO_OPTIONS);
 
     watchId = navigator.geolocation.watchPosition(pos => {
-        handlePositionUpdate([pos.coords.longitude, pos.coords.latitude], pos.coords.heading);
+        handlePositionUpdate([pos.coords.longitude, pos.coords.latitude], pos.coords.heading, pos.coords.speed);
     }, err => {
         console.warn("Watch Position Error:", err);
         // Stop watching if permission is denied or insecure origin to prevent loop
@@ -1184,7 +1185,7 @@ function manualReroute() {
     }, GEO_OPTIONS);
 }
 
-function handlePositionUpdate(userPos, heading) {
+function handlePositionUpdate(userPos, heading, speed) {
     // Update User Marker
     if (!userMarker) {
         const el = document.createElement('div');
@@ -1213,6 +1214,14 @@ function handlePositionUpdate(userPos, heading) {
         updateNavigationDashboard(userPos);
     }
 
+    // Update Speedometer
+    const speedEl = document.getElementById('nav-speed');
+    if (speedEl) {
+        // speed is in m/s, convert to km/h. Handle null/undefined.
+        const kmh = speed ? (speed * 3.6) : 0;
+        speedEl.innerText = Math.round(kmh);
+    }
+
     // Voice Instructions
     if (currentRouteData && currentRouteData.legs && currentRouteData.legs[0]) {
         const steps = currentRouteData.legs[0].steps;
@@ -1238,6 +1247,7 @@ function initNavigationOverlays() {
     topOverlay.innerHTML = `
         <div class="nav-distance-large" id="nav-next-dist">0 m</div>
         <div class="nav-instruction-large" id="nav-instr">Locating...</div>
+        <button id="nav-mute-btn" class="nav-mute-btn"><i data-feather="volume-2"></i></button>
     `;
     document.body.appendChild(topOverlay);
 
@@ -1246,6 +1256,10 @@ function initNavigationOverlays() {
     bottomOverlay.id = 'nav-overlay-bottom';
     bottomOverlay.innerHTML = `
         <div class="nav-stats-group">
+            <div class="nav-stat-item">
+                <span class="nav-stat-value" id="nav-speed">0</span>
+                <span class="nav-stat-label">km/h</span>
+            </div>
             <div class="nav-stat-item">
                 <span class="nav-stat-value" id="nav-time-rem">--</span>
                 <span class="nav-stat-label">min</span>
@@ -1268,6 +1282,18 @@ function initNavigationOverlays() {
         if (btn) btn.innerHTML = `<i data-feather="navigation"></i> Resume Navigation`;
     };
     document.getElementById('exit-nav-btn').onclick = toggleNavigation;
+
+    // Mute Button Logic
+    const muteBtn = document.getElementById('nav-mute-btn');
+    muteBtn.onclick = () => {
+        isMuted = !isMuted;
+        muteBtn.classList.toggle('muted', isMuted);
+        muteBtn.innerHTML = isMuted ? `<i data-feather="volume-x"></i>` : `<i data-feather="volume-2"></i>`;
+        if (feather) feather.replace();
+    };
+
+    // Refresh icons for new elements
+    if (feather) feather.replace();
 }
 
 function updateNavigationDashboard(userPos) {
@@ -1581,7 +1607,7 @@ function renderElevationChart(data) {
 }
 
 function speak(text) {
-    if (!speechSynth) return;
+    if (!speechSynth || isMuted) return;
     const utterance = new SpeechSynthesisUtterance(text);
     speechSynth.speak(utterance);
 }
