@@ -9,8 +9,8 @@
     --border-color: #dadce0;
     --shadow: 0 4px 16px rgba(0,0,0,0.12);
     --icon-color: #5f6368;
+    --accent-red: #e74c3c;
 }
-
 body.dark-mode {
     --bg-color: #121212;
     --panel-bg: #1e1e1e;
@@ -25,13 +25,11 @@ body.dark-mode {
     margin: 0;
     padding: 0;
 }
-
 html, body {
     height: 100%;
     width: 100%;
     overflow: hidden;
 }
-
 body {
     font-family: 'Inter', sans-serif;
     background-color: var(--bg-color);
@@ -44,7 +42,6 @@ body {
     flex-grow: 1;
     height: 100vh;
 }
-
 #sidebar {
     position: absolute;
     top: 15px;
@@ -60,7 +57,6 @@ body {
     overflow: hidden;
     border: 1px solid var(--border-color);
 }
-
 .panel-content {
     padding: 20px;
     overflow-y: auto;
@@ -82,18 +78,15 @@ body {
     font-size: 0.8rem;
     color: var(--text-secondary);
 }
-
 .header-actions {
     display: flex;
     align-items: center;
     gap: 8px;
 }
-
 #auth-container {
     display: flex;
     align-items: center;
 }
-
 .auth-btn {
     display: flex;
     align-items: center;
@@ -105,7 +98,6 @@ body {
     cursor: pointer;
     font-weight: 500;
 }
-
 #user-profile img {
     width: 36px;
     height: 36px;
@@ -122,7 +114,6 @@ body {
     margin-bottom: 16px;
     gap: 4px;
 }
-
 .tab-btn {
     flex: 1;
     padding: 8px 0;
@@ -134,17 +125,14 @@ body {
     cursor: pointer;
     transition: all 0.2s ease;
 }
-
 .tab-btn.active {
     background: var(--panel-bg);
     color: var(--accent-blue);
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     font-weight: 600;
 }
-
 .tab-content { display: none; }
 .tab-content.active { display: block; }
-
 .collapse-btn-mobile {
     display: none;
     background: none;
@@ -166,7 +154,6 @@ body {
     gap: 12px;
     margin-bottom: 16px;
 }
-
 .location-input-wrapper {
     display: flex;
     align-items: center;
@@ -177,7 +164,6 @@ body {
 /* Fix: Ensure the first dropdown appears on top of the second input */
 .location-input-wrapper:nth-child(1) { z-index: 20; }
 .location-input-wrapper:nth-child(2) { z-index: 10; }
-
 .mapboxgl-ctrl-geocoder {
     width: 100%;
     max-width: none;
@@ -189,7 +175,6 @@ body {
     height: 44px;
     transition: border-color 0.2s;
 }
-
 .icon-btn {
     flex-shrink: 0;
     background: none;
@@ -204,13 +189,11 @@ body {
     justify-content: center;
     transition: background 0.2s, transform 0.1s;
 }
-
 .route-actions {
     display: flex;
     gap: 12px;
     margin-top: 16px;
 }
-
 .primary-btn, .secondary-btn {
     display: flex;
     align-items: center;
@@ -230,22 +213,19 @@ body {
 }
 .primary-btn:hover { background-color: var(--accent-blue-dark); }
 .primary-btn:active { transform: scale(0.98); }
-
 .secondary-btn {
     background-color: var(--bg-color);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
 }
-
 #clear-route-btn {
     margin-top: 10px;
     color: var(--accent-red);
     border-color: var(--accent-red);
 }
-
 /* Realtime Navigation Button */
 .nav-btn-large {
-    background-color: #2ecc71; /* Google Maps Green */
+    background-color: #2ecc71;
     color: white;
     font-size: 1.1rem;
     padding: 16px;
@@ -260,14 +240,6 @@ body {
     gap: 16px;
     margin-bottom: 16px;
 }
-/* Improved Stats Container – Perfectly Uniform Boxes */
-#stats-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 16px;
-    margin-bottom: 16px;
-}
-
 .stat-box {
     background: #f8f9fa;
     padding: 14px 12px;
@@ -276,34 +248,28 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    min-height: 90px; /* Increased slightly for better breathing room */
-    height: 90px; /* Fixed height to force absolute uniformity */
-    overflow: hidden; /* Prevent any overflow from breaking layout */
+    min-height: 90px;
+    height: 90px;
+    overflow: hidden;
 }
-
 .stat-box .label {
-    font-size: 0.75rem; /* Slightly smaller to reduce wrapping needs */
+    font-size: 0.75rem;
     color: var(--text-secondary);
     margin-bottom: 6px;
     line-height: 1.3;
     word-wrap: break-word;
-    
-    /* Clamp to exactly 2 lines max – prevents height variation */
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-    
-    /* Extra safety for very long labels */
     max-height: 2.6em;
 }
-
 .stat-box .value {
     font-size: 1.35rem;
     font-weight: 700;
     line-height: 1;
-    margin-top: auto; /* Pushes value to bottom if label is short */
+    margin-top: auto;
 }
 #weather-summary {
     text-align: center;
@@ -357,7 +323,7 @@ body {
     background: #f8f9fa;
     padding: 12px;
     border-radius: 8px;
-    min-height: 200px; /* Increased for axes */
+    min-height: 200px;
 }
 .chart-header {
     display: flex;
@@ -370,7 +336,7 @@ body {
     width: 100%;
     height: 160px;
     display: block;
-    background: rgba(0,0,0,0.02); /* Subtle background to confirm visibility */
+    background: rgba(0,0,0,0.02);
     border-radius: 4px;
     cursor: crosshair;
 }
@@ -386,7 +352,6 @@ body {
 }
 .saved-route-item:hover { background-color: #f1f3f4; }
 .empty-state { text-align: center; padding: 20px; color: var(--text-secondary); }
-
 .delete-route-btn {
     background: none;
     border: none;
@@ -407,20 +372,20 @@ body {
     height: 16px;
 }
 
-/* 8. Map Overlays */
+/* 8. Map Overlays – Controls Stack (Final Fix) */
 .map-controls-stack {
     position: absolute;
     right: 15px;
-    bottom: 30px;
+    bottom: 30px; /* Desktop default */
     display: flex;
     flex-direction: column;
     gap: 12px;
-    z-index: 11; /* Ensure above sidebar */
-    pointer-events: none; /* Allow clicks to pass through container gaps */
+    z-index: 11;
+    pointer-events: none;
+    transition: bottom 0.3s ease-in-out;
 }
-
 .map-overlay-btn {
-    position: relative; /* Reset absolute positioning */
+    position: relative;
     background: var(--panel-bg);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
@@ -437,8 +402,6 @@ body {
 }
 .map-overlay-btn.active { background-color: var(--accent-blue); color: white; }
 .map-overlay-btn:hover { transform: scale(1.05); }
-
-/* Override IDs if they have inline styles or specific ID rules */
 #recenter-btn, #nav-btn {
     position: relative !important;
     bottom: auto !important;
@@ -448,24 +411,25 @@ body {
     margin: 0;
 }
 
+/* Mobile non-nav collapsed default (JS overrides on expand/collapse) */
+@media (max-width: 768px) {
+    body:not(.nav-mode) .map-controls-stack {
+        bottom: calc(120px + 20px);
+    }
+}
+
+/* Navigation mode: strong override to ensure it moves down correctly even if previous inline style exists */
+body.nav-mode .map-controls-stack {
+    bottom: calc(160px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
 /* 9. Feather Icons */
 .feather {
     width: 18px;
     height: 18px;
     stroke-width: 2.5;
 }
-.map-controls-stack {
-    position: absolute;
-    right: 15px;
-    bottom: 30px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    z-index: 11;
-    pointer-events: none;
-    transition: bottom 0.3s ease-in-out;  /* Add this line */
-}
-/* 10. Mobile Responsive */
+
 /* 10. Mobile Responsive */
 @media (max-width: 768px) {
     #sidebar {
@@ -474,42 +438,29 @@ body {
         bottom: 0;
         left: 0;
         border-radius: 12px 12px 0 0;
-        /* Start collapsed to only show tabs */
-        max-height: 50px;
+        max-height: 120px;
         display: flex;
         flex-direction: column;
         transition: max-height 0.3s ease-in-out;
         overflow: hidden;
     }
-    
     .collapse-btn-mobile {
         display: flex;
         align-items: center;
         justify-content: center;
-        flex: 0 0 40px; /* Fixed width, do not grow */
+        flex: 0 0 40px;
     }
-
     #sidebar.expanded {
         max-height: 40vh;
     }
-
-    /* --- FIXED: Only hide header when collapsed --- */
     #sidebar:not(.expanded) .header {
         display: none;
     }
-    /* Remove or comment out the old unconditional rule */
-    /* .header { display: none; } */
-
-    /* Only show tabs in phone mode */
-    /* (title already reduced below) */
-
     .panel-content {
         padding: 16px;
         overflow-y: auto;
     }
     .title-container h1 { font-size: 1.1rem; }
-
-    /* Better UI in directions tab */
     .direction-step {
         padding: 16px 4px;
     }
@@ -520,16 +471,6 @@ body {
     }
     .step-meta {
         margin-top: 8px;
-    }
-
-    /* Move controls to bottom-right on mobile, above the sidebar */
-    body:not(.nav-mode) .map-controls-stack {
-        bottom: calc(50px + 20px); /* Default for collapsed */
-        transition: bottom 0.3s ease-in-out;
-    }
-
-    #sidebar.expanded ~ .map-controls-stack {
-        bottom: calc(40vh + 20px);
     }
 }
 
@@ -569,7 +510,7 @@ body {
     cursor: pointer;
 }
 
-/* User Location Marker (Blue Dot) */
+/* User Location Marker */
 .user-marker {
     width: 20px;
     height: 20px;
@@ -603,7 +544,6 @@ body {
     color: var(--accent-red);
     pointer-events: auto;
 }
-
 .compass-label {
     position: absolute;
     font-size: 9px;
@@ -616,13 +556,10 @@ body {
 .compass-label.s { bottom: 3px; left: 50%; transform: translateX(-50%); }
 .compass-label.e { right: 3px; top: 50%; transform: translateY(-50%); }
 .compass-label.w { left: 3px; top: 50%; transform: translateY(-50%); }
-
 #compass-icon .feather {
     width: 16px;
     height: 16px;
 }
-
-/* Compass Heading Mode Active */
 #compass-icon.active-heading {
     border-color: var(--accent-blue);
     background-color: #e8f0fe;
@@ -651,7 +588,6 @@ body {
     cursor: pointer;
 }
 .poi-btn:hover { background: #eee; }
-
 .poi-marker {
     font-size: 20px;
     cursor: pointer;
@@ -727,7 +663,6 @@ body {
     font-size: 0.9rem;
     font-weight: 600;
 }
-
 .link-box {
     display: flex;
     gap: 8px;
@@ -761,11 +696,6 @@ body.nav-mode .header {
     display: none !important;
 }
 
-/* Adjust floating buttons in nav mode */
-body.nav-mode .map-controls-stack {
-    bottom: 140px; /* Move up to clear the bottom stats bar */
-}
-
 /* Top Instruction Banner */
 #nav-overlay-top {
     display: none;
@@ -775,7 +705,7 @@ body.nav-mode .map-controls-stack {
     transform: translateX(-50%);
     width: 90%;
     max-width: 600px;
-    background-color: #2ecc71; /* Navigation Green */
+    background-color: #2ecc71;
     color: white;
     padding: 20px;
     border-radius: 16px;
@@ -784,16 +714,13 @@ body.nav-mode .map-controls-stack {
     flex-direction: column;
     align-items: flex-start;
 }
-
 body.nav-mode #nav-overlay-top { display: flex; }
-
 .nav-instruction-large {
     font-size: 1.5rem;
     font-weight: 700;
     margin-bottom: 4px;
     line-height: 1.2;
 }
-
 .nav-distance-large {
     font-size: 2rem;
     font-weight: 800;
@@ -809,6 +736,7 @@ body.nav-mode #nav-overlay-top { display: flex; }
     width: 100%;
     background-color: var(--panel-bg);
     padding: 20px 24px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     border-top: 1px solid var(--border-color);
     box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
     z-index: 20;
@@ -816,9 +744,7 @@ body.nav-mode #nav-overlay-top { display: flex; }
     gap: 20px;
     align-items: stretch;
 }
-
 body.nav-mode #nav-overlay-bottom { display: flex; }
-
 .nav-stats-group {
     display: flex;
     justify-content: space-between;
@@ -827,14 +753,12 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
 .nav-stat-item { display: flex; flex-direction: column; }
 .nav-stat-value { font-size: 1.4rem; font-weight: 700; color: var(--text-primary); }
 .nav-stat-label { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; }
-
 .nav-controls-row {
     display: flex;
     justify-content: center;
     gap: 16px;
     width: 100%;
 }
-
 #exit-nav-btn {
     background-color: #e74c3c;
     color: white;
@@ -845,10 +769,9 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
     cursor: pointer;
     font-size: 1rem;
     box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
-    display: none; /* Hidden initially */
+    display: none;
     min-width: 120px;
 }
-
 #pause-nav-btn {
     background-color: #f1c40f;
     color: #212121;
@@ -861,7 +784,6 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
     box-shadow: 0 4px 12px rgba(241, 196, 15, 0.3);
     min-width: 120px;
 }
-
 .nav-mute-btn {
     position: absolute;
     top: 20px;
@@ -884,7 +806,7 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
 /* Map Style Picker */
 .style-picker-menu {
     position: absolute;
-    right: 60px; /* Left of the stack */
+    right: 60px;
     bottom: 0;
     background: var(--panel-bg);
     border: 1px solid var(--border-color);
@@ -896,7 +818,7 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
     box-shadow: var(--shadow);
     z-index: 20;
     width: 140px;
-    pointer-events: auto; /* Fix: Allow clicking menu items */
+    pointer-events: auto;
 }
 .style-picker-menu.active { display: flex; }
 .style-option {
@@ -938,7 +860,6 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
 .wx-unit { font-size: 1rem; vertical-align: top; }
 .wx-feels { font-size: 0.85rem; color: var(--text-secondary); }
 .wx-condition-text { text-align: center; font-weight: 500; margin-bottom: 20px; font-size: 1.1rem; }
-
 .wx-stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
