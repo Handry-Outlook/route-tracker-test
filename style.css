@@ -145,6 +145,20 @@ body {
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 
+.collapse-btn-mobile {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 8px;
+    transition: background 0.2s;
+}
+.collapse-btn-mobile:hover {
+    background: rgba(0,0,0,0.05);
+}
+
 /* 5. Route Planner & Inputs */
 #destination-list {
     display: flex;
@@ -418,15 +432,55 @@ body {
         bottom: 0;
         left: 0;
         border-radius: 12px 12px 0 0;
-        max-height: 50vh;
+        /* Start collapsed to only show tabs */
+        max-height: 50px;
+        display: flex;
+        flex-direction: column;
+        transition: max-height 0.3s ease-in-out;
+        overflow: hidden;
     }
-    .panel-content { padding: 16px; }
+    
+    .collapse-btn-mobile {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 40px; /* Fixed width, do not grow */
+    }
+
+    #sidebar.expanded {
+        max-height: 40vh;
+    }
+
+    /* Only show tabs in phone mode */
+    .header { display: none; }
+
+    .panel-content {
+        padding: 16px;
+        overflow-y: auto;
+    }
     .title-container h1 { font-size: 1.1rem; }
 
-    /* Move controls to top-right on mobile to avoid bottom sheet */
-    .map-controls-stack {
-        bottom: auto;
-        top: 80px;
+    /* Better UI in directions tab */
+    .direction-step {
+        padding: 16px 4px;
+    }
+    .step-instr {
+        font-size: 1rem;
+        font-weight: 500;
+        line-height: 1.4;
+    }
+    .step-meta {
+        margin-top: 8px;
+    }
+
+    /* Move controls to bottom-right on mobile, above the sidebar */
+    body:not(.nav-mode) .map-controls-stack {
+        bottom: calc(50px + 20px); /* Default for collapsed */
+        transition: bottom 0.3s ease-in-out;
+    }
+
+    #sidebar.expanded ~ .map-controls-stack {
+        bottom: calc(40vh + 20px);
     }
 }
 
@@ -709,20 +763,28 @@ body.nav-mode #nav-overlay-top { display: flex; }
     border-top: 1px solid var(--border-color);
     box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
     z-index: 20;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 20px;
+    align-items: stretch;
 }
 
 body.nav-mode #nav-overlay-bottom { display: flex; }
 
 .nav-stats-group {
     display: flex;
-    gap: 24px;
-    align-items: center;
+    justify-content: space-between;
+    width: 100%;
 }
 .nav-stat-item { display: flex; flex-direction: column; }
 .nav-stat-value { font-size: 1.4rem; font-weight: 700; color: var(--text-primary); }
 .nav-stat-label { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; }
+
+.nav-controls-row {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    width: 100%;
+}
 
 #exit-nav-btn {
     background-color: #e74c3c;
@@ -734,6 +796,8 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
     cursor: pointer;
     font-size: 1rem;
     box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+    display: none; /* Hidden initially */
+    min-width: 120px;
 }
 
 #pause-nav-btn {
@@ -746,7 +810,7 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
     cursor: pointer;
     font-size: 1rem;
     box-shadow: 0 4px 12px rgba(241, 196, 15, 0.3);
-    margin-right: 12px;
+    min-width: 120px;
 }
 
 .nav-mute-btn {
@@ -767,3 +831,107 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
 }
 .nav-mute-btn:hover { background: rgba(255,255,255,0.4); }
 .nav-mute-btn.muted { background: rgba(231, 76, 60, 0.8); }
+
+/* Map Style Picker */
+.style-picker-menu {
+    position: absolute;
+    right: 60px; /* Left of the stack */
+    bottom: 0;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 8px;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: var(--shadow);
+    z-index: 20;
+    width: 140px;
+    pointer-events: auto; /* Fix: Allow clicking menu items */
+}
+.style-picker-menu.active { display: flex; }
+.style-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    transition: background 0.2s;
+}
+.style-option:hover { background: #f1f3f4; }
+.style-option.active { color: var(--accent-blue); background: rgba(26, 115, 232, 0.1); }
+
+/* --- WEATHER TAB --- */
+.weather-dashboard {
+    padding: 10px;
+}
+.current-wx-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+.wx-icon-large {
+    width: 64px;
+    height: 64px;
+}
+.wx-temp-group {
+    display: flex;
+    flex-direction: column;
+}
+.wx-temp-large {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.wx-unit { font-size: 1rem; vertical-align: top; }
+.wx-feels { font-size: 0.85rem; color: var(--text-secondary); }
+.wx-condition-text { text-align: center; font-weight: 500; margin-bottom: 20px; font-size: 1.1rem; }
+
+.wx-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.wx-stat-card {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+}
+.wx-stat-card i { color: var(--accent-blue); width: 20px; height: 20px; }
+.wx-stat-card span { font-size: 1.1rem; font-weight: 700; }
+.wx-stat-card label { font-size: 0.75rem; color: var(--text-secondary); }
+
+/* Forecast Scroller */
+.forecast-scroller {
+    display: flex;
+    overflow-x: auto;
+    gap: 10px;
+    padding: 10px 0;
+    margin-bottom: 15px;
+    scrollbar-width: thin;
+}
+.forecast-card {
+    flex: 0 0 auto;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    width: 70px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.forecast-card img { width: 32px; height: 32px; }
+.fc-time { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; }
+.fc-temp { font-size: 0.9rem; font-weight: 700; }
+.fc-wind { font-size: 0.75rem; display: flex; align-items: center; gap: 2px; color: var(--text-secondary); }
