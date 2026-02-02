@@ -1,4 +1,29 @@
-import { MAPBOX_TOKEN } from './config.js';
+import { MAPBOX_TOKEN, X_WEATHER_ID, X_WEATHER_SECRET } from './config.js';
+
+// --- MODULE STATE ---
+let aerisController = null;
+let isWeatherEnabled = false;
+
+/**
+ * Initializes or re-initializes the AerisWeather controller.
+ * This is needed on initial map load and after any style change.
+ * @param {mapboxgl.Map} map The map instance.
+ */
+const initializeAerisController = (map) => {
+    aerisController = null; // Discard old controller
+
+    if (window.aerisweather) {
+        console.log("Initializing AerisWeather SDK...");
+        const { Account, MapboxMapController } = window.aerisweather.mapsgl;
+        const account = new Account(X_WEATHER_ID, X_WEATHER_SECRET);
+        const controller = new MapboxMapController(map, { account });
+
+        controller.on('error', (e) => console.error("❌ AerisWeather Controller Error:", e));
+        controller.on('load', () => onAerisControllerReady(map, controller));
+    } else {
+        console.error("AerisWeather SDK not loaded.");
+    }
+};
 
 /**
  * Initializes the Mapbox instance
@@ -8,7 +33,7 @@ export const initMap = (containerId) => {
     const map = new mapboxgl.Map({
         container: containerId,
         // Using navigation-night for a more "pro" routing look
-        style: 'mapbox://styles/mapbox/navigation-night-v1', 
+        style: 'mapbox://styles/mapbox/navigation-night-v1',
         center: [-0.1276, 51.5072], // London
         zoom: 12,
         preserveDrawingBuffer: true // Required for generating route images
@@ -16,17 +41,58 @@ export const initMap = (containerId) => {
 
     map.on('load', () => {
         map.resize();
-        // Add Terrain Source for Elevation Data
+        if (!map.getSource('mapbox-dem')) {
+            map.addSource('mapbox-dem', {
+                'type': 'raster-dem',
+                'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
+                'tileSize': 512,
+                'maxzoom': 14
+            });
+        }
+        map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 0 });
+    });
+
+    return map;
+};
+
+/**
+ * Callback for when the Aeris controller is loaded and ready.
+ * @param {mapboxgl.Map} map The map instance.
+ * @param {any} controller The new aerisweather controller instance.
+ */
+const onAerisControllerReady = (map, controller) => {
+    console.log("✅ AerisWeather Controller is ready.");
+    aerisController = controller;
+
+    
+
+    if (isWeatherEnabled) {
+        console.log("Adding wind layers now that controller is ready...");
+        try {
+            aerisController.addWeatherLayer('wind-speeds', { paint: { 'raster-opacity': 0.5 } });
+            aerisController.addWeatherLayer('wind-particles');
+        } catch (e) {
+            console.warn("Weather layers already exist or failed to add:", e);
+        }
+    }
+};
+
+/**
+ * Toggles 3D Terrain
+ */
+export const toggleTerrain = (map, enable) => {
+    // After a style change, the DEM source is removed. We must ensure it exists before setting terrain.
+    if (!map.getSource('mapbox-dem')) {
         map.addSource('mapbox-dem', {
             'type': 'raster-dem',
             'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
             'tileSize': 512,
             'maxzoom': 14
         });
-        map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1.5 });
-    });
-
-    return map;
+    }
+    // Toggle between 0 (Flat but data loaded) and 1.5 (3D)
+    // We keep the source attached so elevation queries always work
+    map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': enable ? 1.5 : 0 });
 };
 
 // Internal state to track markers for cleanup
@@ -53,7 +119,7 @@ export const addRouteMarkers = (map, waypoints, onDragEnd) => {
         const marker = new mapboxgl.Marker({ color, draggable: true })
             .setLngLat(parse(pt))
             .addTo(map);
-        
+
         if (onDragEnd) {
             marker.on('dragend', () => onDragEnd(i, marker.getLngLat().toArray()));
         }
@@ -75,11 +141,11 @@ export const drawWindRoute = async (map, coordinates, options = {}) => {
 
         // PRO TIP: overview=full gives high resolution, steps=true gives turn-by-turn
         let url = `https://api.mapbox.com/directions/v5/mapbox/cycling/${coordString}?geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`;
-        
+
         if (options.avoidHighways) {
             url += '&exclude=motorway';
         }
-        
+
         const query = await fetch(url);
         const json = await query.json();
 
@@ -93,6 +159,7 @@ export const drawWindRoute = async (map, coordinates, options = {}) => {
         // CLEANUP: If a route already exists, remove it
         if (map.getSource('route')) {
             map.removeLayer('route-line');
+            if (map.getLayer('route-line-casing')) map.removeLayer('route-line-casing');
             map.removeSource('route');
         }
 
@@ -106,6 +173,18 @@ export const drawWindRoute = async (map, coordinates, options = {}) => {
             }
         });
 
+        // 1. Add Casing Layer (White Outline for visibility)
+        map.addLayer({
+            'id': 'route-line-casing',
+            'type': 'line',
+            'source': 'route',
+            'layout': { 'line-join': 'round', 'line-cap': 'round' },
+            'paint': {
+                'line-color': '#ffffff',
+                'line-width': 10
+            }
+        });
+
         // Draw the line with a "Glow" effect
         map.addLayer({
             'id': 'route-line',
@@ -116,7 +195,7 @@ export const drawWindRoute = async (map, coordinates, options = {}) => {
                 'line-cap': 'round'
             },
             'paint': {
-                'line-color': '#3887be',
+                'line-color': '#0096ff', // Brighter Blue
                 'line-width': 6,
                 'line-opacity': 0.8
             }
@@ -125,17 +204,17 @@ export const drawWindRoute = async (map, coordinates, options = {}) => {
         // "Fly" the map to fit the whole route using the Bounding Box
         const routeCoords = routeGeoJSON.coordinates;
         const bounds = new mapboxgl.LngLatBounds(routeCoords[0], routeCoords[0]);
-        
+
         for (const coord of routeCoords) {
             bounds.extend(coord);
         }
 
-        map.fitBounds(bounds, { 
+        map.fitBounds(bounds, {
             padding: 80, // More padding looks more professional
             duration: 2000 // Smooth 2-second flight
         });
 
-        return routeData; 
+        return routeData;
 
     } catch (error) {
         console.error("Routing Error:", error);
@@ -147,6 +226,7 @@ export const drawWindRoute = async (map, coordinates, options = {}) => {
 export const drawStaticRoute = (map, geoJSON) => {
     if (map.getSource('route')) {
         map.removeLayer('route-line');
+        if (map.getLayer('route-line-casing')) map.removeLayer('route-line-casing');
         map.removeSource('route');
     }
 
@@ -159,13 +239,25 @@ export const drawStaticRoute = (map, geoJSON) => {
         }
     });
 
+    // 1. Add Casing Layer
+    map.addLayer({
+        'id': 'route-line-casing',
+        'type': 'line',
+        'source': 'route',
+        'layout': { 'line-join': 'round', 'line-cap': 'round' },
+        'paint': {
+            'line-color': '#ffffff',
+            'line-width': 10
+        }
+    });
+
     map.addLayer({
         'id': 'route-line',
         'type': 'line',
         'source': 'route',
         'layout': { 'line-join': 'round', 'line-cap': 'round' },
         'paint': {
-            'line-color': '#f39c12', // Orange color to distinguish from "live" search
+            'line-color': '#0096ff', // Consistent bright blue
             'line-width': 6,
             'line-opacity': 0.8
         }
@@ -182,52 +274,80 @@ export const drawStaticRoute = (map, geoJSON) => {
  */
 export const clearRoute = (map) => {
     if (map.getLayer('route-line')) map.removeLayer('route-line');
+    if (map.getLayer('route-line-casing')) map.removeLayer('route-line-casing');
     if (map.getSource('route')) map.removeSource('route');
     markers.forEach(m => m.remove());
     markers = [];
 };
 
 /**
- * Generates an elevation profile from the route coordinates
- * Uses Mapbox Terrain data (client-side)
+ * Generates elevation profile data for a route geometry
+ * @param {mapboxgl.Map} map The map instance (for queryTerrainElevation)
+ * @param {Object} geometry GeoJSON LineString geometry from the route
+ * @returns {Array} Array of {distance (km), elevation (m), coord}
  */
-export const getElevationProfile = (map, coordinates) => {
+export const getElevationProfile = async (map, geometry) => {
+    if (!geometry || geometry.type !== 'LineString' || geometry.coordinates.length < 2) {
+        return [];
+    }
+
+    const previousTerrain = map.getTerrain();
+    let terrainWasChanged = false;
+
+    // FIX: queryTerrainElevation returns 0 if exaggeration is 0. We must temporarily
+    // enable it and, crucially, wait for the map to be 'idle' before querying.
+    if (!previousTerrain || previousTerrain.exaggeration === 0) {
+        terrainWasChanged = true;
+        map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1 });
+        // Wait for the map to finish loading the new terrain before querying.
+        await new Promise(resolve => map.once('idle', resolve));
+    }
+
+    const coords = geometry.coordinates;
     const profile = [];
-    let totalDistance = 0;
-    const R = 6371e3; // Earth radius in meters
-    const toRad = x => x * Math.PI / 180;
+    let totalDistance = 0; // meters
+    let lastElevation = null;
 
-    // Sample the route to avoid performance hits on long routes
-    // We take every nth point based on total length
-    const step = Math.max(1, Math.floor(coordinates.length / 100));
+    const R = 6371000; // Earth radius in meters
 
-    for (let i = 0; i < coordinates.length; i += step) {
-        const coord = coordinates[i];
-        // Safety check for valid coordinates
-        if (!coord || coord.length < 2 || !Number.isFinite(coord[0]) || !Number.isFinite(coord[1])) continue;
+    for (let i = 0; i < coords.length; i++) {
+        const [lng, lat] = coords[i];
 
-        let [lng, lat] = coord;
-        // Clamp latitude to safe Web Mercator bounds to prevent terrain tile lookup errors
-        lat = Math.max(-85, Math.min(85, lat));
-
-        let elevation = 0;
-        try {
-            // Explicitly check terrain and use LngLat object for safety
-            if (map.getTerrain() && map.getSource('mapbox-dem')) {
-                elevation = map.queryTerrainElevation(new mapboxgl.LngLat(lng, lat)) || 0;
-            }
-        } catch (e) { /* Ignore terrain errors during load */ }
+        let elevation = map.queryTerrainElevation([lng, lat]);
+        // If terrain is still loading in some edge cases, fall back to last known elevation
+        if (elevation == null) {
+            elevation = lastElevation ?? 0;
+        } else {
+            lastElevation = elevation;
+        }
 
         if (i > 0) {
-            const [prevLng, prevLat] = coordinates[i - step] || coordinates[0];
-            const dLat = toRad(lat - prevLat);
-            const dLon = toRad(lng - prevLng);
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(prevLat)) * Math.cos(toRad(lat)) * Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const [prevLng, prevLat] = coords[i - 1];
+            const dLat = (lat - prevLat) * Math.PI / 180;
+            const dLon = (lng - prevLng) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 +
+                      Math.cos(prevLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+                      Math.sin(dLon / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             totalDistance += R * c;
         }
-        profile.push({ distance: totalDistance, elevation, coord: [lng, lat] });
+
+        profile.push({
+            distance: Math.round(totalDistance / 1000 * 10) / 10, // km, 1 decimal
+            elevation: Math.round(elevation),
+            coord: [lng, lat]
+        });
     }
+
+    // Restore terrain state if we changed it
+    if (terrainWasChanged) {
+        if (previousTerrain) {
+            map.setTerrain(previousTerrain);
+        } else {
+            map.setTerrain(null);
+        }
+    }
+
     return profile;
 };
 
@@ -283,7 +403,7 @@ export const playRouteAnimation = (map, coordinates, baseDuration = 15000, initi
     activeAnimationSpeed = initialSpeed;
     isPaused = false;
     animationProgress = 0;
-    
+
     // 1. Fly to start first
     map.flyTo({ center: coordinates[0], zoom: 18, pitch: 50 });
 
@@ -306,7 +426,7 @@ export const playRouteAnimation = (map, coordinates, baseDuration = 15000, initi
             if (animationProgress > 1) animationProgress = 1;
 
             const point = turf.along(line, animationProgress * pathLength);
-            
+
             // Safety check to prevent terrain errors with invalid coords
             if (point && point.geometry && point.geometry.coordinates) {
                 const [lng, lat] = point.geometry.coordinates;
@@ -340,12 +460,12 @@ export const toggleTraffic = (map) => {
     if (!map.getLayer('traffic-low')) {
         // Add Traffic Source if it doesn't exist
         if (!map.getSource('mapbox-traffic')) {
-        map.addSource('mapbox-traffic', {
-            type: 'vector',
-            url: 'mapbox://mapbox.mapbox-traffic-v1'
-        });
+            map.addSource('mapbox-traffic', {
+                type: 'vector',
+                url: 'mapbox://mapbox.mapbox-traffic-v1'
+            });
         }
-        
+
         // Add Layers for different congestion levels
         const layers = [
             { id: 'traffic-low', color: '#2ecc71', congestion: 'low' },
@@ -382,17 +502,57 @@ export const toggleTraffic = (map) => {
 /**
  * Toggles a weather radar layer (RainViewer)
  */
-export const toggleWeather = (map) => {
-    if (map.getLayer('met-office-radar')) {
-        const visibility = map.getLayoutProperty('met-office-radar', 'visibility');
-        map.setLayoutProperty('met-office-radar', 'visibility', visibility === 'none' ? 'visible' : 'none');
+export const toggleWeather = (map, forceVisible = null) => {
+    const setVisibility = (layerId, visible) => {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+        }
+    };
+
+    // Determine target state
+    let targetState = 'visible';
+    if (forceVisible !== null) {
+        targetState = forceVisible ? 'visible' : 'none';
+    } else {
+        // Toggle based on current state
+        targetState = isWeatherEnabled ? 'none' : 'visible';
     }
+
+    isWeatherEnabled = (targetState === 'visible');
+
+    // 1. Met Office Radar
+    setVisibility('met-office-radar', isWeatherEnabled);
+
+    // 2. X Weather Wind Particles (MapsGL SDK)
+    if (aerisController) {
+        if (isWeatherEnabled) {
+
+            aerisController.addWeatherLayer('wind-particles');
+        } else {
+
+            aerisController.removeWeatherLayer('wind-particles');
+        }
+    } else if (isWeatherEnabled) {
+        if (!window.aerisweather) console.error("❌ AerisWeather SDK not found on window object.");
+        else console.log("⏳ Weather enabled, waiting for AerisWeather controller to load...");
+    }
+};
+
+/**
+ * Restores weather layers after a map style change
+ */
+export const restoreWeather = (map) => {
+    // The AerisWeather controller is invalidated by a style change and must be re-initialized.
+    initializeAerisController(map);
+
+    // Note: Met Office radar (raster source) is also wiped by style change.
+    // It will reappear on the next animation frame update or needs manual re-adding here if static.
 };
 
 // Inside map-engine.js
 export const updateMetOfficeLayer = (map, blobUrl, bbox) => {
     const sourceId = 'met-office-source';
-    
+
     // Ensure coordinates are in the 4-corner array format Mapbox expects
     const coordinates = [
         [bbox[0], bbox[3]], // Top-Left

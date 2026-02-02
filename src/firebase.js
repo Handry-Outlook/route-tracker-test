@@ -1,6 +1,6 @@
 // src/firebase.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 import { firebaseConfig } from './config.js'; 
@@ -88,6 +88,20 @@ export const deleteRouteFromCloud = async (routeId) => {
         console.log("🗑️ Route deleted:", routeId);
     } catch (e) {
         console.error("❌ Error deleting route:", e);
+        throw e;
+    }
+};
+
+/**
+ * Renames a route in Firestore
+ */
+export const updateRouteName = async (routeId, newName) => {
+    try {
+        const routeRef = doc(db, "routes", routeId);
+        await updateDoc(routeRef, { name: newName });
+        console.log("✅ Route renamed:", routeId);
+    } catch (e) {
+        console.error("❌ Error renaming route:", e);
         throw e;
     }
 };

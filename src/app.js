@@ -1,8 +1,8 @@
-import { auth, googleProvider, saveRouteToCloud, fetchAllRoutes, deleteRouteFromCloud, createLiveSession, updateLiveSession, subscribeToLiveSession } from './firebase.js';
+import { auth, googleProvider, saveRouteToCloud, fetchAllRoutes, deleteRouteFromCloud, createLiveSession, updateLiveSession, subscribeToLiveSession, updateRouteName } from './firebase.js';
 import { onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { fetchWindAtLocation } from './weather-api.js';
+import { fetchWindAtLocation, fetchRouteForecast } from './weather-api.js';
 import { calculateWindImpact } from './geo-logic.js';
-import { initMap, drawWindRoute, drawStaticRoute, addRouteMarkers, clearRoute, getElevationProfile, playRouteAnimation, stopRouteAnimation, toggleTraffic, toggleWeather, setAnimationSpeed, togglePause, updateMetOfficeLayer } from './map-engine.js';
+import { initMap, drawWindRoute, drawStaticRoute, addRouteMarkers, clearRoute, getElevationProfile, playRouteAnimation, stopRouteAnimation, toggleTraffic, toggleWeather, setAnimationSpeed, togglePause, updateMetOfficeLayer, toggleTerrain, restoreWeather } from './map-engine.js';
 import { MAPBOX_TOKEN } from './config.js';
 
 // --- GLOBAL STATE ---
@@ -26,6 +26,11 @@ let lastLogicalWeatherUrl = null;
 let lastBlobUrl = null;
 let compassMode = 'north'; // 'north' | 'heading'
 let isMuted = false;
+let isTerrainEnabled = false;
+let mockIntervalId = null; // To track simulated movement on HTTP
+let currentMapStyle = 'mapbox://styles/mapbox/navigation-night-v1'; // Default
+let lastWeatherFetchDist = 0; // Track distance for weather throttling
+const WEATHER_FETCH_INTERVAL_KM = 25; // Fetch weather every 25km during animation
 
 const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -65,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const originalText = loginBtn.innerHTML;
             loginBtn.innerHTML = 'Wait...';
             loginBtn.disabled = true;
-            
+
             signInWithPopup(auth, googleProvider).catch(e => {
                 console.error("Auth Error", e);
                 let msg = "Login Failed: " + e.message;
@@ -108,6 +113,107 @@ document.addEventListener('DOMContentLoaded', () => {
         shareTabContent.className = 'tab-content';
         shareTabContent.innerHTML = `<div class="empty-state"><p>Plan a route to see sharing options.</p></div>`;
         directionsTab.parentNode.appendChild(shareTabContent);
+    }
+
+    // --- INJECT WEATHER TAB ---
+    const weatherTabBtn = document.createElement('button');
+    weatherTabBtn.className = 'tab-btn';
+    weatherTabBtn.dataset.tab = 'weather';
+    weatherTabBtn.innerHTML = 'Weather';
+    weatherTabBtn.addEventListener('click', () => switchTab('weather'));
+    // Insert before Share tab if possible
+    if (tabContainer.lastChild.innerText === 'Share') {
+        tabContainer.insertBefore(weatherTabBtn, tabContainer.lastChild);
+    } else {
+        tabContainer.appendChild(weatherTabBtn);
+    }
+
+    const weatherTabContent = document.createElement('div');
+    weatherTabContent.id = 'weather-tab';
+    weatherTabContent.className = 'tab-content';
+    weatherTabContent.innerHTML = `
+        <div class="weather-dashboard">
+            <div class="current-wx-row">
+                <img id="wx-icon" src="" class="wx-icon-large" alt="Weather" style="display:none">
+                <div class="wx-temp-group">
+                    <span id="wx-temp-val" class="wx-temp-large">--</span>
+                    <span class="wx-unit">°C</span>
+                    <div class="wx-feels">Feels <span id="wx-feels">--</span>°</div>
+                </div>
+            </div>
+            <div id="wx-desc" class="wx-condition-text">Plan a route to see weather</div>
+            <div id="wx-forecast-container" class="forecast-scroller"></div>
+            
+            <div class="wx-stats-grid">
+                <div class="wx-stat-card">
+                    <i data-feather="wind"></i>
+                    <span id="wx-gust">--</span>
+                    <label>Gusts (m/s)</label>
+                </div>
+                <div class="wx-stat-card">
+                    <i data-feather="droplet"></i>
+                    <span id="wx-humidity">--</span>
+                    <label>Humidity %</label>
+                </div>
+            </div>
+            
+            <!-- Wind Impact Section (Moved from Sidebar) -->
+            <div class="wind-impact-section" style="margin-top:20px; padding-top:15px; border-top:1px solid var(--border-color);">
+    <h3 style="font-size:0.9rem; margin-bottom:10px; color:var(--text-secondary);">Route Wind Impact</h3>
+    
+    <div class="impact-meter" style="margin-bottom:12px;">
+        <div class="impact-label" style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
+            <span>Tailwind</span>
+            
+            <span id="wx-tw-val">--%</span>
+        </div>
+        <div class="meter-track" style="height:6px; background:#ddd; border-radius:3px; overflow:hidden;">
+            <div id="tw-bar" style="width:0%; height:100%; background:#2ecc71; transition:width 0.5s ease;"></div>
+            <div id="wx-tw-bar" style="width:0%; height:100%; background:#2ecc71; transition:width 0.5s ease;"></div>
+        </div>
+    </div>
+    
+    <div class="impact-meter" style="margin-bottom:12px;">
+        <div class="impact-label" style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
+            <span>Headwind</span>
+            
+            <span id="wx-hw-val">--%</span>
+        </div>
+        <div class="meter-track" style="height:6px; background:#ddd; border-radius:3px; overflow:hidden;">
+            <div id="hw-bar" style="width:0%; height:100%; background:#e74c3c; transition:width 0.5s ease;"></div>
+            <div id="wx-hw-bar" style="width:0%; height:100%; background:#e74c3c; transition:width 0.5s ease;"></div>
+        </div>
+    </div>
+    
+    <div class="impact-meter">
+        <div class="impact-label" style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
+            <span>Crosswind</span>
+          
+            <span id="wx-cw-val">--%</span>
+        </div>
+        <div class="meter-track" style="height:6px; background:#ddd; border-radius:3px; overflow:hidden;">
+            <div id="cw-bar" style="width:0%; height:100%; background:#95a5a6; transition:width 0.5s ease;"></div>
+            <div id="wx-cw-bar" style="width:0%; height:100%; background:#95a5a6; transition:width 0.5s ease;"></div>
+        </div>
+    </div>
+</div>
+        </div>
+    `;
+    document.getElementById('directions-tab').parentNode.appendChild(weatherTabContent);
+
+    // --- INJECT COLLAPSE BUTTON (Mobile) ---
+    if (tabContainer) {
+        const collapseBtn = document.createElement('button');
+        collapseBtn.className = 'collapse-btn-mobile';
+        collapseBtn.innerHTML = `<i data-feather="chevron-down"></i>`;
+        collapseBtn.onclick = (e) => {
+            e.stopPropagation();
+            document.getElementById('sidebar').classList.remove('expanded');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        };
+        tabContainer.appendChild(collapseBtn);
+        if (feather) feather.replace();
     }
 
     // --- ROUTE PLANNING ---
@@ -163,13 +269,72 @@ document.addEventListener('DOMContentLoaded', () => {
         if (compassMode === 'north') {
             compassMode = 'heading';
             compassBtn.classList.add('active-heading');
-            // Map will update bearing on next GPS update
+            // Map will update bearing on next GPS update via handlePositionUpdate
         } else {
             compassMode = 'north';
             compassBtn.classList.remove('active-heading');
             map.easeTo({ bearing: 0, pitch: 0 });
         }
     });
+
+    // --- TERRAIN TOGGLE ---
+    const terrainBtn = document.createElement('button');
+    terrainBtn.className = 'map-overlay-btn';
+    terrainBtn.innerHTML = `<i data-feather="triangle"></i>`; // Mountain-ish icon
+    terrainBtn.title = "Toggle 3D Terrain";
+    terrainBtn.onclick = () => {
+        isTerrainEnabled = !isTerrainEnabled;
+        toggleTerrain(map, isTerrainEnabled);
+        terrainBtn.classList.toggle('active', isTerrainEnabled);
+    };
+    //controlsStack.appendChild(terrainBtn);
+
+    // --- MAP STYLE PICKER ---
+    const styleBtnContainer = document.createElement('div');
+    styleBtnContainer.style.position = 'relative';
+    styleBtnContainer.style.pointerEvents = 'auto'; // Ensure clicks pass to children
+
+    const styleBtn = document.createElement('button');
+    styleBtn.className = 'map-overlay-btn';
+    styleBtn.innerHTML = `<i data-feather="layers"></i>`;
+    styleBtn.title = "Change Map Style";
+
+    const styleMenu = document.createElement('div');
+    styleMenu.className = 'style-picker-menu';
+    styleMenu.innerHTML = `
+        <div class="style-option" data-style="mapbox://styles/mapbox/streets-v12">Streets</div>
+        <div class="style-option" data-style="mapbox://styles/mapbox/satellite-streets-v12">Satellite</div>
+        <div class="style-option" data-style="mapbox://styles/mapbox/light-v11">Light</div>
+        <div class="style-option" data-style="mapbox://styles/mapbox/dark-v11">Dark</div>
+        <div class="style-option" data-style="mapbox://styles/mapbox/navigation-day-v1">Nav Day</div>
+        <div class="style-option" data-style="mapbox://styles/mapbox/navigation-night-v1">Nav Night</div>
+    `;
+
+    styleBtn.onclick = (e) => {
+        e.stopPropagation();
+        styleMenu.classList.toggle('active');
+    };
+
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!styleBtnContainer.contains(e.target)) styleMenu.classList.remove('active');
+    });
+
+    styleMenu.querySelectorAll('.style-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+            const newStyle = opt.dataset.style;
+            if (newStyle !== currentMapStyle) {
+                currentMapStyle = newStyle;
+                map.setStyle(newStyle);
+                // Note: map.setStyle triggers 'style.load', where we restore layers
+            }
+            styleMenu.classList.remove('active');
+        });
+    });
+
+    styleBtnContainer.appendChild(styleMenu);
+    styleBtnContainer.appendChild(styleBtn);
+    controlsStack.appendChild(styleBtnContainer);
 
     // Weather Layer Button
     const weatherBtn = document.createElement('button');
@@ -182,8 +347,9 @@ document.addEventListener('DOMContentLoaded', () => {
             lastLogicalWeatherUrl = null; // Force update so it fetches even if URL hasn't changed
             // Load current radar immediately (Progress 0, Duration 0)
             updateWeatherForProgress(0, 0);
+            toggleWeather(map, true); // Enable Wind Layer
         } else {
-            toggleWeather(map); // Hide layer
+            toggleWeather(map, false); // Hide all layers
         }
     };
     controlsStack.appendChild(weatherBtn);
@@ -197,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleTraffic(map);
         trafficBtn.classList.toggle('active');
     };
-    controlsStack.appendChild(trafficBtn);
+    //controlsStack.appendChild(trafficBtn);
 
     // Recenter Button (Dynamically Created)
     const recenterBtn = document.createElement('button');
@@ -251,6 +417,23 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         checkUrlForRoute();
     }
+
+    // --- RESTORE LAYERS ON STYLE CHANGE ---
+    map.on('style.load', () => {
+        // 1. Restore Terrain if enabled
+        if (isTerrainEnabled) toggleTerrain(map, true);
+
+        // 2. Restore Route Line
+        if (currentRouteData) {
+            // We can re-use drawStaticRoute logic to re-add the source/layer
+            drawStaticRoute(map, currentRouteData.geometry);
+        }
+
+        // 3. Restore Weather Layers
+        restoreWeather(map);
+
+        // 3. Markers (DOM elements) persist automatically, but custom layers (Traffic/Weather) need re-toggling if active.
+    });
 });
 
 function initRouteOptionsUI() {
@@ -284,10 +467,31 @@ function initRouteOptionsUI() {
 }
 
 function switchTab(tabId) {
+    const sidebar = document.getElementById('sidebar');
+    const isMobile = window.innerWidth <= 768;
+    const clickedTabBtn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+    const isAlreadyActive = clickedTabBtn.classList.contains('active');
+
+    // Deactivate all first
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(`${tabId}-tab`).classList.add('active');
-    document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
+
+    if (isMobile) {
+        // If we click the currently active tab and the panel is expanded, we should collapse it.
+        if (isAlreadyActive && sidebar.classList.contains('expanded')) {
+            sidebar.classList.remove('expanded');
+            // By not re-adding the 'active' class, the tab is deselected and panel is collapsed.
+        } else {
+            // Otherwise, we expand the panel and show the new tab content.
+            sidebar.classList.add('expanded');
+            document.getElementById(`${tabId}-tab`).classList.add('active');
+            clickedTabBtn.classList.add('active');
+        }
+    } else {
+        // Desktop behavior remains simple: just switch the tab.
+        document.getElementById(`${tabId}-tab`).classList.add('active');
+        clickedTabBtn.classList.add('active');
+    }
 }
 
 function createGeocoder(containerId, placeholder, index) {
@@ -471,14 +675,14 @@ async function handleRouteSelection(route, isNew = false) {
 
         // Attach Listeners with Loading State
         document.getElementById('card-share-link').onclick = () => showLinkUI(route);
-        
-        document.getElementById('card-snapshot').onclick = (e) => 
+
+        document.getElementById('card-snapshot').onclick = (e) =>
             withLoading(e.currentTarget, captureRouteSnapshot);
-            
-        document.getElementById('card-gpx').onclick = (e) => 
+
+        document.getElementById('card-gpx').onclick = (e) =>
             withLoading(e.currentTarget, async () => downloadGPX(route));
-            
-        document.getElementById('card-live').onclick = (e) => 
+
+        document.getElementById('card-live').onclick = (e) =>
             withLoading(e.currentTarget, startLiveSessionUI);
     }
 
@@ -496,6 +700,7 @@ async function handleRouteSelection(route, isNew = false) {
     const paceInput = document.getElementById('user-pace');
     const timeModeSelect = document.getElementById('time-mode');
     const routeTimeInput = document.getElementById('route-time');
+    const startTime = new Date(routeTimeInput.value || new Date());
 
     const updateTimeStats = () => {
         if (!currentRouteData) return;
@@ -523,6 +728,21 @@ async function handleRouteSelection(route, isNew = false) {
             stats.appendChild(timeStat);
         }
         timeStat.innerHTML = `<span class="label">Schedule</span><div class="value" style="font-size:0.9rem">${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>`;
+
+        // Add Distance Stat
+        let distStat = document.getElementById('dist-stat');
+        if (!distStat) {
+            distStat = document.createElement('div');
+            distStat.className = 'stat-box';
+            distStat.id = 'dist-stat';
+            // Insert after timeStat
+            if (timeStat.nextSibling) {
+                stats.insertBefore(distStat, timeStat.nextSibling);
+            } else {
+                stats.appendChild(distStat);
+            }
+        }
+        distStat.innerHTML = `<span class="label">Distance</span><div class="value">${distKm.toFixed(2)} km</div>`;
     };
 
     paceInput.onchange = updateTimeStats;
@@ -530,15 +750,62 @@ async function handleRouteSelection(route, isNew = false) {
     routeTimeInput.onchange = updateTimeStats;
     updateTimeStats(); // Initial call
 
-    const coords = route.geometry.coordinates;
+    const coords = route.geometry.coordinates; // [lng, lat]
     const weather = await fetchWindAtLocation(coords[0][1], coords[0][0]);
     if (weather) {
         const score = calculateRouteWindScore(route.geometry, weather.bearing);
         updateSidebarUI(score, weather);
+        // The more detailed wind impact is calculated later by computeRouteWindImpact
+        updateSidebarUI(null, weather);
+    } else {
+        console.warn("Weather fetch failed, wind stats will remain empty.");
     }
+
+    // --- GENERATE 15-MIN INTERVAL FORECAST ---
+    const paceKmH = parseFloat(paceInput.value) || 20;
+    const totalDistKm = currentRouteData.distance / 1000;
+    const totalDurationHours = totalDistKm / paceKmH;
+
+    // Calculate points every 15 mins (0.25 hours)
+    const forecastPoints = [];
+    const line = turf.lineString(coords);
+
+    // Start at 0, increment by 15 mins
+    for (let t = 0; t <= totalDurationHours; t += 0.25) {
+        const dist = t * paceKmH;
+        if (dist > totalDistKm) break;
+
+        const point = turf.along(line, dist, { units: 'kilometers' });
+        const [lng, lat] = point.geometry.coordinates;
+
+        // Calculate timestamp for this point
+        const pointTime = new Date(startTime.getTime() + (t * 60 * 60 * 1000));
+
+        forecastPoints.push({ lat, lon: lng, time: pointTime });
+    }
+
+    // Add end point if not close to last interval
+    if (forecastPoints.length > 0) {
+        const lastPt = forecastPoints[forecastPoints.length - 1];
+        const endTime = new Date(startTime.getTime() + (totalDurationHours * 60 * 60 * 1000));
+        // If last point is more than 5 mins away from end
+        if ((endTime - lastPt.time) > 5 * 60 * 1000) {
+            const endCoord = coords[coords.length - 1];
+            forecastPoints.push({ lat: endCoord[1], lon: endCoord[0], time: endTime });
+        }
+    }
+
+    // Fetch and Render
+    renderForecast(forecastPoints);
 
     // Generate and Draw Elevation Profile
     // Show loading state first while waiting for terrain data
+    // In handleRouteSelection(route, isNew = false) — Replace the entire elevation block with this updated version
+
+    // --- Generate and Draw Elevation Profile ---
+    // In handleRouteSelection(route, isNew = false) — Replace the entire elevation block with this robust version
+
+    // --- Generate and Draw Elevation Profile ---
     let elevContainer = document.getElementById('elevation-container');
     if (!elevContainer) {
         elevContainer = document.createElement('div');
@@ -546,44 +813,61 @@ async function handleRouteSelection(route, isNew = false) {
         const statsContainer = document.getElementById('stats-container');
         statsContainer.parentNode.insertBefore(elevContainer, statsContainer.nextSibling);
     }
-    
-    elevContainer.innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px;">
-            <div class="spin-anim" style="width:24px; height:24px; border:3px solid #e0e0e0; border-top-color:var(--accent-blue); border-radius:50%;"></div>
-            <span style="margin-top:10px; font-size:0.9rem; color:var(--text-secondary);">Calculating elevation...</span>
-        </div>
-    `;
 
-    const updateElevation = () => {
-        const elevationData = getElevationProfile(map, coords);
+    // Show loading spinner initially
+    elevContainer.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px;">
+        <div class="spin-anim" style="width:24px; height:24px; border:3px solid #e0e0e0; border-top-color:var(--accent-blue); border-radius:50%;"></div>
+        <span style="margin-top:10px; font-size:0.9rem; color:var(--text-secondary);">Calculating elevation...</span>
+    </div>
+`;
+
+    const updateElevation = async () => {
+        const elevationData = await getElevationProfile(map, route.geometry);
+
+        // If all elevations are 0, it's a strong sign the terrain data failed to load,
+        // despite the async fix. We treat it as an error to avoid showing a flat line at 0m.
+        const allZero = elevationData.every(d => d.elevation === 0);
+        if (elevationData.length < 2 || allZero) {
+            elevContainer.innerHTML = '<p class="empty-state">No elevation data available for this route.<br><small>Try zooming in or enabling 3D terrain.</small></p>';
+            return;
+        }
 
         // --- Calories Estimator ---
-        // Formula: ~25 kcal/km + 1.5 kcal per meter climbed
         let cumulativeGain = 0;
-        const elevations = elevationData.map(d => d.elevation);
+        const elevations = elevationData.map(d => d.elevation).filter(e => e != null);
         for (let i = 1; i < elevations.length; i++) {
-            if (elevations[i] > elevations[i - 1]) cumulativeGain += (elevations[i] - elevations[i - 1]);
+            if (elevations[i] > elevations[i - 1]) {
+                cumulativeGain += (elevations[i] - elevations[i - 1]);
+            }
         }
         const distKm = currentRouteData.distance / 1000;
         const calories = Math.round((distKm * 25) + (cumulativeGain * 1.5));
 
         const statsContainer = document.getElementById('stats-container');
-        statsContainer.style.gridTemplateColumns = '1fr 1fr 1fr'; // Add column for calories
-        if (!document.getElementById('cal-stat')) {
-            const calDiv = document.createElement('div');
+        statsContainer.style.gridTemplateColumns = '1fr 1fr 1fr 1fr';
+
+        let calDiv = document.getElementById('cal-stat');
+        if (!calDiv) {
+            calDiv = document.createElement('div');
             calDiv.className = 'stat-box';
             calDiv.id = 'cal-stat';
-            calDiv.innerHTML = `<span class="label">Est. Burn</span><div class="value" id="cal-val"></div>`;
+            calDiv.innerHTML = `<span class="label">Est. Burn</span><div class="value" id="cal-val">--</div>`;
             statsContainer.appendChild(calDiv);
         }
         document.getElementById('cal-val').innerText = `${calories} kcal`;
-        // --------------------------
 
         renderElevationChart(elevationData);
     };
-    // Wait for map to settle (load terrain tiles) to ensure accurate elevation data
+
+    // Critical fix: Always wait for 'idle' after the route fitBounds animation completes.
+    // If the map is already idle (e.g. loading a saved route), this fires immediately.
     map.once('idle', updateElevation);
 
+    // --- Route Wind Impact (Detailed Meters) ---
+    computeRouteWindImpact(route.geometry).then(impact => {
+        updateWindImpactMeters(impact);
+    });
     // Add Animation Controls (Play + Speed Slider)
     const statsContainer = document.getElementById('stats-container');
 
@@ -622,9 +906,26 @@ async function handleRouteSelection(route, isNew = false) {
         const realDurationHours = (currentRouteData.distance / 1000) / paceKmH;
         const realDurationMs = realDurationHours * 3600 * 1000;
         lastLogicalWeatherUrl = null; // Reset weather tracker on new play
+        lastWeatherFetchDist = 0; // Reset weather fetch tracker
 
         playRouteAnimation(map, coords, realDurationMs, speed, (progress) => {
             updateWeatherForProgress(progress, realDurationHours);
+
+            // Dynamic Weather Update (Throttled)
+            const currentDistKm = (currentRouteData.distance / 1000) * progress;
+            if (Math.abs(currentDistKm - lastWeatherFetchDist) > WEATHER_FETCH_INTERVAL_KM) {
+                lastWeatherFetchDist = currentDistKm;
+
+                // Calculate current position along route
+                const line = turf.lineString(coords);
+                const point = turf.along(line, currentDistKm); // units default to km in turf if not specified? turf.along takes (line, distance, options). Default units kilometers.
+                const [lng, lat] = point.geometry.coordinates;
+
+                // Fetch and update
+                fetchWindAtLocation(lat, lng).then(weather => {
+                    if (weather) updateSidebarUI(null, weather); // Pass null for score to only update conditions
+                });
+            }
         });
     };
 
@@ -747,7 +1048,7 @@ async function updateWeatherForProgress(progress, durationHours) {
         xhr.open('GET', finalUrl, true);
         xhr.responseType = 'blob'; // We want the raw data
 
-        xhr.onload = function() {
+        xhr.onload = function () {
             if (this.status === 200) {
                 const blob = this.response;
                 const blobUrl = URL.createObjectURL(blob);
@@ -763,7 +1064,7 @@ async function updateWeatherForProgress(progress, durationHours) {
             }
         };
 
-        xhr.onerror = function() {
+        xhr.onerror = function () {
             console.error("CORS block or Network failure on radar frame.");
         };
 
@@ -771,10 +1072,61 @@ async function updateWeatherForProgress(progress, durationHours) {
     }
 }
 
+async function renderForecast(points) {
+    const container = document.getElementById('wx-forecast-container');
+    if (!container) return;
+
+    container.innerHTML = `<div class="spin-anim" style="margin:20px auto; width:20px; height:20px; border:2px solid #ccc; border-top-color:#333; border-radius:50%;"></div>`;
+
+    const forecasts = await fetchRouteForecast(points);
+
+    container.innerHTML = '';
+    if (forecasts.length === 0) {
+        container.innerHTML = '<p style="font-size:0.8rem; color:#888; text-align:center;">Forecast unavailable</p>';
+        return;
+    }
+
+    forecasts.forEach(wx => {
+        const timeStr = new Date(wx.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const card = document.createElement('div');
+        card.className = 'forecast-card';
+        card.innerHTML = `
+            <div class="fc-time">${timeStr}</div>
+            <img src="src/Aeris_WxIcons_55x55/${wx.icon}" alt="${wx.desc}">
+            <div class="fc-temp">${Math.round(wx.temp)}°</div>
+            <div class="fc-wind">
+                <i data-feather="wind" style="width:12px; height:12px;"></i> ${Math.round(wx.speed)}
+            </div>
+        `;
+        container.appendChild(card);
+    });
+    if (feather) feather.replace();
+}
+
 const updateSidebarUI = (score, weather) => {
-    document.getElementById('tw-val').innerText = `${score.percentage}%`;
-    document.getElementById('hw-val').innerText = `${100 - score.percentage}%`;
-    document.getElementById('weather-desc').innerText = `Wind: ${weather.speed}m/s from ${weather.bearing}°`;
+    // Update Weather Tab Conditions
+    if (weather) {
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = val;
+        };
+
+        setVal('wx-temp-val', Math.round(weather.temp));
+        setVal('wx-feels', Math.round(weather.feelsLike));
+        setVal('wx-desc', weather.desc);
+        setVal('wx-gust', weather.gust);
+        setVal('wx-humidity', weather.humidity);
+
+        const iconImg = document.getElementById('wx-icon');
+        if (iconImg) {
+            iconImg.src = `src/Aeris_WxIcons_55x55/${weather.icon}`; // Use local folder
+            iconImg.style.display = 'block';
+        }
+    }
+    // Legacy score update removed to prevent crashes on missing IDs.
+    // Wind scores are now handled exclusively by updateWindImpactMeters
+    // to avoid conflicting logic.
 };
 
 const loadSavedList = async () => {
@@ -827,7 +1179,41 @@ const loadSavedList = async () => {
                 <span style="font-size:0.8em; color:#888;">${dateStr}</span>
             </div>
             <small>Distance: ${(r.distance / 1000).toFixed(2)} km • Score: ${r.tailwindScore}%</small>
+            <small>Distance: ${(r.distance / 1000).toFixed(2)} km</small>
         `;
+
+        // Action Buttons Container
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.display = 'flex';
+        actionsDiv.style.gap = '4px';
+
+        // Rename Button
+        const renameBtn = document.createElement('button');
+        renameBtn.className = 'delete-route-btn'; // Reuse style
+        renameBtn.style.color = 'var(--text-secondary)';
+        renameBtn.innerHTML = '<i data-feather="edit-2"></i>';
+        renameBtn.title = "Rename Route";
+        renameBtn.onclick = async (e) => {
+            e.stopPropagation();
+            const newName = prompt("Enter new name:", r.name);
+            if (newName && newName !== r.name) {
+                await updateRouteName(r.id, newName);
+                loadSavedList();
+            }
+        };
+
+        // Duplicate Button
+        const dupBtn = document.createElement('button');
+        dupBtn.className = 'delete-route-btn'; // Reuse style
+        dupBtn.style.color = 'var(--accent-blue)';
+        dupBtn.innerHTML = '<i data-feather="copy"></i>';
+        dupBtn.title = "Duplicate Route";
+        dupBtn.onclick = async (e) => {
+            e.stopPropagation();
+            const { id, ...routeData } = r; // Remove ID
+            await saveRouteToCloud({ ...routeData, name: `${r.name} (Copy)` });
+            loadSavedList();
+        };
 
         // Delete Button
         const delBtn = document.createElement('button');
@@ -845,7 +1231,10 @@ const loadSavedList = async () => {
         };
 
         div.appendChild(contentDiv);
-        div.appendChild(delBtn);
+        actionsDiv.appendChild(renameBtn);
+        actionsDiv.appendChild(dupBtn);
+        actionsDiv.appendChild(delBtn);
+        div.appendChild(actionsDiv);
 
         div.onclick = async () => {
             const geo = JSON.parse(r.geometry);
@@ -862,7 +1251,7 @@ const loadSavedList = async () => {
 
 function locateUser() {
     if (!navigator.geolocation) return alert("Geolocation not supported.");
-    
+
     const onLocationFound = async (position) => {
         const { longitude, latitude } = position.coords;
         userLocation = [longitude, latitude]; // Update global state
@@ -894,7 +1283,14 @@ function locateUser() {
 
 async function handleSaveButtonClick() {
     if (!currentRouteData || !currentUser) return;
-    const routeName = prompt("Enter a name for this route:", "My Awesome Ride");
+
+    // Get location names for default title
+    const startInput = document.querySelector('#geocoder-start input');
+    const endInput = document.querySelector('#geocoder-end input');
+    const startName = startInput ? startInput.value : "Start";
+    const endName = endInput ? endInput.value : "Destination";
+
+    const routeName = prompt("Enter a name for this route:", `${startName} to ${endName}`);
     if (!routeName) return;
 
     const start = currentRouteData.geometry.coordinates[0];
@@ -1037,20 +1433,20 @@ function initTrackingMode(sessionId) {
             }
 
             if (data.lastLocation) {
-            const { lat, lng } = data.lastLocation;
-            const pos = [lng, lat];
+                const { lat, lng } = data.lastLocation;
+                const pos = [lng, lat];
 
-            if (!remoteMarker) {
-                const el = document.createElement('div');
-                el.className = 'user-marker';
-                el.style.backgroundColor = '#e74c3c'; // Red for friend
-                remoteMarker = new mapboxgl.Marker(el).setLngLat(pos).addTo(map);
-            } else {
-                remoteMarker.setLngLat(pos);
-            }
+                if (!remoteMarker) {
+                    const el = document.createElement('div');
+                    el.className = 'user-marker';
+                    el.style.backgroundColor = '#e74c3c'; // Red for friend
+                    remoteMarker = new mapboxgl.Marker(el).setLngLat(pos).addTo(map);
+                } else {
+                    remoteMarker.setLngLat(pos);
+                }
 
-            map.flyTo({ center: pos, zoom: 15 });
-            document.getElementById('last-update').innerText = 'Last update: ' + new Date().toLocaleTimeString();
+                map.flyTo({ center: pos, zoom: 15 });
+                document.getElementById('last-update').innerText = 'Last update: ' + new Date().toLocaleTimeString();
             }
         }
     });
@@ -1058,8 +1454,12 @@ function initTrackingMode(sessionId) {
 
 // --- NAVIGATION ---
 function toggleNavigation() {
+    // Fix: Check UI state to determine intent (Exit vs Enter)
+    // This prevents getting stuck if isNavigating becomes false due to errors while UI is still in nav-mode
+    const isCurrentlyInNavMode = document.body.classList.contains('nav-mode');
+
     // Resume if paused (minimized)
-    if (isNavigating && !document.body.classList.contains('nav-mode')) {
+    if (isNavigating && !isCurrentlyInNavMode) {
         document.body.classList.add('nav-mode');
         initNavigationOverlays();
         const btn = document.getElementById('realtime-nav-btn');
@@ -1067,9 +1467,11 @@ function toggleNavigation() {
         return;
     }
 
-    isNavigating = !isNavigating;
+    // Toggle State based on current UI
+    isNavigating = !isCurrentlyInNavMode;
+
     document.getElementById('nav-btn').classList.toggle('active', isNavigating);
-    
+
     const recalcBtn = document.getElementById('recalc-btn');
     if (recalcBtn) recalcBtn.style.display = isNavigating ? 'flex' : 'none';
 
@@ -1095,7 +1497,7 @@ function startLiveTracking() {
         if (currentRouteData) {
             const startPoint = currentRouteData.geometry.coordinates[0];
             const distKm = turf.distance(userPos, startPoint, { units: 'kilometers' });
-            
+
             if (distKm > 0.2) { // User is > 200m away from start
                 if (confirm("You are not at the start. Reroute from current location?")) {
                     speak("Rerouting...");
@@ -1134,12 +1536,19 @@ function startLiveTracking() {
         if (err.code === 1) {
             navigator.geolocation.clearWatch(watchId);
             watchId = null;
-            isNavigating = false;
-            // Suppress alert for secure origin to allow "bypass" feel (just stops tracking)
-            if (!err.message.includes("secure origin")) {
-                 alert("Live Navigation stopped: Permission denied.");
+
+            if (err.message.includes("secure origin")) {
+                console.warn("⚠️ Secure Origin Error. Starting Mock Navigation Loop.");
+                // Start Mock Loop (Simulate standing still or moving slowly)
+                if (mockIntervalId) clearInterval(mockIntervalId);
+                mockIntervalId = setInterval(() => {
+                    // Mock location: London or last known
+                    const mockPos = userLocation || [-0.1276, 51.5072];
+                    handlePositionUpdate(mockPos, 0, 5); // 5 m/s speed
+                }, 2000);
             } else {
-                 console.warn("Live Navigation stopped: HTTPS required.");
+                isNavigating = false;
+                alert("Live Navigation stopped: Permission denied.");
             }
         }
     }, GEO_OPTIONS);
@@ -1147,7 +1556,7 @@ function startLiveTracking() {
 
 function manualReroute() {
     if (!navigator.geolocation) return alert("Geolocation not supported");
-    
+
     speak("Rerouting...");
 
     // Show loading in Nav UI
@@ -1159,21 +1568,21 @@ function manualReroute() {
     const onLocationFound = (pos) => {
         const userPos = [pos.coords.longitude, pos.coords.latitude];
         waypoints[0] = userPos;
-        
+
         // Ensure destination exists
         if (!waypoints[1] && currentRouteData) {
             const coords = currentRouteData.geometry.coordinates;
             waypoints[1] = coords[coords.length - 1];
         }
-        
+
         if (geocoders[0]) geocoders[0].setInput("Current Location");
         calculateRoute();
     };
-    
+
     navigator.geolocation.getCurrentPosition(onLocationFound, err => {
         console.warn("Reroute location error:", err);
         if (err.code === 1) {
-             if (err.message.includes("secure origin")) {
+            if (err.message.includes("secure origin")) {
                 console.warn("⚠️ Secure Origin Error. Bypassing with Mock Location.");
                 onLocationFound({ coords: { longitude: -0.1276, latitude: 51.5072 } });
                 return;
@@ -1200,13 +1609,33 @@ function handlePositionUpdate(userPos, heading, speed) {
         updateLiveSession(liveSessionId, userPos);
     }
 
-    // Follow user if navigating
-    if (isNavigating) {
+    // Follow user if navigating OR if Compass Mode is 'heading' (even when not navigating)
+    if (isNavigating || compassMode === 'heading') {
         const cameraOptions = { center: userPos, zoom: 18, pitch: 50 };
         if (compassMode === 'heading' && heading !== null && heading !== undefined) {
-            cameraOptions.bearing = heading;
+            cameraOptions.bearing = heading; // Rotate map to match device movement
         }
         map.easeTo(cameraOptions);
+    }
+
+    // --- AUTO THEME SWITCHING (Nav Mode) ---
+    if (isNavigating) {
+        const hour = new Date().getHours();
+        const isNight = hour < 6 || hour >= 18;
+
+        // Simple Tunnel Detection: Check instruction text
+        let isTunnel = false;
+        if (currentRouteData && currentRouteData.legs && currentRouteData.legs[0].steps[lastSpokenStepIndex + 1]) {
+            const nextInstr = currentRouteData.legs[0].steps[lastSpokenStepIndex + 1].maneuver.instruction.toLowerCase();
+            if (nextInstr.includes('tunnel')) isTunnel = true;
+        }
+
+        const targetStyle = (isNight || isTunnel) ? 'mapbox://styles/mapbox/navigation-night-v1' : 'mapbox://styles/mapbox/navigation-day-v1';
+
+        if (currentMapStyle !== targetStyle) {
+            currentMapStyle = targetStyle;
+            map.setStyle(targetStyle);
+        }
     }
 
     // Update Navigation Dashboard UI
@@ -1261,6 +1690,14 @@ function initNavigationOverlays() {
                 <span class="nav-stat-label">km/h</span>
             </div>
             <div class="nav-stat-item">
+                <span class="nav-stat-value" id="nav-time-now">--:--</span>
+                <span class="nav-stat-label">Time</span>
+            </div>
+            <div class="nav-stat-item">
+                <span class="nav-stat-value" id="nav-eta">--:--</span>
+                <span class="nav-stat-label">ETA</span>
+            </div>
+            <div class="nav-stat-item">
                 <span class="nav-stat-value" id="nav-time-rem">--</span>
                 <span class="nav-stat-label">min</span>
             </div>
@@ -1269,19 +1706,40 @@ function initNavigationOverlays() {
                 <span class="nav-stat-label">km</span>
             </div>
         </div>
-        <div style="display:flex;">
+        <div class="nav-controls-row">
             <button id="pause-nav-btn">Pause</button>
-            <button id="exit-nav-btn">Exit</button>
+            <button id="exit-nav-btn" style="display:none;">Exit Navigation</button>
         </div>
     `;
     document.body.appendChild(bottomOverlay);
 
-    document.getElementById('pause-nav-btn').onclick = () => {
-        document.body.classList.remove('nav-mode');
-        const btn = document.getElementById('realtime-nav-btn');
-        if (btn) btn.innerHTML = `<i data-feather="navigation"></i> Resume Navigation`;
+    const pauseBtn = document.getElementById('pause-nav-btn');
+    const exitBtn = document.getElementById('exit-nav-btn');
+
+    pauseBtn.onclick = () => {
+        if (exitBtn.style.display === 'none') {
+            // Pause State: Show Exit button
+            exitBtn.style.display = 'block';
+            pauseBtn.innerText = 'Resume';
+            pauseBtn.style.backgroundColor = '#2ecc71'; // Green
+            pauseBtn.style.color = '#fff';
+        } else {
+            // Resume State: Hide Exit button
+            exitBtn.style.display = 'none';
+            pauseBtn.innerText = 'Pause';
+            pauseBtn.style.backgroundColor = '#f1c40f'; // Yellow
+            pauseBtn.style.color = '#212121';
+        }
     };
-    document.getElementById('exit-nav-btn').onclick = toggleNavigation;
+
+    exitBtn.onclick = () => {
+        // Reset UI state
+        exitBtn.style.display = 'none';
+        pauseBtn.innerText = 'Pause';
+        pauseBtn.style.backgroundColor = '#f1c40f';
+        pauseBtn.style.color = '#212121';
+        toggleNavigation();
+    };
 
     // Mute Button Logic
     const muteBtn = document.getElementById('nav-mute-btn');
@@ -1298,12 +1756,12 @@ function initNavigationOverlays() {
 
 function updateNavigationDashboard(userPos) {
     if (!currentRouteData || !currentRouteData.legs) return;
-    
+
     const steps = currentRouteData.legs[0].steps;
     // Determine next step (simple logic: step after the last spoken one)
     let nextStepIndex = lastSpokenStepIndex + 1;
     if (nextStepIndex >= steps.length) nextStepIndex = steps.length - 1;
-    
+
     const nextStep = steps[nextStepIndex];
     if (nextStep && nextStep.maneuver) {
         document.getElementById('nav-instr').innerText = nextStep.maneuver.instruction;
@@ -1315,14 +1773,24 @@ function updateNavigationDashboard(userPos) {
     const endPoint = currentRouteData.geometry.coordinates[currentRouteData.geometry.coordinates.length - 1];
     const totalDistKm = turf.distance(userPos, endPoint, { units: 'kilometers' });
     const pace = parseFloat(document.getElementById('user-pace')?.value) || 20;
-    
+
     document.getElementById('nav-dist-rem').innerText = totalDistKm.toFixed(1);
     document.getElementById('nav-time-rem').innerText = Math.round((totalDistKm / pace) * 60);
+
+    // Update Current Time & ETA
+    const now = new Date();
+    document.getElementById('nav-time-now').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const durationMins = (totalDistKm / pace) * 60;
+    const eta = new Date(now.getTime() + durationMins * 60000);
+    document.getElementById('nav-eta').innerText = eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function stopLiveTracking() {
     if (watchId) navigator.geolocation.clearWatch(watchId);
     watchId = null;
+    if (mockIntervalId) clearInterval(mockIntervalId);
+    mockIntervalId = null;
     isNavigating = false;
     lastSpokenStepIndex = -1;
 }
@@ -1342,8 +1810,10 @@ function toggleTheme() {
     const isDark = document.body.classList.contains('dark-mode');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
 
+    // This manual toggle overrides the auto-nav style temporarily
     // Optional: Switch Map Style (Requires redrawing route if active)
     const style = isDark ? 'mapbox://styles/mapbox/navigation-night-v1' : 'mapbox://styles/mapbox/navigation-day-v1';
+    currentMapStyle = style; // Sync global state
     map.setStyle(style);
 
     map.once('style.load', () => {
@@ -1374,7 +1844,7 @@ function renderLinkBox(label, url) {
             </div>
         </div>
     `;
-    
+
     document.getElementById('copy-share-btn').onclick = () => {
         const input = document.getElementById('share-url-input');
         input.select();
@@ -1395,8 +1865,8 @@ async function withLoading(element, asyncFn) {
     element.style.pointerEvents = 'none';
     element.innerHTML = `<i data-feather="loader" class="spin-anim"></i>`;
     if (feather) feather.replace();
-    try { await asyncFn(); } 
-    catch (e) { console.error(e); alert("Action failed."); } 
+    try { await asyncFn(); }
+    catch (e) { console.error(e); alert("Action failed."); }
     finally {
         element.innerHTML = originalContent;
         element.style.pointerEvents = 'auto';
@@ -1446,6 +1916,8 @@ function injectCustomStyles() {
     document.head.appendChild(style);
 }
 
+// In renderElevationChart(data) — Replace the entire function with this fixed version
+
 function renderElevationChart(data) {
     const statsContainer = document.getElementById('stats-container');
     let container = document.getElementById('elevation-container');
@@ -1456,16 +1928,20 @@ function renderElevationChart(data) {
         statsContainer.parentNode.insertBefore(container, statsContainer.nextSibling);
     }
 
-    // Fix: Check if canvas exists. If container has spinner (loading state), overwrite it.
-    if (!document.getElementById('elevation-canvas')) {
-         container.innerHTML = `
-            <div class="chart-header">
-                <span class="label">Elevation Profile</span>
-                <span class="value" id="elev-gain"></span>
-            </div>
-            <canvas id="elevation-canvas"></canvas>
-        `;
+    // Safety: if insufficient data, show empty state instead of crashing
+    if (data.length < 2) {
+        container.innerHTML = '<p class="empty-state">No elevation data available for this route.</p>';
+        return;
     }
+
+    // Always (re)create canvas to ensure clean state
+    container.innerHTML = `
+        <div class="chart-header">
+            <span class="label">Elevation Profile</span>
+            <span class="value" id="elev-gain"></span>
+        </div>
+        <canvas id="elevation-canvas"></canvas>
+    `;
 
     const canvas = document.getElementById('elevation-canvas');
     const ctx = canvas.getContext('2d');
@@ -1486,27 +1962,39 @@ function renderElevationChart(data) {
 
     // 2. Calculate Scales
     const elevations = data.map(d => d.elevation);
-    const minElev = Math.min(...elevations);
-    const maxElev = Math.max(...elevations);
+    const validElevations = elevations.filter(e => e !== null && e !== undefined);
+    if (validElevations.length === 0) {
+        container.innerHTML = '<p class="empty-state">No elevation data available.</p>';
+        return;
+    }
+
+    let minElev = Math.min(...validElevations);
+    let maxElev = Math.max(...validElevations);
+
+    // True gain (before any visual padding)
+    const trueGain = Math.round(maxElev - minElev);
+    document.getElementById('elev-gain').innerText = `+${trueGain}m`;
+
+    // Light visual exaggeration only if very flat (helps visibility)
+    if (trueGain < 20) {
+        const center = (minElev + maxElev) / 2;
+        minElev = center - 10;
+        maxElev = center + 10;
+    }
+
     const totalDist = data[data.length - 1].distance;
-    const range = maxElev - minElev || 10; // Avoid divide by zero
+    const range = maxElev - minElev || 10; // Prevent divide-by-zero
 
-    // 3. Update Header Text
-    const gain = Math.round(maxElev - minElev);
-    document.getElementById('elev-gain').innerText = `+${gain}m`;
-
-    // 4. Draw Function
+    // 3. Draw Function
     const draw = (mouseX = null) => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.translate(margin.left, margin.top);
 
-        // Draw Axes
+        // Axes
         ctx.beginPath();
         ctx.strokeStyle = '#e0e0e0';
         ctx.lineWidth = 1;
-        // Y Axis
         ctx.moveTo(0, 0); ctx.lineTo(0, height);
-        // X Axis
         ctx.moveTo(0, height); ctx.lineTo(width, height);
         ctx.stroke();
 
@@ -1517,9 +2005,9 @@ function renderElevationChart(data) {
         ctx.fillText(`${Math.round(maxElev)}m`, -5, 0);
         ctx.fillText(`${Math.round(minElev)}m`, -5, height);
         ctx.textAlign = 'center';
-        ctx.fillText(`${(totalDist / 1000).toFixed(1)}km`, width, height + 15);
+        ctx.fillText(`${(totalDist / 1000).toFixed(1)}km`, width / 2, height + 15);
 
-        // Draw Area Path
+        // Filled Area
         ctx.beginPath();
         ctx.moveTo(0, height);
         data.forEach(d => {
@@ -1532,8 +2020,13 @@ function renderElevationChart(data) {
         ctx.fillStyle = 'rgba(56, 135, 190, 0.2)';
         ctx.fill();
 
-        // Draw Line
+        // Profile Line — Fixed: add explicit moveTo for first point
         ctx.beginPath();
+        if (data.length > 0) {
+            const firstX = (data[0].distance / totalDist) * width;
+            const firstY = height - ((data[0].elevation - minElev) / range) * height;
+            ctx.moveTo(firstX, firstY);
+        }
         data.forEach(d => {
             const x = (d.distance / totalDist) * width;
             const y = height - ((d.elevation - minElev) / range) * height;
@@ -1543,11 +2036,10 @@ function renderElevationChart(data) {
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Hover Effect
+        // Hover Effect (unchanged)
         if (mouseX !== null) {
             const xRatio = Math.max(0, Math.min(1, (mouseX - margin.left) / width));
             const targetDist = xRatio * totalDist;
-            // Find nearest point
             const point = data.reduce((prev, curr) =>
                 Math.abs(curr.distance - targetDist) < Math.abs(prev.distance - targetDist) ? curr : prev
             );
@@ -1555,7 +2047,6 @@ function renderElevationChart(data) {
             const x = (point.distance / totalDist) * width;
             const y = height - ((point.elevation - minElev) / range) * height;
 
-            // Draw Vertical Line
             ctx.beginPath();
             ctx.moveTo(x, 0); ctx.lineTo(x, height);
             ctx.strokeStyle = '#212121';
@@ -1564,21 +2055,20 @@ function renderElevationChart(data) {
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Draw Dot
             ctx.beginPath();
             ctx.arc(x, y, 4, 0, Math.PI * 2);
             ctx.fillStyle = '#fff';
             ctx.fill();
             ctx.stroke();
 
-            // Tooltip Text
             ctx.fillStyle = '#212121';
             ctx.font = 'bold 11px sans-serif';
             ctx.fillText(`${Math.round(point.elevation)}m`, x, y - 10);
 
-            // Update Map Marker
             if (!elevationMarker) {
-                elevationMarker = new mapboxgl.Marker({ color: '#f39c12', scale: 0.8 }).setLngLat(point.coord).addTo(map);
+                elevationMarker = new mapboxgl.Marker({ color: '#f39c12', scale: 0.8 })
+                    .setLngLat(point.coord)
+                    .addTo(map);
             } else {
                 elevationMarker.setLngLat(point.coord);
             }
@@ -1589,21 +2079,17 @@ function renderElevationChart(data) {
             }
         }
 
-        ctx.translate(-margin.left, -margin.top); // Reset transform
+        ctx.translate(-margin.left, -margin.top);
     };
 
-    // Initial Draw
     draw();
 
-    // Event Listeners
     canvas.onmousemove = (e) => {
         const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left); // Scale not needed for logic, only drawing
+        const x = e.clientX - rect.left;
         draw(x);
     };
-    canvas.onmouseleave = () => {
-        draw(null);
-    };
+    canvas.onmouseleave = () => draw(null);
 }
 
 function speak(text) {
@@ -1640,7 +2126,7 @@ async function downloadGPX(route) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     // Small delay to show loading spinner
     await new Promise(r => setTimeout(r, 500));
 }
@@ -1664,7 +2150,128 @@ function handleMarkerDrag(index, newCoords) {
         if (waypoints.filter(w => w).length >= 2) calculateRoute();
     }
 }
+function updateWindImpactMeters({ tail = 0, head = 0, cross = 0 }) {
+    const setMeter = (valId, barId, pct) => {
+        const valEl = document.getElementById(valId);
+        if (valEl) valEl.innerText = `${Math.round(pct)}%`;
+        const barEl = document.getElementById(barId);
+        if (barEl) barEl.style.width = `${pct}%`;
+    };
+    setMeter('tw-val', 'tw-bar', tail);
+    setMeter('hw-val', 'hw-bar', head);
+    setMeter('cw-val', 'cw-bar', cross);
+    setMeter('wx-tw-val', 'wx-tw-bar', tail);
+    setMeter('wx-hw-val', 'wx-hw-bar', head);
+    setMeter('wx-cw-val', 'wx-cw-bar', cross);
+}
 
+// Helper: Haversine distance in km
+function haversineDistance(p1, p2) {
+    const [lon1, lat1] = p1;
+    const [lon2, lat2] = p2;
+    const R = 6371000;
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) ** 2 +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c / 1000; // km
+}
+
+// Helper: Bearing from point1 to point2 (0-360)
+function calculateBearing(p1, p2) {
+    let [lon1, lat1] = p1;
+    let [lon2, lat2] = p2;
+    lon1 *= Math.PI / 180;
+    lon2 *= Math.PI / 180;
+    lat1 *= Math.PI / 180;
+    lat2 *= Math.PI / 180;
+
+    const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) -
+        Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+
+    let bearing = Math.atan2(y, x) * 180 / Math.PI;
+    return (bearing + 360) % 360;
+}
+
+async function computeRouteWindImpact(geometry) {
+    if (!geometry || geometry.type !== 'LineString' || geometry.coordinates.length < 2) {
+        return { tail: 0, head: 0, cross: 100 };
+    }
+
+    const coords = geometry.coordinates;
+
+    // Sample points evenly by index (dense routes ≈ even distance)
+    const maxSamples = 15;
+    const numSamples = Math.min(maxSamples, Math.max(3, Math.floor(coords.length / 50) + 2));
+    const sampleIndices = [];
+    for (let i = 0; i < numSamples; i++) {
+        const fraction = i / (numSamples - 1);
+        sampleIndices.push(Math.round(fraction * (coords.length - 1)));
+    }
+
+    const samplePoints = sampleIndices.map(idx => ({
+        lat: coords[idx][1],
+        lon: coords[idx][0],
+        time: null
+    }));
+
+    let weatherData = await fetchRouteForecast(samplePoints);
+
+    // Pad with last valid or null
+    while (weatherData.length < numSamples) {
+        weatherData.push(weatherData[weatherData.length - 1] ?? null);
+    }
+
+    let tailM = 0, headM = 0, crossM = 0;
+
+    for (let i = 0; i < coords.length - 1; i++) {
+        const start = coords[i];
+        const end = coords[i + 1];
+        const segKm = haversineDistance(start, end);
+        if (segKm === 0) continue;
+
+        // Approximate mid index for closest sample
+        const midIdx = Math.floor(i + 0.5);
+        let closestSampleIdx = 0;
+        let minDist = Infinity;
+        sampleIndices.forEach((sIdx, s) => {
+            const dist = Math.abs(midIdx - sIdx);
+            if (dist < minDist) {
+                minDist = dist;
+                closestSampleIdx = s;
+            }
+        });
+
+        const wd = weatherData[closestSampleIdx];
+
+        let impact = 'crosswind';
+        if (wd && wd.bearing != null) {
+            const bearing = calculateBearing(start, end);
+            impact = calculateWindImpact(bearing, wd.bearing);
+        }
+        // else treat as crosswind (no data)
+
+        const segM = segKm * 1000;
+        if (impact === 'tailwind') tailM += segM;
+        else if (impact === 'headwind') headM += segM;
+        else crossM += segM;
+    }
+
+    const totalM = tailM + headM + crossM || 1; // avoid divide by zero
+
+    return {
+        tail: Math.round((tailM / totalM) * 100),
+        head: Math.round((headM / totalM) * 100),
+        cross: Math.round((crossM / totalM) * 100)
+    };
+}
 async function captureRouteSnapshot() {
     if (!currentRouteData) return;
 
