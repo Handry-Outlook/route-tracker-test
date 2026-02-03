@@ -2994,6 +2994,12 @@ function stopLiveTracking() {
     isNavigating = false;
     lastSpokenStepIndex = -1;
     hideWrongWayAlert();
+
+    // Clean up navigation overlays
+    ['nav-overlay-top', 'nav-overlay-bottom', 'nav-chat-overlay', 'nav-viewer-overlay', 'wrong-way-alert'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    });
 }
 
 // --- THEME & SHARING ---
