@@ -91,5 +91,12 @@
     <script>
       feather.replace()
     </script>
-
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/route-tracker-test/sw.js');
+    });
+  }
+</script>
 </html>
+
