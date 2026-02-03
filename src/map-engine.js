@@ -50,6 +50,9 @@ export const initMap = (containerId) => {
             });
         }
         map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 0 });
+
+        // FIX: Initialize AerisWeather controller immediately on load
+        initializeAerisController(map);
     });
 
     return map;
@@ -563,6 +566,9 @@ export const restoreWeather = (map) => {
 
     // Note: Met Office radar (raster source) is also wiped by style change.
     // It will reappear on the next animation frame update or needs manual re-adding here if static.
+    if (isWeatherEnabled && window.lastRadarBlobUrl) {
+        updateMetOfficeLayer(map, window.lastRadarBlobUrl, [-25, 44.02, 16, 64]);
+    }
 };
 
 // Inside map-engine.js

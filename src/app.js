@@ -2465,6 +2465,64 @@ function toggleNavigation() {
     else stopLiveTracking();
 }
 
+async function startAndShareSession() {
+    if (!currentUser) {
+        alert("Please log in to start a live session.");
+        throw new Error("User not logged in");
+    }
+
+    if (liveSessionId) {
+        // Session already exists, just show the share modal
+        const url = `${window.location.origin}${window.location.pathname}?track=${liveSessionId}`;
+        showAutoShareModal(url);
+        return; // Success, no need to create a new session
+    }
+
+    // No session, so create one.
+    if (!navigator.geolocation) {
+        alert("Geolocation not supported.");
+        throw new Error("Geolocation not supported");
+    }
+
+    // This will throw on error, and withLoading will catch it.
+    await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            try {
+                const coords = [pos.coords.longitude, pos.coords.latitude];
+                const routeGeo = currentRouteData ? currentRouteData.geometry : null;
+                liveSessionId = await createLiveSession(currentUser.uid, coords, routeGeo);
+                
+                // Activate host features
+                subscribeToReactions(liveSessionId);
+                if (chatOverlayUnsubscribe) chatOverlayUnsubscribe();
+                chatOverlayUnsubscribe = subscribeToChat(liveSessionId, updateChatOverlay);
+                if (viewerOverlayUnsubscribe) viewerOverlayUnsubscribe();
+                viewerOverlayUnsubscribe = subscribeToViewers(liveSessionId, updateViewerOverlay);
+
+                // Show UI elements
+                const stopBtn = document.getElementById('stop-share-btn');
+                const statusBtn = document.getElementById('send-status-btn');
+                const viewerCount = document.getElementById('nav-viewer-count');
+                const shareBtn = document.getElementById('share-nav-btn');
+                if (stopBtn) stopBtn.style.display = 'block';
+                if (statusBtn) statusBtn.style.display = 'block';
+                if (viewerCount) viewerCount.style.display = 'flex';
+                if (shareBtn) shareBtn.style.display = 'block';
+
+                const url = `${window.location.origin}${window.location.pathname}?track=${liveSessionId}`;
+                showAutoShareModal(url);
+                resolve(liveSessionId);
+            } catch (e) {
+                console.error("Auto-share error:", e);
+                reject(e);
+            }
+        }, (err) => {
+            console.warn("Share loc error", err);
+            reject(err);
+        }, GEO_OPTIONS);
+    });
+}
+
 function startLiveTracking() {
     if (!navigator.geolocation) return alert("Geolocation not supported");
 
@@ -2473,42 +2531,10 @@ function startLiveTracking() {
 
     // --- AUTO SHARE LIVE LOCATION ---
     if (currentUser) {
-        const handleAutoShare = async (pos) => {
-            try {
-                if (!liveSessionId) {
-                    const coords = [pos.coords.longitude, pos.coords.latitude];
-                    const routeGeo = currentRouteData ? currentRouteData.geometry : null;
-                    liveSessionId = await createLiveSession(currentUser.uid, coords, routeGeo);
-                    subscribeToReactions(liveSessionId); // Listen for viewer reactions
-
-                    // Reveal Host UI immediately
-                    const stopBtn = document.getElementById('stop-share-btn');
-                    const statusBtn = document.getElementById('send-status-btn');
-                    const dashBtn = document.getElementById('host-dash-btn');
-                    const viewerCount = document.getElementById('nav-viewer-count');
-                const shareBtn = document.getElementById('share-nav-btn');
-
-                    if (stopBtn) stopBtn.style.display = 'block';
-                    if (statusBtn) statusBtn.style.display = 'block';
-                    // dashBtn (Live Chat) remains hidden until paused
-                    if (viewerCount) viewerCount.style.display = 'flex';
-                if (shareBtn) shareBtn.style.display = 'block';
-
-                    // Start Subscriptions for Overlays
-                    if (chatOverlayUnsubscribe) chatOverlayUnsubscribe();
-                    chatOverlayUnsubscribe = subscribeToChat(liveSessionId, updateChatOverlay);
-                    if (viewerOverlayUnsubscribe) viewerOverlayUnsubscribe();
-                    viewerOverlayUnsubscribe = subscribeToViewers(liveSessionId, updateViewerOverlay);
-                }
-                const url = `${window.location.origin}${window.location.pathname}?track=${liveSessionId}`;
-                showAutoShareModal(url);
-            } catch (e) {
-                console.error("Auto-share error:", e);
-            }
-        };
-
-        // Get current position for session creation
-        navigator.geolocation.getCurrentPosition(handleAutoShare, (err) => console.warn("Share loc error", err), GEO_OPTIONS);
+        startAndShareSession().catch(err => {
+            console.error("Failed to auto-start session:", err);
+            // Don't alert, as this is an automatic background process.
+        });
     }
 
     // Check if user is near the start point
@@ -2865,7 +2891,7 @@ function initNavigationOverlays() {
     const chatOverlayEl = document.createElement('div');
     chatOverlayEl.id = 'nav-chat-overlay';
     chatOverlayEl.style.cssText = `
-        position: absolute; bottom: 180px; left: 20px; width: 250px;
+        position: absolute; bottom: 190px; left: 20px; width: 250px;
         pointer-events: auto; z-index: 25; display: flex; flex-direction: column;
         gap: 8px; align-items: flex-start; cursor: pointer;
     `;
@@ -2876,7 +2902,7 @@ function initNavigationOverlays() {
     const viewerOverlay = document.createElement('div');
     viewerOverlay.id = 'nav-viewer-overlay';
     viewerOverlay.style.cssText = `
-        position: absolute; bottom: 140px; left: 20px;
+        position: absolute; bottom: 165px; left: 20px;
         background: rgba(0,0,0,0.5); color: white; padding: 4px 8px;
         border-radius: 4px; font-size: 0.8rem; pointer-events: none; z-index: 25; display: none;
     `;
@@ -2913,7 +2939,7 @@ function initNavigationOverlays() {
             <button id="exit-nav-btn" style="display:none; flex-shrink:0;">Exit Navigation</button>
             <button id="send-status-btn" style="display:none; background-color:#9b59b6; color:white; border:none; padding:12px 24px; border-radius:30px; font-weight:600; cursor:pointer; flex-shrink:0;">Status</button>
             <button id="host-dash-btn" style="display:none; background-color:#8e44ad; color:white; border:none; padding:12px 24px; border-radius:30px; font-weight:600; cursor:pointer; flex-shrink:0;">Live Chat</button>
-            <button id="share-nav-btn" style="display:none; background-color:#2ecc71; color:white; border:none; padding:12px 24px; border-radius:30px; font-weight:600; cursor:pointer; flex-shrink:0;">Share</button>
+            <button id="share-nav-btn" style="display:block; background-color:#2ecc71; color:white; border:none; padding:12px 24px; border-radius:30px; font-weight:600; cursor:pointer; flex-shrink:0;">Share</button>
             <button id="stop-share-btn" style="display:none; background-color:#3498db; color:white; border:none; padding:12px 24px; border-radius:30px; font-weight:600; cursor:pointer; flex-shrink:0;">Stop Sharing</button>
         </div>
     `;
@@ -2951,12 +2977,7 @@ function initNavigationOverlays() {
     document.getElementById('host-dash-btn').onclick = () => { if (liveSessionId) showHostLiveDashboard(liveSessionId); };
 
     if (shareBtn) {
-        shareBtn.onclick = () => {
-            if (liveSessionId) {
-                const url = `${window.location.origin}${window.location.pathname}?track=${liveSessionId}`;
-                showAutoShareModal(url);
-            }
-        };
+        shareBtn.onclick = () => withLoading(shareBtn, startAndShareSession);
     }
 
     pauseBtn.onclick = () => {
@@ -2998,11 +3019,23 @@ function initNavigationOverlays() {
     };
 
     document.getElementById('stop-share-btn').onclick = async () => {
-        if (confirm("Stop sharing your live location?")) {
-            await endLiveSession(liveSessionId);
-            liveSessionId = null;
-            document.getElementById('stop-share-btn').style.display = 'none';
-        }
+        if (liveSessionId) await endLiveSession(liveSessionId);
+        liveSessionId = null;
+
+        // Hide all sharing-related UI elements
+        document.getElementById('stop-share-btn').style.display = 'none';
+        document.getElementById('send-status-btn').style.display = 'none';
+        document.getElementById('nav-viewer-count').style.display = 'none';
+        const dashBtn = document.getElementById('host-dash-btn');
+        if (dashBtn) dashBtn.style.display = 'none';
+
+        // Unsubscribe from listeners to save resources
+        if (liveSessionUnsubscribe) liveSessionUnsubscribe();
+        liveSessionUnsubscribe = null;
+        if (chatOverlayUnsubscribe) chatOverlayUnsubscribe();
+        chatOverlayUnsubscribe = null;
+        if (viewerOverlayUnsubscribe) viewerOverlayUnsubscribe();
+        viewerOverlayUnsubscribe = null;
     };
 
     document.getElementById('send-status-btn').onclick = showStatusOptions;
@@ -3572,26 +3605,38 @@ function renderElevationChart(data) {
     canvas.onmouseleave = () => draw(null);
 }
 
-function speak(text) {
-    if (!speechSynth || isMuted) return;
+async function speak(text) {
+    if (isMuted) return;
 
-    // Cancel anything currently in the queue to avoid lag
-    speechSynth.cancel();
+    // 1. Check if we are in a Native environment with the plugin
+    const NativeTTS = window.Capacitor?.Plugins?.TextToSpeech;
 
-    const utterance = new SpeechSynthesisUtterance(text);
-
-    // Set a voice (optional, but helps compatibility)
-    const voices = speechSynth.getVoices();
-    if (voices.length > 0) {
-        // Try to find an English voice, otherwise use the first available
-        utterance.voice = voices.find(v => v.lang.includes('en')) || voices[0];
+    if (NativeTTS) {
+        try {
+            await NativeTTS.speak({
+                text: text,
+                lang: 'en-US',
+                rate: 1.0,
+                pitch: 1.0,
+                volume: 1.0,
+                category: 'ambient'
+            });
+            return; // Exit if Native TTS worked
+        } catch (e) {
+            console.warn("Native TTS failed, trying Web Speech API", e);
+        }
     }
 
-    utterance.pitch = 1.0;
-    utterance.rate = 1.0;
-    utterance.volume = 1.0;
-
-    speechSynth.speak(utterance);
+    // 2. Web Fallback (Standard Browser)
+    if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        // Match the settings
+        utterance.lang = 'en-US';
+        utterance.rate = 1.0;
+        window.speechSynthesis.speak(utterance);
+    } else {
+        console.error("Text-to-Speech not supported on this browser.");
+    }
 }
 
 async function downloadGPX(route) {
@@ -4198,7 +4243,7 @@ function showAutoShareModal(url) {
     const modal = document.createElement('div');
     modal.id = 'auto-share-modal';
     modal.style.cssText = `
-        position: fixed; top: 80px; right: 20px; width: 320px;
+        position: fixed; top: 180px; right: 20px; width: 320px;
         background: var(--panel-bg, #fff); border: 1px solid var(--border-color, #ccc);
         border-radius: 12px; padding: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
         z-index: 2000; display: flex; flex-direction: column; gap: 12px;
@@ -4219,9 +4264,7 @@ function showAutoShareModal(url) {
             <a href="${waLink}" target="_blank" style="display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; background:#25D366; color:white; text-decoration:none; border-radius:8px; font-weight:600; font-size:0.9rem;">
                 <i data-feather="message-circle" style="width:16px; height:16px;"></i> WhatsApp
             </a>
-            <a href="${smsLink}" target="_blank" style="display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; background:#3498db; color:white; text-decoration:none; border-radius:8px; font-weight:600; font-size:0.9rem;">
-                <i data-feather="message-square" style="width:16px; height:16px;"></i> SMS
-            </a>
+            
             <button id="copy-share-link-btn" style="display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; background:#f1c40f; color:#212121; border:none; border-radius:8px; font-weight:600; font-size:0.9rem; cursor:pointer;">
                 <i data-feather="copy" style="width:16px; height:16px;"></i> Copy Link
             </button>
