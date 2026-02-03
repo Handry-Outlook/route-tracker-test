@@ -3561,7 +3561,23 @@ function renderElevationChart(data) {
 
 function speak(text) {
     if (!speechSynth || isMuted) return;
+
+    // Cancel anything currently in the queue to avoid lag
+    speechSynth.cancel();
+
     const utterance = new SpeechSynthesisUtterance(text);
+
+    // Set a voice (optional, but helps compatibility)
+    const voices = speechSynth.getVoices();
+    if (voices.length > 0) {
+        // Try to find an English voice, otherwise use the first available
+        utterance.voice = voices.find(v => v.lang.includes('en')) || voices[0];
+    }
+
+    utterance.pitch = 1.0;
+    utterance.rate = 1.0;
+    utterance.volume = 1.0;
+
     speechSynth.speak(utterance);
 }
 
@@ -3934,6 +3950,17 @@ function loadFavoritesList() {
     });
     if (feather) feather.replace();
 }
+
+// Function to "wake up" the speech engine on first user click
+document.body.addEventListener('click', () => {
+    if (speechSynth && speechSynth.speaking) return; // Don't interrupt if already talking
+    if (speechSynth) {
+        const wakeUp = new SpeechSynthesisUtterance("");
+        wakeUp.volume = 0; // Silent
+        speechSynth.speak(wakeUp);
+        console.log("Speech Engine Unlocked");
+    }
+}, { once: true }); // Only runs the first time they tap anywhere
 
 // Helper to mount chat into a container
 function mountChatUI(container, sessionId, senderName, isHost, initialText = '') {
