@@ -1,5 +1,5 @@
 import { auth, googleProvider, saveRouteToCloud, fetchAllRoutes, deleteRouteFromCloud, createLiveSession, updateLiveSession, endLiveSession, subscribeToLiveSession, updateRouteName, saveSharedRoute, fetchSharedRoute, sendReaction, updateViewerCount, sendChatMessage, subscribeToChat, registerViewer, subscribeToViewers, kickViewer } from './firebase.js';
-import { onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { onAuthStateChanged, signInWithPopup, signOut, getRedirectResult, signInWithRedirect } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { fetchWindAtLocation, fetchRouteForecast } from './weather-api.js';
 import { calculateWindImpact } from './geo-logic.js';
 import { initMap, fetchRouteAlternatives, drawStaticRoute, addRouteMarkers, clearRoute, getElevationProfile, playRouteAnimation, stopRouteAnimation, toggleTraffic, toggleWeather, setAnimationSpeed, togglePause, updateMetOfficeLayer, toggleTerrain, restoreWeather } from './map-engine.js';
@@ -42,6 +42,7 @@ let recentLocations = []; // Track history for bearing calculation
 let lastKnownHeading = 0;
 let isRerouting = false;
 let wrongWayState = { active: false, startTime: 0, isAlerting: false };
+let currentTutorialStep = 0;
 
 const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -94,7 +95,7 @@ const searchLocal = (query) => {
     try {
         const favorites = getFavorites().map(item => {
             if (!item.properties) item.properties = {};
-            item.properties.maki = 'star';
+            item.properties.maki = 'star'; 
             item.place_name = '⭐ ' + item.place_name.replace('⭐ ', ''); // Visual cue
             return item;
         });
@@ -102,7 +103,7 @@ const searchLocal = (query) => {
         const history = JSON.parse(localStorage.getItem('location_history') || '[]');
         const historyItems = history.map(item => {
             if (!item.properties) item.properties = {};
-            item.properties.maki = 'clock';
+            item.properties.maki = 'clock'; 
             return item;
         });
 
@@ -117,50 +118,27 @@ const searchLocal = (query) => {
 document.addEventListener('DOMContentLoaded', () => {
     injectCustomStyles();
     initTheme();
+    initTutorial(); // Initialize tutorial system
 
     // --- AUTH ---
-    // --- NEW LOGIN LOGIC (Fixes "Missing Initial State") ---
-
     const loginBtn = document.getElementById('login-btn');
-    if (loginBtn) {
-        loginBtn.addEventListener('click', () => {
-            // 1. Force account selection to avoid "auto-login" loops
-            googleProvider.setCustomParameters({
-                prompt: 'select_account'
-            });
-
-            // 2. Use Popup instead of Redirect
-            signInWithPopup(auth, googleProvider)
-                .then((result) => {
-                    // Success! User is signed in.
-                    const user = result.user;
-                    console.log("User signed in:", user.displayName);
-
-                    // Close the modal if it exists
-                    const loginModal = document.getElementById('login-modal');
-                    if (loginModal) loginModal.style.display = 'none';
-
-                    // Optional: Show a success message
-                    showToast(`Welcome back, ${user.displayName.split(' ')[0]}!`);
-                })
-                .catch((error) => {
-                    console.error("Login Error:", error);
-
-                    // Specific error handling for your issue
-                    if (error.code === 'auth/unauthorized-domain') {
-                        alert("Error: This domain is not authorized in Firebase Console. Please add 'median.co' to Authorized Domains.");
-                    } else if (error.code === 'auth/popup-blocked') {
-                        alert("Popup blocked. Please allow popups for this site.");
-                    } else {
-                        alert("Login Failed: " + error.message);
-                    }
-                });
-        });
-    }
     const logoutBtn = document.getElementById('logout-btn');
     const userProfile = document.getElementById('user-profile');
 
     if (auth) {
+        getRedirectResult(auth)
+            .then((result) => {
+                if (result) {
+                    // This confirms the user has just signed in via redirect.
+                    // The onAuthStateChanged observer will handle the UI updates.
+                    console.log("Handled redirect sign-in for user:", result.user.displayName);
+                }
+            }).catch((error) => {
+                // Handle Errors here.
+                console.error("Redirect Result Error:", error);
+                alert("Login failed during redirect: " + error.message);
+            });
+
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 currentUser = { uid: user.uid, name: user.displayName, avatar: user.photoURL };
@@ -185,20 +163,34 @@ document.addEventListener('DOMContentLoaded', () => {
             loginBtn.innerHTML = 'Wait...';
             loginBtn.disabled = true;
 
-            signInWithPopup(auth, googleProvider).catch(e => {
-                console.error("Auth Error", e);
-                let msg = "Login Failed: " + e.message;
-                if (e.code === 'auth/unauthorized-domain') {
-                    msg = `Configuration Error: The domain "${window.location.hostname}" is not authorized.\n\nPlease add it to your Firebase Console under Authentication > Settings > Authorized Domains.`;
-                } else if (e.code === 'auth/popup-closed-by-user') {
-                    msg = "Login cancelled by user.";
-                } else if (e.code === 'auth/popup-blocked') {
-                    msg = "Login popup was blocked. Please allow popups for this site.";
-                }
-                alert(msg);
-                loginBtn.innerHTML = originalText;
-                loginBtn.disabled = false;
-            });
+            // Check if the app is running in the Android WebView
+            // We look for 'Version/' which is common in Android WebView UserAgents
+            const isWebView = /Android|WV|Version\/[\d.]+/i.test(navigator.userAgent);
+
+            if (isWebView) {
+                // Use Redirect for Android App. The result will be handled by getRedirectResult.
+                signInWithRedirect(auth, googleProvider);
+            } else {
+                // Use Popup for standard browsers (Desktop/Chrome)
+                signInWithPopup(auth, googleProvider).catch(e => {
+                    console.error("Auth Error", e);
+                    let msg = "Login Failed: " + e.message;
+                    if (e.code === 'auth/unauthorized-domain') {
+                        msg = `Configuration Error: The domain "${window.location.hostname}" is not authorized.\n\nPlease add it to your Firebase Console under Authentication > Settings > Authorized Domains.`;
+                    } else if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
+                        // Don't show an alert if the user just closes the popup.
+                        console.log("Login cancelled by user.");
+                        loginBtn.innerHTML = originalText;
+                        loginBtn.disabled = false;
+                        return; // exit without alert
+                    } else if (e.code === 'auth/popup-blocked') {
+                        msg = "Login popup was blocked. Please allow popups for this site.";
+                    }
+                    alert(msg);
+                    loginBtn.innerHTML = originalText;
+                    loginBtn.disabled = false;
+                });
+            }
         });
         logoutBtn.addEventListener('click', () => signOut(auth));
     } else if (loginBtn) {
@@ -384,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const startWrapper = document.querySelector('.location-input-wrapper');
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'input-actions';
-
+    
     // Add Star Button for Start
     const starBtnStart = document.createElement('button');
     starBtnStart.className = 'icon-btn star-btn';
@@ -605,6 +597,13 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleBtn.innerHTML = `<i data-feather="moon"></i>`;
     toggleBtn.onclick = toggleTheme;
     header.appendChild(toggleBtn);
+
+    // Add Help/Tutorial Button
+    const helpBtn = document.createElement('button');
+    helpBtn.className = 'icon-btn help-btn';
+    helpBtn.innerHTML = `<i data-feather="help-circle"></i>`;
+    helpBtn.onclick = startTutorial;
+    header.appendChild(helpBtn);
     if (feather) feather.replace();
 
     // Check URL for Tracking or Route
@@ -674,7 +673,7 @@ function initRouteOptionsUI() {
 
     if (!addDestBtn) {
         // Fallback: search by visible text (matches "+ Add Destination" or "Add Destination")
-        addDestBtn = Array.from(document.querySelectorAll('button')).find(btn =>
+        addDestBtn = Array.from(document.querySelectorAll('button')).find(btn => 
             btn.textContent.trim().includes('Add Destination')
         );
     }
@@ -871,7 +870,7 @@ function addDestination() {
         currentFeatures[newIndex] = e.result;
 
         wrapper.classList.add('location-set');
-
+        
         const isFav = getFavorites().some(f => f.place_name === e.result.place_name);
         starBtn.classList.toggle('active', isFav);
         starBtn.innerHTML = isFav ? `<i data-feather="star" fill="currentColor"></i>` : `<i data-feather="star"></i>`;
@@ -880,8 +879,8 @@ function addDestination() {
         waypoints[newIndex] = e.result.center;
         addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
     });
-    geocoder.on('clear', () => {
-        waypoints[newIndex] = null;
+    geocoder.on('clear', () => { 
+        waypoints[newIndex] = null; 
         currentFeatures[newIndex] = null;
         wrapper.classList.remove('location-set');
         starBtn.classList.remove('active');
@@ -899,22 +898,22 @@ function insertIntermediateWaypoint(coords) {
     // 1. Determine insertion index (before the last destination)
     // If we only have Start(0) and End(1), we insert at 1.
     const insertIndex = waypoints.length - 1;
-
+    
     // 2. Update Data Arrays
     waypoints.splice(insertIndex, 0, coords);
     currentFeatures.splice(insertIndex, 0, null); // Placeholder
-
+    
     // 3. Update UI (Insert Input Field)
     const destinationList = document.getElementById('destination-list');
     const wrappers = destinationList.getElementsByClassName('location-input-wrapper');
     const lastWrapper = wrappers[wrappers.length - 1]; // The destination input
-
+    
     const wrapper = document.createElement('div');
     wrapper.className = 'location-input-wrapper';
     const container = document.createElement('div');
     container.className = 'geocoder-container';
     wrapper.appendChild(container);
-
+    
     // Insert before the final destination input
     destinationList.insertBefore(wrapper, lastWrapper);
 
@@ -938,7 +937,7 @@ function insertIntermediateWaypoint(coords) {
     });
 
     container.appendChild(geocoder.onAdd(map));
-
+    
     // Sync Geocoder List
     geocoders.splice(insertIndex, 0, geocoder);
 
@@ -962,7 +961,7 @@ function insertIntermediateWaypoint(coords) {
     if (geocoder._inputEl) {
         geocoder._inputEl.addEventListener('input', () => wrapper.classList.remove('location-set'));
     }
-
+    
     if (feather) feather.replace();
 
     // 4. Trigger Route Recalculation
@@ -993,7 +992,7 @@ async function calculateRoute(options = {}) {
 
         // 1. Fetch Alternatives
         const routes = await fetchRouteAlternatives(validWaypoints, options);
-
+        
         if (!routes || routes.length === 0) return;
 
         // PREPARE TERRAIN FOR BATCH ELEVATION CALCS
@@ -1009,7 +1008,7 @@ async function calculateRoute(options = {}) {
         // 2. Get Preferences
         const avoidARoads = document.getElementById('avoid-aroads')?.checked || false;
         const preferScenic = document.getElementById('prefer-scenic')?.checked || false;
-
+        
         // 3. Fetch Weather for Scoring (Start Point)
         const start = validWaypoints[0];
         const weather = await fetchWindAtLocation(start[1], start[0]);
@@ -1019,27 +1018,27 @@ async function calculateRoute(options = {}) {
         const scoredRoutes = await Promise.all(routes.map(async (r, index) => {
             // Wind Score
             const windScore = calculateRouteWindScore(r.geometry, windBearing);
-
+            
             // Detailed Road Analysis (Cycle Lanes, A-Roads, Motorways)
             const stats = analyzeRouteCharacteristics(r);
-
+            
             // Elevation Gain (Async Calculation)
             const profile = await getElevationProfile(map, r.geometry);
             let ascent = 0;
             if (profile && profile.length > 0) {
                 const elevs = profile.map(p => p.elevation);
-                for (let i = 1; i < elevs.length; i++) {
-                    if (elevs[i] > elevs[i - 1]) ascent += (elevs[i] - elevs[i - 1]);
+                for(let i=1; i<elevs.length; i++) {
+                    if(elevs[i] > elevs[i-1]) ascent += (elevs[i] - elevs[i-1]);
                 }
             }
 
             // --- ADVANCED SCORING ALGORITHM ---
             let score = 50; // Base score
-
+            
             // 1. WIND FACTOR (0-100 impact)
             // Tailwind is a huge plus, headwind is a major drag.
             score += (windScore.percentage - 50); // +/- 50 pts based on wind
-
+            
             // 2. INFRASTRUCTURE (Cycle Lanes)
             // We want to maximize this.
             score += (stats.cycleLanePct * 0.5); // Up to +50 pts
@@ -1047,12 +1046,12 @@ async function calculateRoute(options = {}) {
             // 2b. SCENIC SCORE
             // If scenic is requested, heavily weight green areas
             if (preferScenic) score += (stats.scenicScore * 2);
-
+            
             // 3. ROAD DANGER (A-Roads & Motorways)
             // Heavy penalty for A-roads.
-            score -= (stats.aRoadPct * 1.5);
+            score -= (stats.aRoadPct * 1.5); 
             score -= (stats.motorwayPct * 5); // Huge penalty for motorways
-
+            
             // 4. EFFORT (Ascent)
             // Penalize climbing: -1 pt per 10m climbed
             score -= (ascent / 10);
@@ -1153,7 +1152,7 @@ function reverseRoute() {
     const tempCoords = waypoints[0];
     waypoints[0] = waypoints[1];
     waypoints[1] = tempCoords;
-
+    
     const tempFeat = currentFeatures[0];
     currentFeatures[0] = currentFeatures[1];
     currentFeatures[1] = tempFeat;
@@ -1175,13 +1174,13 @@ function reverseRoute() {
     // 3. Update Star Buttons
     const startBtn = document.querySelectorAll('.star-btn')[0];
     const endBtn = document.querySelectorAll('.star-btn')[1];
-
+    
     const isStartFav = currentFeatures[0] && getFavorites().some(f => f.place_name === currentFeatures[0].place_name);
     const isEndFav = currentFeatures[1] && getFavorites().some(f => f.place_name === currentFeatures[1].place_name);
-
+    
     if (startBtn) { startBtn.classList.toggle('active', isStartFav); startBtn.innerHTML = isStartFav ? `<i data-feather="star" fill="currentColor"></i>` : `<i data-feather="star"></i>`; }
     if (endBtn) { endBtn.classList.toggle('active', isEndFav); endBtn.innerHTML = isEndFav ? `<i data-feather="star" fill="currentColor"></i>` : `<i data-feather="star"></i>`; }
-
+    
     if (feather) feather.replace();
 
     // 3. Recalculate if we have a route
@@ -1235,7 +1234,7 @@ async function handleRouteSelection(route, isNew = false, allOptions = null) {
             mobileSaveBtn.style.backgroundColor = '#2ecc71'; // Green to stand out
             mobileSaveBtn.innerHTML = `<i data-feather="save"></i> Save to Cloud`;
             mobileSaveBtn.onclick = handleSaveButtonClick;
-
+            
             // Insert after the stats container so it's easily accessible
             const stats = document.getElementById('stats-container');
             if (stats && stats.parentNode) {
@@ -1263,10 +1262,10 @@ async function handleRouteSelection(route, isNew = false, allOptions = null) {
             const btn = document.createElement('div');
             btn.className = `route-card ${isSelected ? 'selected' : ''}`;
             btn.style.cursor = 'pointer';
-
+            
             const distKm = (opt.distance / 1000).toFixed(1);
             const timeMins = Math.round(opt.duration / 60);
-
+            
             // Color Coding Helper
             const getScoreColor = (val, highIsGood = true) => {
                 if (highIsGood) return val >= 70 ? '#2ecc71' : val >= 40 ? '#f39c12' : '#e74c3c';
@@ -1790,6 +1789,127 @@ async function renderForecast(points) {
     if (feather) feather.replace();
 }
 
+// --- TUTORIAL LOGIC ---
+const tutorialSteps = [
+    {
+        target: null, // Center screen
+        title: "Welcome to Route Planner",
+        text: "Let's take a quick tour of the features to help you plan the perfect ride."
+    },
+    {
+        target: '.location-input-wrapper',
+        title: "Plan Your Route",
+        text: "Enter your start and destination here. You can add multiple stops, reorder them, and save favorites."
+    },
+    {
+        target: '.tab-container',
+        title: "Dashboard Tabs",
+        text: "Switch between Planning, detailed Directions, Weather forecasts, and your Saved Routes."
+    },
+    {
+        target: '.map-controls-stack',
+        title: "Map Tools",
+        text: "Use these controls to toggle 3D terrain, traffic data, weather radar, and change map styles."
+    },
+    {
+        target: '.theme-toggle',
+        title: "Dark Mode",
+        text: "Toggle between light and dark themes. The app also switches automatically during navigation at night."
+    }
+];
+
+function initTutorial() {
+    // Create Tutorial Tooltip Element
+    const tooltip = document.createElement('div');
+    tooltip.id = 'tutorial-tooltip';
+    tooltip.className = 'tutorial-tooltip';
+    tooltip.innerHTML = `
+        <h3 id="tut-title">Title</h3>
+        <p id="tut-text">Description</p>
+        <div class="tutorial-controls">
+            <span id="tut-step" class="tutorial-step-indicator">1/5</span>
+            <div class="tutorial-btn-group">
+                <button class="tutorial-btn secondary" onclick="endTutorial()">Skip</button>
+                <button class="tutorial-btn primary" onclick="nextTutorialStep()">Next</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(tooltip);
+    window.nextTutorialStep = nextTutorialStep;
+    window.endTutorial = endTutorial;
+}
+
+function startTutorial() {
+    currentTutorialStep = 0;
+    // Ensure sidebar is visible/expanded on mobile so targets are found
+    const sidebar = document.getElementById('sidebar');
+    if (window.innerWidth <= 768 && sidebar) sidebar.classList.add('expanded');
+    
+    renderTutorialStep();
+}
+
+function renderTutorialStep() {
+    const step = tutorialSteps[currentTutorialStep];
+    const tooltip = document.getElementById('tutorial-tooltip');
+    
+    // Update Content
+    document.getElementById('tut-title').innerText = step.title;
+    document.getElementById('tut-text').innerText = step.text;
+    document.getElementById('tut-step').innerText = `${currentTutorialStep + 1}/${tutorialSteps.length}`;
+    
+    // Clear previous highlights
+    document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
+
+    tooltip.classList.add('active');
+
+    if (step.target) {
+        const targetEl = document.querySelector(step.target);
+        if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetEl.classList.add('tutorial-highlight');
+            
+            // Position Tooltip
+            const rect = targetEl.getBoundingClientRect();
+            const tooltipRect = tooltip.getBoundingClientRect();
+            
+            // Default: Position to the right
+            let top = rect.top;
+            let left = rect.right + 15;
+
+            // If off-screen (mobile or right edge), position below
+            if (left + tooltipRect.width > window.innerWidth) {
+                left = Math.max(10, rect.left); // Align left, but keep padding
+                top = rect.bottom + 15;
+            }
+            
+            tooltip.style.top = `${top}px`;
+            tooltip.style.left = `${left}px`;
+            return;
+        }
+    }
+
+    // Default Center Position (for steps with no target or missing target)
+    tooltip.style.top = '50%';
+    tooltip.style.left = '50%';
+    tooltip.style.transform = 'translate(-50%, -50%)';
+}
+
+function nextTutorialStep() {
+    currentTutorialStep++;
+    if (currentTutorialStep >= tutorialSteps.length) {
+        endTutorial();
+    } else {
+        renderTutorialStep();
+    }
+}
+
+function endTutorial() {
+    const tooltip = document.getElementById('tutorial-tooltip');
+    tooltip.classList.remove('active');
+    tooltip.style.transform = ''; // Reset transform
+    document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
+}
+
 const updateSidebarUI = (score, weather) => {
     // Update Weather Tab Conditions
     if (weather) {
@@ -1939,7 +2059,7 @@ const loadSavedList = async () => {
                 // 2. Restore Waypoints & Markers
                 waypoints = JSON.parse(r.savedWaypoints);
                 addRouteMarkers(map, waypoints.filter(w => w), handleMarkerDrag);
-
+                
                 // 3. Update UI Inputs (Generic labels since we don't save address text)
                 geocoders.forEach(g => g.clear());
                 waypoints.forEach((wp, i) => {
@@ -1955,7 +2075,7 @@ const loadSavedList = async () => {
                 // Legacy: Recalculate based on geometry
                 const geo = JSON.parse(r.geometry);
                 const routeWaypoints = [geo.coordinates[0], geo.coordinates[geo.coordinates.length - 1]];
-
+                
                 // FIX: Update global waypoints so sharing works for legacy routes
                 waypoints = routeWaypoints;
 
@@ -2353,13 +2473,13 @@ function startLiveTracking() {
                     const statusBtn = document.getElementById('send-status-btn');
                     const dashBtn = document.getElementById('host-dash-btn');
                     const viewerCount = document.getElementById('nav-viewer-count');
-                    const shareBtn = document.getElementById('share-nav-btn');
+                const shareBtn = document.getElementById('share-nav-btn');
 
                     if (stopBtn) stopBtn.style.display = 'block';
                     if (statusBtn) statusBtn.style.display = 'block';
                     // dashBtn (Live Chat) remains hidden until paused
                     if (viewerCount) viewerCount.style.display = 'flex';
-                    if (shareBtn) shareBtn.style.display = 'block';
+                if (shareBtn) shareBtn.style.display = 'block';
 
                     // Start Subscriptions for Overlays
                     if (chatOverlayUnsubscribe) chatOverlayUnsubscribe();
@@ -2543,9 +2663,9 @@ function handlePositionUpdate(userPos, heading, speed) {
         const pt = turf.point(userPos);
         // Check distance to route line
         const dist = turf.pointToLineDistance(pt, routeLine, { units: 'kilometers' });
-
+        
         if (dist > 0.05) { // > 50 meters off-track
-            console.log(`Off-route detected (${(dist * 1000).toFixed(0)}m). Rerouting...`);
+            console.log(`Off-route detected (${(dist*1000).toFixed(0)}m). Rerouting...`);
             performAutomaticReroute(userPos);
         }
     }
@@ -2564,16 +2684,16 @@ function handlePositionUpdate(userPos, heading, speed) {
             const pointAhead = turf.along(routeLine, distAlong + 0.02);
             const routeBearing = turf.bearing(snapped, pointAhead);
             const normRouteBearing = (routeBearing + 360) % 360;
-
+            
             let diff = Math.abs(heading - normRouteBearing);
             if (diff > 180) diff = 360 - diff;
-
+            
             if (diff > 120) { // > 120 degrees difference implies moving backwards
                 if (!wrongWayState.active) {
                     wrongWayState.active = true;
                     wrongWayState.startTime = Date.now();
                 } else if (Date.now() - wrongWayState.startTime > 3000 && !wrongWayState.isAlerting) {
-                    showWrongWayAlert();
+                     showWrongWayAlert();
                 }
             } else {
                 if (wrongWayState.isAlerting) hideWrongWayAlert();
@@ -2677,15 +2797,15 @@ async function performAutomaticReroute(userPos) {
     let bearing = 0;
     const targetTime = Date.now() - 4000;
     // Find closest point in history to targetTime
-    const prevItem = recentLocations.reduce((prev, curr) =>
+    const prevItem = recentLocations.reduce((prev, curr) => 
         Math.abs(curr.timestamp - targetTime) < Math.abs(prev.timestamp - targetTime) ? curr : prev
-        , recentLocations[0]);
+    , recentLocations[0]);
 
-    if (prevItem && turf.distance(prevItem.coords, userPos, { units: 'meters' }) > 5) {
+    if (prevItem && turf.distance(prevItem.coords, userPos, {units: 'meters'}) > 5) {
         bearing = turf.bearing(prevItem.coords, userPos);
         bearing = (bearing + 360) % 360; // Normalize to 0-360
     } else if (lastKnownHeading !== null && lastKnownHeading !== undefined) {
-        bearing = lastKnownHeading;
+         bearing = lastKnownHeading;
     }
 
     // Format for Mapbox: "angle,tolerance"
@@ -2833,10 +2953,10 @@ function initNavigationOverlays() {
             pauseBtn.innerText = 'Resume';
             pauseBtn.style.backgroundColor = '#2ecc71'; // Green
             pauseBtn.style.color = '#fff';
-
+            
             // Show Live Dash/Chat button when paused
             if (liveSessionId && dashBtn) dashBtn.style.display = 'block';
-
+            
             // Allow typing in chat overlay
             if (chatOverlayEl) chatOverlayEl.onclick = () => { if (liveSessionId) showChatModal(liveSessionId, "Host", true); };
         } else {
@@ -2845,9 +2965,9 @@ function initNavigationOverlays() {
             pauseBtn.innerText = 'Pause';
             pauseBtn.style.backgroundColor = '#f1c40f'; // Yellow
             pauseBtn.style.color = '#212121';
-
+            
             if (dashBtn) dashBtn.style.display = 'none';
-
+            
             // Revert chat overlay to Status Options
             if (chatOverlayEl) chatOverlayEl.onclick = showStatusOptions;
         }
@@ -2890,7 +3010,7 @@ function initNavigationOverlays() {
 function updateChatOverlay(messages) {
     const container = document.getElementById('nav-chat-overlay');
     if (!container) return;
-
+    
     // Show last 3 messages
     const recent = messages.slice(-3);
     container.innerHTML = '';
@@ -2909,12 +3029,12 @@ function updateChatOverlay(messages) {
 function updateViewerOverlay(viewers) {
     const container = document.getElementById('nav-viewer-overlay');
     if (!container) return;
-
+    
     if (viewers.length === 0) {
         container.style.display = 'none';
         return;
     }
-
+    
     container.style.display = 'block';
     const names = viewers.map(v => v.name || 'Guest');
     let text = '';
@@ -2940,9 +3060,9 @@ function showStatusOptions() {
     `;
 
     const options = ["On my way 🚴", "Delayed 5m ⏱️", "Heavy Traffic 🚗", "Taking a break ☕", "Arriving soon 🏁"];
-
+    
     modal.innerHTML = `<h3 style="margin:0 0 8px 0; font-size:1rem;">Send Status</h3>`;
-
+    
     options.forEach(opt => {
         const btn = document.createElement('button');
         btn.innerText = opt;
@@ -3086,7 +3206,7 @@ async function showLinkUI(route) {
             geometry: JSON.stringify(route.geometry),
             distance: route.distance,
             duration: route.duration,
-            legs: JSON.stringify(compressedLegs || []),
+            legs: JSON.stringify(compressedLegs || []), 
             savedWaypoints: JSON.stringify(waypoints),
         };
 
@@ -3096,7 +3216,7 @@ async function showLinkUI(route) {
         // Generate ID-based URL
         const baseUrl = window.location.href.split('?')[0].split('#')[0];
         const url = `${baseUrl}?share_id=${shareId}`;
-
+        
         renderLinkBox("Shared Route Link (100% Identical)", url);
     } catch (e) {
         console.error(e);
@@ -3178,7 +3298,7 @@ async function checkUrlForRoute() {
             // 3. Update UI Inputs
             geocoders.forEach(g => g.clear());
             while (geocoders.length < waypoints.length) addDestination();
-
+            
             waypoints.forEach((wp, i) => {
                 if (geocoders[i]) geocoders[i].setInput(i === 0 ? "Shared Start" : i === waypoints.length - 1 ? "Shared Dest" : "Shared Stop");
                 if (geocoders[i] && geocoders[i]._inputEl) {
@@ -3633,7 +3753,7 @@ function analyzeRouteCharacteristics(route) {
                 const d = step.distance;
                 const name = step.name || "";
                 const ref = step.ref || "";
-
+                
                 // Check for A-Roads (e.g., "A1", "A406")
                 if (/\bA\d+\b/.test(ref) || /\bA\d+\b/.test(name)) {
                     aRoadDist += d;
@@ -3647,14 +3767,14 @@ function analyzeRouteCharacteristics(route) {
                 // Check for Cycle-friendly keywords
                 const lowerName = name.toLowerCase();
                 const lowerRef = ref.toLowerCase();
-                if (lowerName.includes('cycle') || lowerName.includes('path') ||
-                    lowerName.includes('greenway') || lowerName.includes('towpath') ||
+                if (lowerName.includes('cycle') || lowerName.includes('path') || 
+                    lowerName.includes('greenway') || lowerName.includes('towpath') || 
                     lowerRef.includes('ncn')) {
                     cycleDist += d;
                 }
 
                 // Check for Scenic keywords (Parks, Forests, Water)
-                if (lowerName.includes('park') || lowerName.includes('forest') ||
+                if (lowerName.includes('park') || lowerName.includes('forest') || 
                     lowerName.includes('wood') || lowerName.includes('common') ||
                     lowerName.includes('trail') || lowerName.includes('river') ||
                     lowerName.includes('canal') || lowerName.includes('lake')) {
@@ -3735,9 +3855,9 @@ async function captureRouteSnapshot() {
 function loadFavoritesList() {
     const list = document.getElementById('favorites-list');
     if (!list) return;
-
+    
     const favorites = getFavorites();
-
+    
     if (favorites.length === 0) {
         list.innerHTML = '<p class="empty-state">No favorite locations yet.<br><small>Star locations in the search bar to add them here.</small></p>';
         return;
@@ -3780,7 +3900,7 @@ function loadFavoritesList() {
 
             // Set as Destination (Last Waypoint)
             const destIndex = waypoints.length - 1;
-
+            
             if (geocoders[destIndex]) {
                 geocoders[destIndex].setInput(fav.place_name);
                 if (geocoders[destIndex]._inputEl) {
@@ -3839,7 +3959,7 @@ function mountChatUI(container, sessionId, senderName, isHost, initialText = '')
             <button class="chat-send" style="background:var(--accent-blue); color:white; border:none; padding:8px 12px; border-radius:20px; cursor:pointer;"><i data-feather="send"></i></button>
         </div>
     `;
-
+    
     const msgContainer = container.querySelector('.chat-messages');
     const input = container.querySelector('.chat-input');
     const sendBtn = container.querySelector('.chat-send');
@@ -3857,7 +3977,7 @@ function mountChatUI(container, sessionId, senderName, isHost, initialText = '')
             if (isHost) isVisible = true; // Host sees all
             else if (msg.visibility === 'public') isVisible = true; // Public messages
             else if (msg.senderId === currentUser?.uid) isVisible = true; // My own messages
-
+            
             if (!isVisible) return;
 
             const div = document.createElement('div');
@@ -3969,22 +4089,22 @@ function showHostLiveDashboard(sessionId) {
 
     const content = document.getElementById('dash-content');
     let currentUnsubscribe = null;
-
+    
     const renderViewers = () => {
         if (currentUnsubscribe) currentUnsubscribe();
         content.innerHTML = `<div style="padding:15px; overflow-y:auto; height:100%;"><h4 style="margin-top:0;">Active Viewers</h4><div id="viewer-list">Loading...</div></div>`;
-
+        
         currentUnsubscribe = subscribeToViewers(sessionId, (viewers) => {
             const list = document.getElementById('viewer-list');
-            if (!list) return;
+            if(!list) return;
             list.innerHTML = viewers.length === 0 ? '<p style="color:#888;">No registered viewers.</p>' : '';
             viewers.forEach(v => {
                 const row = document.createElement('div');
                 row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #eee;";
-
+                
                 const infoDiv = document.createElement('div');
                 infoDiv.innerHTML = `<div style="font-weight:600;">${v.name || 'Guest'}</div><div style="font-size:0.75rem; color:#888;">Joined: ${v.joinedAt ? new Date(v.joinedAt.seconds * 1000).toLocaleTimeString() : '-'}</div>`;
-
+                
                 const btnGroup = document.createElement('div');
                 btnGroup.style.display = 'flex';
                 btnGroup.style.gap = '6px';
@@ -3997,8 +4117,8 @@ function showHostLiveDashboard(sessionId) {
                 const kickBtn = document.createElement('button');
                 kickBtn.innerText = "Kick";
                 kickBtn.style.cssText = "background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.8rem;";
-                kickBtn.onclick = () => { if (confirm(`Kick ${v.name}?`)) kickViewer(sessionId, v.id); };
-
+                kickBtn.onclick = () => { if(confirm(`Kick ${v.name}?`)) kickViewer(sessionId, v.id); };
+                
                 btnGroup.appendChild(chatBtn);
                 btnGroup.appendChild(kickBtn);
                 row.appendChild(infoDiv);
@@ -4094,7 +4214,7 @@ function showAutoShareModal(url) {
             if (feather) feather.replace();
         });
     };
-
+    
     // Auto-close after 15s
     setTimeout(() => {
         if (document.body.contains(modal)) modal.remove();
@@ -4118,8 +4238,8 @@ function updateStarButtons() {
             btn.classList.toggle('active', isFav);
             btn.innerHTML = isFav ? `<i data-feather="star" fill="currentColor"></i>` : `<i data-feather="star"></i>`;
         } else {
-            btn.classList.remove('active');
-            btn.innerHTML = `<i data-feather="star"></i>`;
+             btn.classList.remove('active');
+             btn.innerHTML = `<i data-feather="star"></i>`;
         }
     });
     if (feather) feather.replace();
