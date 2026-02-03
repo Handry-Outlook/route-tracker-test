@@ -5,6 +5,19 @@ import { calculateWindImpact } from './geo-logic.js';
 import { initMap, fetchRouteAlternatives, drawStaticRoute, addRouteMarkers, clearRoute, getElevationProfile, playRouteAnimation, stopRouteAnimation, toggleTraffic, toggleWeather, setAnimationSpeed, togglePause, updateMetOfficeLayer, toggleTerrain, restoreWeather } from './map-engine.js';
 import { MAPBOX_TOKEN } from './config.js';
 
+// --- AUDIO UNLOCKER FOR ANDROID WEBVIEW ---
+function unlockAudio() {
+    const speak = new SpeechSynthesisUtterance(" "); // A silent "puff" of air
+    window.speechSynthesis.speak(speak);
+    console.log("Audio Engine Unlocked");
+    // Remove the listener so it only runs once
+    document.removeEventListener('click', unlockAudio);
+    document.removeEventListener('touchstart', unlockAudio);
+}
+
+document.addEventListener('click', unlockAudio);
+document.addEventListener('touchstart', unlockAudio);
+
 // --- GLOBAL STATE ---
 let currentUser = null;
 let currentRouteData = null;
@@ -3950,17 +3963,6 @@ function loadFavoritesList() {
     });
     if (feather) feather.replace();
 }
-
-// Function to "wake up" the speech engine on first user click
-document.body.addEventListener('click', () => {
-    if (speechSynth && speechSynth.speaking) return; // Don't interrupt if already talking
-    if (speechSynth) {
-        const wakeUp = new SpeechSynthesisUtterance("");
-        wakeUp.volume = 0; // Silent
-        speechSynth.speak(wakeUp);
-        console.log("Speech Engine Unlocked");
-    }
-}, { once: true }); // Only runs the first time they tap anywhere
 
 // Helper to mount chat into a container
 function mountChatUI(container, sessionId, senderName, isHost, initialText = '') {
