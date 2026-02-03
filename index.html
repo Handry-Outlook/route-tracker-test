@@ -1,20 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Handry Outlook | Pro Route Planner</title>
-    <link rel="manifest" href="manifest.json">
+
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
+    <link rel="stylesheet"
+        href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css"
+        type="text/css">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdn.aerisapi.com/sdk/js/mapsgl/latest/aerisweather.mapsgl.css" rel="stylesheet" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/feather-icons"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/feather-icons"></script>
 
 </head>
+
 <body>
 
     <div id="sidebar" class="floating-panel">
@@ -44,29 +48,33 @@
                     <div id="destination-list">
                         <div class="location-input-wrapper">
                             <div id="geocoder-start" class="geocoder-container"></div>
-                            <button class="icon-btn locate-me-btn" title="Use current location"><i data-feather="crosshair"></i></button>
+                            <button class="icon-btn locate-me-btn" title="Use current location"><i
+                                    data-feather="crosshair"></i></button>
                         </div>
                         <div class="location-input-wrapper">
                             <div id="geocoder-end" class="geocoder-container"></div>
                         </div>
                     </div>
                     <div class="route-actions">
-                        <button id="add-destination-btn" class="secondary-btn"><i data-feather="plus"></i> Add Destination</button>
+                        <button id="add-destination-btn" class="secondary-btn"><i data-feather="plus"></i> Add
+                            Destination</button>
                         <button id="plan-btn" class="primary-btn">Calculate Route</button>
                     </div>
-                     <button id="clear-route-btn" class="secondary-btn" style="display: none;"><i data-feather="x"></i> Clear</button>
+                    <button id="clear-route-btn" class="secondary-btn" style="display: none;"><i data-feather="x"></i>
+                        Clear</button>
                 </div>
             </div>
-            
+
             <div id="directions-tab" class="tab-content">
                 <div id="stats-container" class="stats-container">
-                    
+
                 </div>
                 <div id="weather-summary">
                     <p id="weather-desc">Create or Select a route to view weather data</p>
                 </div>
                 <div id="directions-list" class="instructions-container"></div>
-                <button id="save-btn" class="primary-btn" style="display:none;"><i data-feather="save"></i> Save Route</button>
+                <button id="save-btn" class="primary-btn" style="display:none;"><i data-feather="save"></i> Save
+                    Route</button>
             </div>
 
             <div id="saved-tab" class="tab-content">
@@ -76,27 +84,24 @@
             </div>
         </div>
     </div>
-    
+
     <div id="map">
         <button id="recenter-btn" class="map-overlay-btn" style="display:none;"><i data-feather="compass"></i></button>
-        <button id="nav-btn" class="map-overlay-btn" style="display:none; bottom: 80px;"><i data-feather="navigation"></i></button>
+        <button id="nav-btn" class="map-overlay-btn" style="display:none; bottom: 80px;"><i
+                data-feather="navigation"></i></button>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/@capacitor-community/text-to-speech@5.0.0/dist/plugin.js"></script>
 
+    <script type="module" src="app.js"></script>
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+    <script
+        src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf/turf.min.js"></script>
     <script src="https://cdn.aerisapi.com/sdk/js/mapsgl/latest/aerisweather.mapsgl.js"></script>
-    
+
     <script type="module" src="src/app.js"></script>
     <script>
-      feather.replace()
+        feather.replace()
     </script>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/route-tracker-test/sw.js');
-    });
-  }
-</script>
-</html>
 
+</html>
