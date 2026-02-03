@@ -237,7 +237,7 @@ export const fetchRouteAlternatives = async (coordinates, options = {}) => {
     }
 };
 
-export const drawStaticRoute = (map, geoJSON) => {
+export const drawStaticRoute = (map, geoJSON, fitToView = true) => {
     if (map.getSource('route')) {
         map.removeLayer('route-line');
         if (map.getLayer('route-line-casing')) map.removeLayer('route-line-casing');
@@ -278,9 +278,11 @@ export const drawStaticRoute = (map, geoJSON) => {
     });
 
     // Zoom to the saved route
-    const bounds = new mapboxgl.LngLatBounds(geoJSON.coordinates[0], geoJSON.coordinates[0]);
-    geoJSON.coordinates.forEach(c => bounds.extend(c));
-    map.fitBounds(bounds, { padding: 50 });
+    if (fitToView) {
+        const bounds = new mapboxgl.LngLatBounds(geoJSON.coordinates[0], geoJSON.coordinates[0]);
+        geoJSON.coordinates.forEach(c => bounds.extend(c));
+        map.fitBounds(bounds, { padding: 50 });
+    }
 };
 
 /**

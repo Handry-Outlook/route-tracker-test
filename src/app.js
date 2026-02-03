@@ -1,4 +1,4 @@
-import { auth, googleProvider, saveRouteToCloud, fetchAllRoutes, deleteRouteFromCloud, createLiveSession, updateLiveSession, subscribeToLiveSession, updateRouteName, saveSharedRoute, fetchSharedRoute } from './firebase.js';
+import { auth, googleProvider, saveRouteToCloud, fetchAllRoutes, deleteRouteFromCloud, createLiveSession, updateLiveSession, endLiveSession, subscribeToLiveSession, updateRouteName, saveSharedRoute, fetchSharedRoute, sendReaction, updateViewerCount, sendChatMessage, subscribeToChat, registerViewer, subscribeToViewers, kickViewer } from './firebase.js';
 import { onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { fetchWindAtLocation, fetchRouteForecast } from './weather-api.js';
 import { calculateWindImpact } from './geo-logic.js';
@@ -21,6 +21,11 @@ let speechSynth = window.speechSynthesis;
 let lastSpokenStepIndex = -1;
 let poiMarkers = []; // Store POI markers
 let liveSessionId = null;
+let liveSessionUnsubscribe = null; // To listen for reactions as host
+let chatUnsubscribe = null;
+let chatOverlayUnsubscribe = null;
+let viewerOverlayUnsubscribe = null;
+let lastReactionTime = 0;
 let remoteMarker = null;
 let metOfficeTimestamps = [];
 let lastLogicalWeatherUrl = null;
@@ -36,6 +41,7 @@ const WEATHER_FETCH_INTERVAL_KM = 25; // Fetch weather every 25km during animati
 let recentLocations = []; // Track history for bearing calculation
 let lastKnownHeading = 0;
 let isRerouting = false;
+let wrongWayState = { active: false, startTime: 0, isAlerting: false };
 
 const GEO_OPTIONS = {
     enableHighAccuracy: true,
@@ -122,16 +128,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (user) {
                 currentUser = { uid: user.uid, name: user.displayName, avatar: user.photoURL };
                 userProfile.innerHTML = `<img id="user-avatar" src="${user.photoURL}" alt="User Avatar">`;
-                loginBtn.style.display = 'none';
-                logoutBtn.style.display = 'block';
-                document.getElementById('user-profile').style.display = 'flex';
-                loadSavedList();
+                if (loginBtn) loginBtn.style.display = 'none';
+                if (logoutBtn) logoutBtn.style.display = 'block';
+                if (userProfile) userProfile.style.display = 'flex';
+                if (trackId) initTrackingMode(trackId);
+                else loadSavedList();
             } else {
                 currentUser = null;
-                userProfile.style.display = 'none';
-                loginBtn.style.display = 'block';
-                logoutBtn.style.display = 'none';
-                document.getElementById('saved-routes-list').innerHTML = '<p class="empty-state">Please log in to see your routes.</p>';
+                if (userProfile) userProfile.style.display = 'none';
+                if (loginBtn) loginBtn.style.display = 'block';
+                if (logoutBtn) logoutBtn.style.display = 'none';
+                if (trackId) initTrackingMode(trackId);
+                else if (document.getElementById('saved-routes-list')) document.getElementById('saved-routes-list').innerHTML = '<p class="empty-state">Please log in to see your routes.</p>';
             }
         });
 
@@ -579,7 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. Restore Route Line
         if (currentRouteData) {
             // We can re-use drawStaticRoute logic to re-add the source/layer
-            drawStaticRoute(map, currentRouteData.geometry);
+            drawStaticRoute(map, currentRouteData.geometry, !isNavigating);
         }
 
         // 3. Restore Weather Layers
@@ -931,13 +939,16 @@ async function calculateRoute(options = {}) {
     try {
         const validWaypoints = waypoints.filter(w => w);
         if (validWaypoints.length < 2) {
+            if (options.suppressAlerts) return;
             return alert("Please select at least a start and end point.");
         }
 
-        // Auto-zoom to fit all waypoints
-        const bounds = new mapboxgl.LngLatBounds();
-        validWaypoints.forEach(pt => bounds.extend(pt));
-        map.fitBounds(bounds, { padding: 100, maxZoom: 15 });
+        // Auto-zoom to fit all waypoints (only if NOT navigating)
+        if (!isNavigating) {
+            const bounds = new mapboxgl.LngLatBounds();
+            validWaypoints.forEach(pt => bounds.extend(pt));
+            map.fitBounds(bounds, { padding: 100, maxZoom: 15 });
+        }
 
         planBtn.disabled = true;
         planBtn.innerHTML = `<i data-feather="loader" class="spin-anim"></i> Planning...`;
@@ -1167,7 +1178,12 @@ async function handleRouteSelection(route, isNew = false, allOptions = null) {
     currentRouteData = route;
     document.getElementById('nav-btn').style.display = 'block';
     stopRouteAnimation(); // Stop any previous animation
-    drawStaticRoute(map, route.geometry); // Draw the selected route
+    drawStaticRoute(map, route.geometry, !isNavigating); // Draw the selected route
+
+    // Update live session with new route geometry if navigating (e.g. Reroute)
+    if (isNavigating && liveSessionId) {
+        updateLiveSession(liveSessionId, { coords: userLocation, routeGeometry: route.geometry });
+    }
 
     if (isNew && currentUser) {
         document.getElementById('save-btn').style.display = 'block';
@@ -1765,6 +1781,7 @@ const updateSidebarUI = (score, weather) => {
 const loadSavedList = async () => {
     if (!currentUser) return;
     const list = document.getElementById('saved-routes-list');
+    if (!list) return; // Fix: Prevent crash if element doesn't exist
     list.innerHTML = '<p class="empty-state">Loading...</p>';
     const routes = await fetchAllRoutes(currentUser.uid);
 
@@ -2085,14 +2102,64 @@ async function startLiveSessionUI() {
 }
 
 function initTrackingMode(sessionId) {
+    if (!currentUser) {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.innerHTML = `
+            <div class="panel-content">
+                <div class="title-container"><h1>📡 Live Tracking</h1></div>
+                <div class="empty-state">
+                    <p>Please log in to view this live session.</p>
+                    <button id="track-login-btn" class="primary-btn" style="margin-top:16px;">
+                        <i data-feather="log-in"></i> Login with Google
+                    </button>
+                </div>
+            </div>
+        `;
+        if (feather) feather.replace();
+        document.getElementById('track-login-btn').addEventListener('click', () => signInWithPopup(auth, googleProvider));
+        return;
+    }
+
     // Replace Sidebar Content with Tracking UI
     const sidebar = document.getElementById('sidebar');
     sidebar.innerHTML = `
         <div class="panel-content">
-            <div class="title-container"><h1>📡 Live Tracking</h1></div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div class="title-container"><h1>📡 Live Tracking</h1></div>
+                <div style="display:flex; gap:8px;">
+                    <button id="viewer-chat-icon-btn" class="collapse-btn-mobile" style="color:var(--accent-blue);" title="Open Chat"><i data-feather="message-circle"></i></button>
+                    <button id="track-collapse-btn" class="collapse-btn-mobile"><i data-feather="chevron-up"></i></button>
+                </div>
+            </div>
             <div class="stat-box" style="margin-top:20px; text-align:center;">
                 <p>Tracking user location...</p>
                 <div id="last-update" style="font-size:0.8em; color:#888; margin-top:8px;">Waiting for signal...</div>
+            </div>
+            <div class="stat-box" style="margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap:10px; text-align:center;">
+                <div>
+                    <div style="font-size:0.8em; color:#888;">ETA</div>
+                    <div id="track-eta" style="font-weight:bold; font-size:1.2em;">--:--</div>
+                </div>
+                <div>
+                    <div style="font-size:0.8em; color:#888;">Remaining</div>
+                    <div id="track-dist" style="font-weight:bold; font-size:1.2em;">-- km</div>
+                </div>
+            </div>
+            <div class="stat-box" style="margin-top:10px; text-align:center; display:none;" id="status-box">
+                <div style="font-size:0.8em; color:#888;">Status Update</div>
+                <div id="track-status" style="font-weight:bold; font-size:1.1em; color:#9b59b6;">--</div>
+            </div>
+            <div style="margin-top:20px; text-align:center;">
+                <p style="font-size:0.8em; color:#888; margin-bottom:8px;">Send Reaction</p>
+                <div style="display:flex; justify-content:center; gap:15px;">
+                    <button class="reaction-btn" data-emoji="👏" style="font-size:1.5rem; background:none; border:none; cursor:pointer; transition:transform 0.1s;">👏</button>
+                    <button class="reaction-btn" data-emoji="🔥" style="font-size:1.5rem; background:none; border:none; cursor:pointer; transition:transform 0.1s;">🔥</button>
+                    <button class="reaction-btn" data-emoji="❤️" style="font-size:1.5rem; background:none; border:none; cursor:pointer; transition:transform 0.1s;">❤️</button>
+                    <button class="reaction-btn" data-emoji="🚴" style="font-size:1.5rem; background:none; border:none; cursor:pointer; transition:transform 0.1s;">🚴</button>
+                </div>
+                <button id="viewer-chat-btn" class="secondary-btn" style="margin-top:15px;">
+                    <i data-feather="message-square"></i> Open Chat
+                </button>
             </div>
             <button class="secondary-btn" onclick="window.location.href='/'" style="margin-top:20px;">
                 <i data-feather="map"></i> Go to Route Planner
@@ -2101,14 +2168,59 @@ function initTrackingMode(sessionId) {
     `;
     if (feather) feather.replace();
 
+    // NEW: Collapse Logic for Tracking Mode (Fixes hidden chat button on mobile)
+    const collapseBtn = document.getElementById('track-collapse-btn');
+    if (collapseBtn) {
+        collapseBtn.onclick = () => {
+            const isExpanded = sidebar.classList.toggle('expanded');
+            collapseBtn.innerHTML = isExpanded ? `<i data-feather="chevron-down"></i>` : `<i data-feather="chevron-up"></i>`;
+            if (feather) feather.replace();
+        };
+    }
+
+    // Attach Reaction Listeners
+    document.querySelectorAll('.reaction-btn').forEach(btn => {
+        btn.onclick = () => {
+            btn.style.transform = 'scale(1.3)';
+            setTimeout(() => btn.style.transform = 'scale(1)', 150);
+            sendReaction(sessionId, btn.dataset.emoji);
+        };
+    });
+
+    // Viewer Chat
+    const viewerId = currentUser.uid;
+    const viewerName = currentUser.name || `User ${viewerId.substr(0, 4)}`;
+    registerViewer(sessionId, viewerId, viewerName);
+
+    const openChat = () => showChatModal(sessionId, viewerName, false);
+    document.getElementById('viewer-chat-btn').onclick = openChat;
+    document.getElementById('viewer-chat-icon-btn').onclick = openChat;
+
+    let lastRouteGeoStr = null;
+
+    // Increment viewer count on join
+    updateViewerCount(sessionId, 1);
+    // Decrement on leave (best effort)
+    window.addEventListener('unload', () => updateViewerCount(sessionId, -1));
+
     subscribeToLiveSession(sessionId, (data) => {
+        if (data && data.bannedViewers && data.bannedViewers.includes(viewerId)) {
+            alert("You have been removed from this session.");
+            window.location.href = '/';
+            return;
+        }
+
         if (data) {
-            // Draw Route if available and not yet drawn
-            if (data.routeGeometry && !map.getSource('route')) {
-                try {
-                    const geo = typeof data.routeGeometry === 'string' ? JSON.parse(data.routeGeometry) : data.routeGeometry;
-                    drawStaticRoute(map, geo);
-                } catch (e) { console.error("Error parsing route geometry", e); }
+            // Draw Route if available (and update if changed)
+            if (data.routeGeometry) {
+                const geoStr = typeof data.routeGeometry === 'string' ? data.routeGeometry : JSON.stringify(data.routeGeometry);
+                if (geoStr !== lastRouteGeoStr) {
+                    lastRouteGeoStr = geoStr;
+                    try {
+                        const geo = JSON.parse(geoStr);
+                        drawStaticRoute(map, geo, false); // Don't auto-fit on updates to keep focus on user
+                    } catch (e) { console.error("Error parsing route geometry", e); }
+                }
             }
 
             if (data.lastLocation) {
@@ -2126,6 +2238,25 @@ function initTrackingMode(sessionId) {
 
                 map.flyTo({ center: pos, zoom: 15 });
                 document.getElementById('last-update').innerText = 'Last update: ' + new Date().toLocaleTimeString();
+            }
+
+            // Update ETA and Distance
+            if (data.eta) {
+                const etaDate = data.eta.toDate ? data.eta.toDate() : new Date(data.eta);
+                document.getElementById('track-eta').innerText = etaDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+            if (data.distanceRemaining) {
+                document.getElementById('track-dist').innerText = data.distanceRemaining.toFixed(1) + ' km';
+            }
+            if (data.statusMessage) {
+                const statusBox = document.getElementById('status-box');
+                if (statusBox) {
+                    statusBox.style.display = 'block';
+                    document.getElementById('track-status').innerText = data.statusMessage;
+                }
+            }
+            if (data.active === false) {
+                document.getElementById('last-update').innerText = 'Session Ended';
             }
         }
     });
@@ -2170,6 +2301,46 @@ function startLiveTracking() {
     speak("Starting navigation.");
     isNavigating = true;
 
+    // --- AUTO SHARE LIVE LOCATION ---
+    if (currentUser) {
+        const handleAutoShare = async (pos) => {
+            try {
+                if (!liveSessionId) {
+                    const coords = [pos.coords.longitude, pos.coords.latitude];
+                    const routeGeo = currentRouteData ? currentRouteData.geometry : null;
+                    liveSessionId = await createLiveSession(currentUser.uid, coords, routeGeo);
+                    subscribeToReactions(liveSessionId); // Listen for viewer reactions
+
+                    // Reveal Host UI immediately
+                    const stopBtn = document.getElementById('stop-share-btn');
+                    const statusBtn = document.getElementById('send-status-btn');
+                    const dashBtn = document.getElementById('host-dash-btn');
+                    const viewerCount = document.getElementById('nav-viewer-count');
+                const shareBtn = document.getElementById('share-nav-btn');
+
+                    if (stopBtn) stopBtn.style.display = 'block';
+                    if (statusBtn) statusBtn.style.display = 'block';
+                    // dashBtn (Live Chat) remains hidden until paused
+                    if (viewerCount) viewerCount.style.display = 'flex';
+                if (shareBtn) shareBtn.style.display = 'block';
+
+                    // Start Subscriptions for Overlays
+                    if (chatOverlayUnsubscribe) chatOverlayUnsubscribe();
+                    chatOverlayUnsubscribe = subscribeToChat(liveSessionId, updateChatOverlay);
+                    if (viewerOverlayUnsubscribe) viewerOverlayUnsubscribe();
+                    viewerOverlayUnsubscribe = subscribeToViewers(liveSessionId, updateViewerOverlay);
+                }
+                const url = `${window.location.origin}${window.location.pathname}?track=${liveSessionId}`;
+                showAutoShareModal(url);
+            } catch (e) {
+                console.error("Auto-share error:", e);
+            }
+        };
+
+        // Get current position for session creation
+        navigator.geolocation.getCurrentPosition(handleAutoShare, (err) => console.warn("Share loc error", err), GEO_OPTIONS);
+    }
+
     // Check if user is near the start point
     const checkProximity = (pos) => {
         const userPos = [pos.coords.longitude, pos.coords.latitude];
@@ -2178,19 +2349,17 @@ function startLiveTracking() {
             const distKm = turf.distance(userPos, startPoint, { units: 'kilometers' });
 
             if (distKm > 0.2) { // User is > 200m away from start
-                if (confirm("You are not at the start. Reroute from current location?")) {
-                    speak("Rerouting...");
-                    waypoints[0] = userPos;
+                speak("Rerouting from current location...");
+                waypoints[0] = userPos;
 
-                    // Fix: Ensure destination is preserved if global waypoints are empty (e.g. loaded from saved route)
-                    if (!waypoints[1] && currentRouteData) {
-                        const coords = currentRouteData.geometry.coordinates;
-                        waypoints[1] = coords[coords.length - 1];
-                    }
-
-                    if (geocoders[0]) geocoders[0].setInput("Current Location");
-                    calculateRoute();
+                // Fix: Ensure destination is preserved if global waypoints are empty (e.g. loaded from saved route)
+                if (!waypoints[1] && currentRouteData) {
+                    const coords = currentRouteData.geometry.coordinates;
+                    waypoints[1] = coords[coords.length - 1];
                 }
+
+                if (geocoders[0]) geocoders[0].setInput("Current Location");
+                calculateRoute();
             }
         }
     };
@@ -2231,6 +2400,32 @@ function startLiveTracking() {
             }
         }
     }, GEO_OPTIONS);
+}
+
+function subscribeToReactions(sessionId) {
+    if (liveSessionUnsubscribe) liveSessionUnsubscribe();
+    lastReactionTime = Date.now(); // Ignore old reactions
+
+    liveSessionUnsubscribe = subscribeToLiveSession(sessionId, (data) => {
+        if (data && data.lastReaction) {
+            // Handle Firestore Timestamp or Date object
+            const ts = data.lastReaction.timestamp.toMillis ? data.lastReaction.timestamp.toMillis() : new Date(data.lastReaction.timestamp).getTime();
+            if (ts > lastReactionTime) {
+                lastReactionTime = ts;
+                showReactionToast(data.lastReaction.emoji);
+            }
+        }
+
+        // Update Viewer Count UI
+        if (data && data.viewerCount !== undefined) {
+            const countEl = document.getElementById('nav-viewer-count');
+            const valEl = document.getElementById('viewer-count-val');
+            if (countEl && valEl) {
+                countEl.style.display = 'flex'; // Always show if session is active
+                valEl.innerText = data.viewerCount;
+            }
+        }
+    });
 }
 
 function manualReroute() {
@@ -2287,7 +2482,7 @@ function handlePositionUpdate(userPos, heading, speed) {
 
     // Update Live Session if active
     if (liveSessionId) {
-        updateLiveSession(liveSessionId, userPos);
+        updateLiveSession(liveSessionId, { coords: userPos });
     }
 
     // Follow user if navigating OR if Compass Mode is 'heading' (even when not navigating)
@@ -2318,6 +2513,37 @@ function handlePositionUpdate(userPos, heading, speed) {
         }
     }
 
+    // --- WRONG WAY DETECTION ---
+    // Only check if moving faster than 1.5 m/s (~5.4 km/h) to avoid noise when stopped
+    if (isNavigating && currentRouteData && heading !== null && speed > 1.5) {
+        const routeLine = turf.lineString(currentRouteData.geometry.coordinates);
+        const pt = turf.point(userPos);
+        const snapped = turf.nearestPointOnLine(routeLine, pt);
+        const distAlong = snapped.properties.location; // km
+        const lineLength = turf.length(routeLine);
+
+        // Look ahead 20m (0.02km) to determine route direction
+        if (distAlong + 0.02 < lineLength) {
+            const pointAhead = turf.along(routeLine, distAlong + 0.02);
+            const routeBearing = turf.bearing(snapped, pointAhead);
+            const normRouteBearing = (routeBearing + 360) % 360;
+            
+            let diff = Math.abs(heading - normRouteBearing);
+            if (diff > 180) diff = 360 - diff;
+            
+            if (diff > 120) { // > 120 degrees difference implies moving backwards
+                if (!wrongWayState.active) {
+                    wrongWayState.active = true;
+                    wrongWayState.startTime = Date.now();
+                } else if (Date.now() - wrongWayState.startTime > 3000 && !wrongWayState.isAlerting) {
+                     showWrongWayAlert();
+                }
+            } else {
+                if (wrongWayState.isAlerting) hideWrongWayAlert();
+            }
+        }
+    }
+
     // --- AUTO THEME SWITCHING (Nav Mode) ---
     if (isNavigating) {
         const hour = new Date().getHours();
@@ -2325,9 +2551,12 @@ function handlePositionUpdate(userPos, heading, speed) {
 
         // Simple Tunnel Detection: Check instruction text
         let isTunnel = false;
-        if (currentRouteData && currentRouteData.legs && currentRouteData.legs[0].steps[lastSpokenStepIndex + 1]) {
-            const nextInstr = currentRouteData.legs[0].steps[lastSpokenStepIndex + 1].maneuver.instruction.toLowerCase();
-            if (nextInstr.includes('tunnel')) isTunnel = true;
+        const currentStepIdx = lastSpokenStepIndex + 1;
+        if (currentRouteData && currentRouteData.legs && currentRouteData.legs[0].steps[currentStepIdx]) {
+            const step = currentRouteData.legs[0].steps[currentStepIdx];
+            const instr = step.maneuver.instruction.toLowerCase();
+            const name = (step.name || "").toLowerCase();
+            if (instr.includes('tunnel') || name.includes('tunnel')) isTunnel = true;
         }
 
         const targetStyle = (isNight || isTunnel) ? 'mapbox://styles/mapbox/navigation-night-v1' : 'mapbox://styles/mapbox/navigation-day-v1';
@@ -2367,6 +2596,38 @@ function handlePositionUpdate(userPos, heading, speed) {
     }
 }
 
+function showWrongWayAlert() {
+    wrongWayState.isAlerting = true;
+    const alert = document.getElementById('wrong-way-alert');
+    if (alert) alert.style.display = 'flex';
+    speak("Wrong way. Turn around.");
+}
+
+function hideWrongWayAlert() {
+    wrongWayState.isAlerting = false;
+    wrongWayState.active = false;
+    const alert = document.getElementById('wrong-way-alert');
+    if (alert) alert.style.display = 'none';
+}
+
+function showReactionToast(emoji) {
+    const toast = document.createElement('div');
+    toast.innerText = emoji;
+    toast.style.cssText = `
+        position: fixed; bottom: 120px; left: 20px; transform: scale(0);
+        font-size: 4rem; pointer-events: none; z-index: 3000;
+        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease-in;
+        opacity: 0; text-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    `;
+    document.body.appendChild(toast);
+
+    // Animate In
+    requestAnimationFrame(() => { toast.style.transform = 'scale(1.5)'; toast.style.opacity = '1'; });
+    // Animate Out
+    setTimeout(() => { toast.style.transform = 'translateY(-100px) scale(2)'; toast.style.opacity = '0'; }, 1500);
+    setTimeout(() => toast.remove(), 2000);
+}
+
 async function performAutomaticReroute(userPos) {
     isRerouting = true;
     speak("Rerouting...");
@@ -2403,7 +2664,7 @@ async function performAutomaticReroute(userPos) {
     if (feather) feather.replace();
 
     try {
-        await calculateRoute({ bearings: bearingsParam });
+        await calculateRoute({ bearings: bearingsParam, suppressAlerts: true });
     } catch (e) {
         console.error("Reroute failed", e);
     } finally {
@@ -2418,11 +2679,38 @@ function initNavigationOverlays() {
     const topOverlay = document.createElement('div');
     topOverlay.id = 'nav-overlay-top';
     topOverlay.innerHTML = `
-        <div class="nav-distance-large" id="nav-next-dist">0 m</div>
+        <div style="display:flex; justify-content:space-between; width:100%; align-items:flex-start;">
+            <div class="nav-distance-large" id="nav-next-dist">0 m</div>
+            <div id="nav-viewer-count" style="display:none; background:rgba(0,0,0,0.6); color:white; padding:4px 10px; border-radius:12px; font-size:0.85rem; align-items:center; gap:6px; margin-right: 50px; cursor:pointer; pointer-events:auto;">
+                <i data-feather="eye" style="width:14px; height:14px;"></i> 
+                <span id="viewer-count-val">0</span>
+            </div>
+        </div>
         <div class="nav-instruction-large" id="nav-instr">Locating...</div>
         <button id="nav-mute-btn" class="nav-mute-btn"><i data-feather="volume-2"></i></button>
     `;
     document.body.appendChild(topOverlay);
+
+    // NEW: Chat Overlay (Read-only / Status trigger)
+    const chatOverlayEl = document.createElement('div');
+    chatOverlayEl.id = 'nav-chat-overlay';
+    chatOverlayEl.style.cssText = `
+        position: absolute; bottom: 180px; left: 20px; width: 250px;
+        pointer-events: auto; z-index: 25; display: flex; flex-direction: column;
+        gap: 8px; align-items: flex-start; cursor: pointer;
+    `;
+    chatOverlayEl.onclick = showStatusOptions; // Default to status options when running
+    document.body.appendChild(chatOverlayEl);
+
+    // NEW: Viewer Indicator (Bottom Left)
+    const viewerOverlay = document.createElement('div');
+    viewerOverlay.id = 'nav-viewer-overlay';
+    viewerOverlay.style.cssText = `
+        position: absolute; bottom: 140px; left: 20px;
+        background: rgba(0,0,0,0.5); color: white; padding: 4px 8px;
+        border-radius: 4px; font-size: 0.8rem; pointer-events: none; z-index: 25; display: none;
+    `;
+    document.body.appendChild(viewerOverlay);
 
     // Bottom Bar (Stats & Exit)
     const bottomOverlay = document.createElement('div');
@@ -2450,15 +2738,56 @@ function initNavigationOverlays() {
                 <span class="nav-stat-label">km</span>
             </div>
         </div>
-        <div class="nav-controls-row">
-            <button id="pause-nav-btn">Pause</button>
-            <button id="exit-nav-btn" style="display:none;">Exit Navigation</button>
+        <div class="nav-controls-row" style="overflow-x: auto; white-space: nowrap; justify-content: flex-start; padding-bottom: 4px; -webkit-overflow-scrolling: touch;">
+            <button id="pause-nav-btn" style="flex-shrink:0;">Pause</button>
+            <button id="exit-nav-btn" style="display:none; flex-shrink:0;">Exit Navigation</button>
+            <button id="send-status-btn" style="display:none; background-color:#9b59b6; color:white; border:none; padding:12px 24px; border-radius:30px; font-weight:600; cursor:pointer; flex-shrink:0;">Status</button>
+            <button id="host-dash-btn" style="display:none; background-color:#8e44ad; color:white; border:none; padding:12px 24px; border-radius:30px; font-weight:600; cursor:pointer; flex-shrink:0;">Live Chat</button>
+            <button id="share-nav-btn" style="display:none; background-color:#2ecc71; color:white; border:none; padding:12px 24px; border-radius:30px; font-weight:600; cursor:pointer; flex-shrink:0;">Share</button>
+            <button id="stop-share-btn" style="display:none; background-color:#3498db; color:white; border:none; padding:12px 24px; border-radius:30px; font-weight:600; cursor:pointer; flex-shrink:0;">Stop Sharing</button>
         </div>
     `;
     document.body.appendChild(bottomOverlay);
 
+    // Wrong Way Alert Overlay (unchanged)
+    const wrongWayOverlay = document.createElement('div');
+    wrongWayOverlay.id = 'wrong-way-alert';
+    wrongWayOverlay.style.display = 'none';
+    wrongWayOverlay.innerHTML = `
+        <div style="background:#e74c3c; color:white; padding:20px; border-radius:12px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,0.3); display:flex; flex-direction:column; align-items:center;">
+            <i data-feather="alert-triangle" style="width:48px; height:48px; margin-bottom:10px;"></i>
+            <div style="font-size:1.5rem; font-weight:800;">WRONG WAY</div>
+            <div style="font-size:1rem;">Turn around</div>
+        </div>
+    `;
+    Object.assign(wrongWayOverlay.style, { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: '100' });
+    document.body.appendChild(wrongWayOverlay);
+
     const pauseBtn = document.getElementById('pause-nav-btn');
     const exitBtn = document.getElementById('exit-nav-btn');
+    const dashBtn = document.getElementById('host-dash-btn');
+    const shareBtn = document.getElementById('share-nav-btn');
+
+    // Show Stop Sharing if session is active
+    if (liveSessionId) {
+        document.getElementById('stop-share-btn').style.display = 'block';
+        document.getElementById('send-status-btn').style.display = 'block';
+        // host-dash-btn remains hidden until paused
+        if (shareBtn) shareBtn.style.display = 'block';
+    }
+
+    // Bind listeners unconditionally (they check liveSessionId at runtime)
+    document.getElementById('nav-viewer-count').onclick = () => { if (liveSessionId) showHostLiveDashboard(liveSessionId); };
+    document.getElementById('host-dash-btn').onclick = () => { if (liveSessionId) showHostLiveDashboard(liveSessionId); };
+
+    if (shareBtn) {
+        shareBtn.onclick = () => {
+            if (liveSessionId) {
+                const url = `${window.location.origin}${window.location.pathname}?track=${liveSessionId}`;
+                showAutoShareModal(url);
+            }
+        };
+    }
 
     pauseBtn.onclick = () => {
         if (exitBtn.style.display === 'none') {
@@ -2467,12 +2796,23 @@ function initNavigationOverlays() {
             pauseBtn.innerText = 'Resume';
             pauseBtn.style.backgroundColor = '#2ecc71'; // Green
             pauseBtn.style.color = '#fff';
+            
+            // Show Live Dash/Chat button when paused
+            if (liveSessionId && dashBtn) dashBtn.style.display = 'block';
+            
+            // Allow typing in chat overlay
+            if (chatOverlayEl) chatOverlayEl.onclick = () => { if (liveSessionId) showChatModal(liveSessionId, "Host", true); };
         } else {
             // Resume State: Hide Exit button
             exitBtn.style.display = 'none';
             pauseBtn.innerText = 'Pause';
             pauseBtn.style.backgroundColor = '#f1c40f'; // Yellow
             pauseBtn.style.color = '#212121';
+            
+            if (dashBtn) dashBtn.style.display = 'none';
+            
+            // Revert chat overlay to Status Options
+            if (chatOverlayEl) chatOverlayEl.onclick = showStatusOptions;
         }
     };
 
@@ -2482,8 +2822,20 @@ function initNavigationOverlays() {
         pauseBtn.innerText = 'Pause';
         pauseBtn.style.backgroundColor = '#f1c40f';
         pauseBtn.style.color = '#212121';
+        if (dashBtn) dashBtn.style.display = 'none';
+        if (chatOverlayEl) chatOverlayEl.onclick = showStatusOptions;
         toggleNavigation();
     };
+
+    document.getElementById('stop-share-btn').onclick = async () => {
+        if (confirm("Stop sharing your live location?")) {
+            await endLiveSession(liveSessionId);
+            liveSessionId = null;
+            document.getElementById('stop-share-btn').style.display = 'none';
+        }
+    };
+
+    document.getElementById('send-status-btn').onclick = showStatusOptions;
 
     // Mute Button Logic
     const muteBtn = document.getElementById('nav-mute-btn');
@@ -2496,6 +2848,93 @@ function initNavigationOverlays() {
 
     // Refresh icons for new elements
     if (feather) feather.replace();
+}
+
+function updateChatOverlay(messages) {
+    const container = document.getElementById('nav-chat-overlay');
+    if (!container) return;
+    
+    // Show last 3 messages
+    const recent = messages.slice(-3);
+    container.innerHTML = '';
+    recent.forEach(msg => {
+        const div = document.createElement('div');
+        div.style.cssText = `
+            background: rgba(0,0,0,0.6); color: white; padding: 6px 10px;
+            border-radius: 12px; font-size: 0.9rem; max-width: 100%;
+            backdrop-filter: blur(4px); text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        `;
+        div.innerHTML = `<strong style="font-size:0.75rem; color:#ddd;">${msg.sender}:</strong> ${msg.text}`;
+        container.appendChild(div);
+    });
+}
+
+function updateViewerOverlay(viewers) {
+    const container = document.getElementById('nav-viewer-overlay');
+    if (!container) return;
+    
+    if (viewers.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'block';
+    const names = viewers.map(v => v.name || 'Guest');
+    let text = '';
+    if (names.length <= 2) {
+        text = 'Watching: ' + names.join(', ');
+    } else {
+        text = `Watching: ${names[0]}, ${names[1]} +${names.length - 2}`;
+    }
+    container.innerText = text;
+}
+
+function showStatusOptions() {
+    const existing = document.getElementById('status-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'status-modal';
+    modal.style.cssText = `
+        position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 320px;
+        background: var(--panel-bg, #fff); border: 1px solid var(--border-color, #ccc);
+        border-radius: 12px; padding: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        z-index: 2000; display: flex; flex-direction: column; gap: 8px;
+    `;
+
+    const options = ["On my way 🚴", "Delayed 5m ⏱️", "Heavy Traffic 🚗", "Taking a break ☕", "Arriving soon 🏁"];
+    
+    modal.innerHTML = `<h3 style="margin:0 0 8px 0; font-size:1rem;">Send Status</h3>`;
+    
+    options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.innerText = opt;
+        btn.style.cssText = `padding:10px; border:1px solid #eee; background:#f9f9f9; border-radius:8px; cursor:pointer; text-align:left;`;
+        btn.onclick = () => {
+            if (liveSessionId) {
+                updateLiveSession(liveSessionId, { statusMessage: opt });
+            }
+            modal.remove();
+        };
+        modal.appendChild(btn);
+    });
+
+    const closeBtn = document.createElement('button');
+    closeBtn.innerText = "Cancel";
+    closeBtn.style.cssText = `padding:10px; border:none; background:none; color:#e74c3c; cursor:pointer; margin-top:4px;`;
+    closeBtn.onclick = () => modal.remove();
+    modal.appendChild(closeBtn);
+
+    document.body.appendChild(modal);
+}
+
+function getViewerId() {
+    let id = localStorage.getItem('viewer_id');
+    if (!id) {
+        id = 'v_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('viewer_id', id);
+    }
+    return id;
 }
 
 function updateNavigationDashboard(userPos) {
@@ -2528,15 +2967,33 @@ function updateNavigationDashboard(userPos) {
     const durationMins = (totalDistKm / pace) * 60;
     const eta = new Date(now.getTime() + durationMins * 60000);
     document.getElementById('nav-eta').innerText = eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // Push ETA to Live Session
+    if (liveSessionId) {
+        updateLiveSession(liveSessionId, {
+            coords: userPos,
+            eta: eta,
+            distanceRemaining: totalDistKm
+        });
+    }
 }
 
 function stopLiveTracking() {
     if (watchId) navigator.geolocation.clearWatch(watchId);
     watchId = null;
     if (mockIntervalId) clearInterval(mockIntervalId);
+    if (liveSessionUnsubscribe) liveSessionUnsubscribe();
+    liveSessionUnsubscribe = null;
+    if (chatUnsubscribe) chatUnsubscribe();
+    chatUnsubscribe = null;
+    if (chatOverlayUnsubscribe) chatOverlayUnsubscribe();
+    chatOverlayUnsubscribe = null;
+    if (viewerOverlayUnsubscribe) viewerOverlayUnsubscribe();
+    viewerOverlayUnsubscribe = null;
     mockIntervalId = null;
     isNavigating = false;
     lastSpokenStepIndex = -1;
+    hideWrongWayAlert();
 }
 
 // --- THEME & SHARING ---
@@ -2565,7 +3022,7 @@ function toggleTheme() {
 
         // Redraw route if exists
         if (currentRouteData) {
-            drawStaticRoute(map, currentRouteData.geometry);
+            drawStaticRoute(map, currentRouteData.geometry, !isNavigating);
         }
     });
 }
@@ -2644,6 +3101,7 @@ async function withLoading(element, asyncFn) {
         if (feather) feather.replace();
     }
 }
+
 
 async function checkUrlForRoute() {
     const params = new URLSearchParams(window.location.search);
@@ -3312,6 +3770,292 @@ function loadFavoritesList() {
         list.appendChild(div);
     });
     if (feather) feather.replace();
+}
+
+// Helper to mount chat into a container
+function mountChatUI(container, sessionId, senderName, isHost, initialText = '') {
+    let controlsHtml = '';
+    if (isHost) {
+        controlsHtml = `
+            <div style="padding: 0 12px; display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#555;">
+                <input type="checkbox" id="chat-to-all" checked>
+                <label for="chat-to-all">Broadcast to All</label>
+            </div>
+        `;
+    }
+
+    // Ensure container is flex column so children size correctly
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+
+    container.innerHTML = `
+        <div class="chat-messages" style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px;"></div>
+        ${controlsHtml}
+        <div style="padding:12px; border-top:1px solid #eee; display:flex; gap:8px; background: #fff; flex-shrink: 0;">
+            <input type="text" class="chat-input" placeholder="Type a message..." style="flex:1; padding:8px; border:1px solid #ddd; border-radius:20px; color: #000; background: #fff;">
+            <button class="chat-send" style="background:var(--accent-blue); color:white; border:none; padding:8px 12px; border-radius:20px; cursor:pointer;"><i data-feather="send"></i></button>
+        </div>
+    `;
+    
+    const msgContainer = container.querySelector('.chat-messages');
+    const input = container.querySelector('.chat-input');
+    const sendBtn = container.querySelector('.chat-send');
+
+    if (initialText) {
+        input.value = initialText;
+        input.focus();
+    }
+
+    const unsubscribe = subscribeToChat(sessionId, (messages) => {
+        msgContainer.innerHTML = '';
+        messages.forEach(msg => {
+            // Visibility Logic
+            let isVisible = false;
+            if (isHost) isVisible = true; // Host sees all
+            else if (msg.visibility === 'public') isVisible = true; // Public messages
+            else if (msg.senderId === currentUser?.uid) isVisible = true; // My own messages
+            
+            if (!isVisible) return;
+
+            const div = document.createElement('div');
+            const isMe = msg.sender === senderName;
+            const isPrivate = msg.visibility === 'private';
+
+            div.style.cssText = `
+                align-self: ${isMe ? 'flex-end' : 'flex-start'};
+                background: ${isMe ? '#dcf8c6' : '#f1f0f0'};
+                ${isPrivate ? 'border: 1px dashed #999;' : ''}
+                padding: 6px 10px; border-radius: 12px; max-width: 80%;
+                font-size: 0.9rem;
+            `;
+            div.innerHTML = `
+                <div style="font-size:0.7rem; color:#888; margin-bottom:2px; display:flex; justify-content:space-between;">
+                    <span>${msg.sender}</span>
+                    ${isPrivate ? '<span style="font-size:0.6rem; margin-left:4px;">🔒</span>' : ''}
+                </div>
+                ${msg.text}
+            `;
+            msgContainer.appendChild(div);
+        });
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+    });
+
+    const sendMessage = () => {
+        const text = input.value.trim();
+        if (text) {
+            const options = { senderId: currentUser?.uid };
+            if (isHost) {
+                const toAll = container.querySelector('#chat-to-all').checked;
+                options.visibility = toAll ? 'public' : 'private';
+            } else {
+                options.visibility = 'private'; // Viewers always private to host
+            }
+            sendChatMessage(sessionId, senderName, text, options);
+            input.value = '';
+        }
+    };
+
+    sendBtn.onclick = sendMessage;
+    input.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
+    if (feather) feather.replace();
+
+    return unsubscribe;
+}
+
+function showChatModal(sessionId, senderName, isHost) {
+    const existing = document.getElementById('chat-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'chat-modal';
+    modal.style.cssText = `
+        position: fixed; bottom: 20px; right: 20px; width: 320px; height: 400px;
+        background: var(--panel-bg, #fff); border: 1px solid var(--border-color, #ccc);
+        border-radius: 12px; padding: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        z-index: 2100; display: flex; flex-direction: column; overflow: hidden;
+    `;
+
+    modal.innerHTML = `
+        <div style="padding:12px; background:#f8f9fa; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-size:1rem;">💬 Chat</h3>
+            <button id="close-chat" style="border:none; background:none; cursor:pointer;"><i data-feather="x"></i></button>
+        </div>
+        <div id="chat-content" style="flex:1; overflow:hidden;"></div>
+    `;
+    document.body.appendChild(modal);
+    if (feather) feather.replace();
+
+    const contentDiv = document.getElementById('chat-content');
+    chatUnsubscribe = mountChatUI(contentDiv, sessionId, senderName, isHost);
+
+    document.getElementById('close-chat').onclick = () => {
+        if (chatUnsubscribe) chatUnsubscribe();
+        modal.remove();
+    };
+}
+
+function showHostLiveDashboard(sessionId) {
+    const existing = document.getElementById('host-dashboard');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'host-dashboard';
+    modal.style.cssText = `
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 90%; max-width: 400px; height: 500px;
+        background: var(--panel-bg, #fff); border: 1px solid var(--border-color, #ccc);
+        border-radius: 12px; padding: 0; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        z-index: 2200; display: flex; flex-direction: column; overflow: hidden;
+    `;
+
+    modal.innerHTML = `
+        <div style="padding:15px; background:#f8f9fa; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-size:1.1rem;">🔴 Live Dashboard</h3>
+            <button id="close-dash" style="border:none; background:none; cursor:pointer;"><i data-feather="x"></i></button>
+        </div>
+        <div style="display:flex; border-bottom:1px solid #eee;">
+            <button class="tab-btn active" id="tab-chat-btn" style="flex:1; border-radius:0;">Chat</button>
+            <button class="tab-btn" id="tab-viewers-btn" style="flex:1; border-radius:0;">Viewers</button>
+        </div>
+        <div id="dash-content" style="flex:1; overflow:hidden; position:relative;"></div>
+    `;
+    document.body.appendChild(modal);
+    if (feather) feather.replace();
+
+    document.getElementById('close-dash').onclick = () => modal.remove();
+
+    const content = document.getElementById('dash-content');
+    let currentUnsubscribe = null;
+    
+    const renderViewers = () => {
+        if (currentUnsubscribe) currentUnsubscribe();
+        content.innerHTML = `<div style="padding:15px; overflow-y:auto; height:100%;"><h4 style="margin-top:0;">Active Viewers</h4><div id="viewer-list">Loading...</div></div>`;
+        
+        currentUnsubscribe = subscribeToViewers(sessionId, (viewers) => {
+            const list = document.getElementById('viewer-list');
+            if(!list) return;
+            list.innerHTML = viewers.length === 0 ? '<p style="color:#888;">No registered viewers.</p>' : '';
+            viewers.forEach(v => {
+                const row = document.createElement('div');
+                row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #eee;";
+                
+                const infoDiv = document.createElement('div');
+                infoDiv.innerHTML = `<div style="font-weight:600;">${v.name || 'Guest'}</div><div style="font-size:0.75rem; color:#888;">Joined: ${v.joinedAt ? new Date(v.joinedAt.seconds * 1000).toLocaleTimeString() : '-'}</div>`;
+                
+                const btnGroup = document.createElement('div');
+                btnGroup.style.display = 'flex';
+                btnGroup.style.gap = '6px';
+
+                const chatBtn = document.createElement('button');
+                chatBtn.innerHTML = '<i data-feather="message-circle" style="width:14px; height:14px;"></i>';
+                chatBtn.style.cssText = "background:#3498db; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer;";
+                chatBtn.onclick = () => switchToChat(`@${v.name} `);
+
+                const kickBtn = document.createElement('button');
+                kickBtn.innerText = "Kick";
+                kickBtn.style.cssText = "background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.8rem;";
+                kickBtn.onclick = () => { if(confirm(`Kick ${v.name}?`)) kickViewer(sessionId, v.id); };
+                
+                btnGroup.appendChild(chatBtn);
+                btnGroup.appendChild(kickBtn);
+                row.appendChild(infoDiv);
+                row.appendChild(btnGroup);
+                list.appendChild(row);
+            });
+            if (feather) feather.replace();
+        });
+    };
+
+    const renderChat = (initialText = '') => {
+        if (currentUnsubscribe) currentUnsubscribe();
+        content.innerHTML = ''; // Clear
+        currentUnsubscribe = mountChatUI(content, sessionId, "Host", true, initialText);
+    };
+
+    const switchToChat = (text = '') => {
+        document.querySelectorAll('#host-dashboard .tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-chat-btn').classList.add('active');
+        renderChat(text);
+    };
+
+    document.getElementById('tab-viewers-btn').onclick = () => {
+        document.querySelectorAll('#host-dashboard .tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-viewers-btn').classList.add('active');
+        renderViewers();
+    };
+
+    document.getElementById('tab-chat-btn').onclick = () => {
+        switchToChat();
+    };
+
+    // Clean up on close
+    const originalClose = document.getElementById('close-dash').onclick;
+    document.getElementById('close-dash').onclick = () => {
+        if (currentUnsubscribe) currentUnsubscribe();
+        modal.remove();
+    };
+
+    // Initial load: Viewers
+    renderViewers();
+}
+
+function showAutoShareModal(url) {
+    const existing = document.getElementById('auto-share-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'auto-share-modal';
+    modal.style.cssText = `
+        position: fixed; top: 80px; right: 20px; width: 320px;
+        background: var(--panel-bg, #fff); border: 1px solid var(--border-color, #ccc);
+        border-radius: 12px; padding: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        z-index: 2000; display: flex; flex-direction: column; gap: 12px;
+        color: var(--text-primary, #000);
+    `;
+
+    const msg = encodeURIComponent(`Follow my live location: ${url}`);
+    const waLink = `https://wa.me/?text=${msg}`;
+    const smsLink = `sms:?&body=${msg}`;
+
+    modal.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:1rem; margin:0; font-weight:600;">📡 Share Live Location</h3>
+            <button id="close-share-modal" style="background:none; border:none; cursor:pointer; color:var(--text-secondary);"><i data-feather="x"></i></button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-secondary); margin:0;">Let others track your ride in real-time.</p>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <a href="${waLink}" target="_blank" style="display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; background:#25D366; color:white; text-decoration:none; border-radius:8px; font-weight:600; font-size:0.9rem;">
+                <i data-feather="message-circle" style="width:16px; height:16px;"></i> WhatsApp
+            </a>
+            <a href="${smsLink}" target="_blank" style="display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; background:#3498db; color:white; text-decoration:none; border-radius:8px; font-weight:600; font-size:0.9rem;">
+                <i data-feather="message-square" style="width:16px; height:16px;"></i> SMS
+            </a>
+            <button id="copy-share-link-btn" style="display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; background:#f1c40f; color:#212121; border:none; border-radius:8px; font-weight:600; font-size:0.9rem; cursor:pointer;">
+                <i data-feather="copy" style="width:16px; height:16px;"></i> Copy Link
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    if (feather) feather.replace();
+
+    document.getElementById('close-share-modal').onclick = () => modal.remove();
+    document.getElementById('copy-share-link-btn').onclick = () => {
+        navigator.clipboard.writeText(url).then(() => {
+            const btn = document.getElementById('copy-share-link-btn');
+            btn.innerHTML = `<i data-feather="check" style="width:16px; height:16px;"></i> Copied!`;
+            setTimeout(() => {
+                btn.innerHTML = `<i data-feather="copy" style="width:16px; height:16px;"></i> Copy Link`;
+                if (feather) feather.replace();
+            }, 2000);
+            if (feather) feather.replace();
+        });
+    };
+    
+    // Auto-close after 15s
+    setTimeout(() => {
+        if (document.body.contains(modal)) modal.remove();
+    }, 15000);
 }
 
 function removeFavorite(index) {

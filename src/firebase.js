@@ -1,6 +1,6 @@
 // src/firebase.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc, setDoc, onSnapshot, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc, setDoc, onSnapshot, updateDoc, getDoc, increment, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 import { firebaseConfig } from './config.js'; 
@@ -144,7 +144,8 @@ export const createLiveSession = async (userId, coords, routeGeometry = null) =>
         hostId: userId,
         lastLocation: { lat: coords[1], lng: coords[0] },
         timestamp: new Date(),
-        active: true
+        active: true,
+        viewerCount: 0
     };
     if (routeGeometry) {
         payload.routeGeometry = JSON.stringify(routeGeometry);
@@ -155,14 +156,93 @@ export const createLiveSession = async (userId, coords, routeGeometry = null) =>
 
 /**
  * Updates an existing live session with new coordinates
+ * @param {string} sessionId
+ * @param {Object} updates - Object containing fields to update (coords, routeGeometry, eta, etc.)
  */
-export const updateLiveSession = async (sessionId, coords) => {
+export const updateLiveSession = async (sessionId, updates) => {
+    if (!sessionId) return;
+    const sessionRef = doc(db, "live_sessions", sessionId);
+    
+    const payload = { timestamp: new Date() };
+    
+    if (updates.coords) {
+        payload.lastLocation = { lat: updates.coords[1], lng: updates.coords[0] };
+    }
+    if (updates.routeGeometry) {
+        payload.routeGeometry = JSON.stringify(updates.routeGeometry);
+    }
+    if (updates.eta) payload.eta = updates.eta;
+    if (updates.distanceRemaining) payload.distanceRemaining = updates.distanceRemaining;
+    if (updates.statusMessage) payload.statusMessage = updates.statusMessage;
+    
+    await setDoc(sessionRef, payload, { merge: true });
+};
+
+export const updateViewerCount = async (sessionId, change) => {
+    if (!sessionId) return;
+    const sessionRef = doc(db, "live_sessions", sessionId);
+    await updateDoc(sessionRef, { viewerCount: increment(change) });
+};
+
+export const sendReaction = async (sessionId, emoji) => {
     if (!sessionId) return;
     const sessionRef = doc(db, "live_sessions", sessionId);
     await setDoc(sessionRef, {
-        lastLocation: { lat: coords[1], lng: coords[0] },
-        timestamp: new Date()
+        lastReaction: {
+            emoji: emoji,
+            timestamp: new Date()
+        }
     }, { merge: true });
+};
+
+export const endLiveSession = async (sessionId) => {
+    if (!sessionId) return;
+    const sessionRef = doc(db, "live_sessions", sessionId);
+    await updateDoc(sessionRef, { active: false });
+};
+
+export const sendChatMessage = async (sessionId, sender, text, options = {}) => {
+    if (!sessionId || !text) return;
+    const msgsRef = collection(db, "live_sessions", sessionId, "messages");
+    await addDoc(msgsRef, {
+        sender,
+        text,
+        timestamp: new Date(),
+        ...options
+    });
+};
+
+export const subscribeToChat = (sessionId, onUpdate) => {
+    const msgsRef = collection(db, "live_sessions", sessionId, "messages");
+    const q = query(msgsRef, orderBy("timestamp", "asc"));
+    return onSnapshot(q, (snapshot) => {
+        const messages = [];
+        snapshot.forEach(doc => messages.push({ id: doc.id, ...doc.data() }));
+        onUpdate(messages);
+    });
+};
+
+export const registerViewer = async (sessionId, viewerId, name) => {
+    const viewerRef = doc(db, "live_sessions", sessionId, "viewers", viewerId);
+    await setDoc(viewerRef, {
+        name,
+        joinedAt: new Date(),
+        active: true
+    }, { merge: true });
+};
+
+export const subscribeToViewers = (sessionId, onUpdate) => {
+    const viewersRef = collection(db, "live_sessions", sessionId, "viewers");
+    return onSnapshot(viewersRef, (snapshot) => {
+        const viewers = [];
+        snapshot.forEach(doc => viewers.push({ id: doc.id, ...doc.data() }));
+        onUpdate(viewers);
+    });
+};
+
+export const kickViewer = async (sessionId, viewerId) => {
+    const sessionRef = doc(db, "live_sessions", sessionId);
+    await updateDoc(sessionRef, { bannedViewers: arrayUnion(viewerId) });
 };
 
 /**
