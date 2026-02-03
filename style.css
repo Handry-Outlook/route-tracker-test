@@ -6,18 +6,28 @@
     --text-secondary: #5f6368;
     --accent-blue: #1a73e8;
     --accent-blue-dark: #1662c8;
+    --accent-red: #e74c3c;
     --border-color: #dadce0;
     --shadow: 0 4px 16px rgba(0,0,0,0.12);
     --icon-color: #5f6368;
-    --accent-red: #e74c3c;
+    --surface-bg: #f8f9fa;
+    --hover-bg: #f1f3f4;
+    --input-bg: #fff;
 }
 body.dark-mode {
     --bg-color: #121212;
     --panel-bg: #1e1e1e;
     --text-primary: #e0e0e0;
     --text-secondary: #a0a0a0;
+    --accent-blue: #4285f4;
+    --accent-blue-dark: #5c97f7;
+    --accent-red: #ef5350;
     --border-color: #333;
     --shadow: 0 4px 16px rgba(0,0,0,0.6);
+    --icon-color: #a0a0a0;
+    --surface-bg: #2c2c2c;
+    --hover-bg: #333;
+    --input-bg: #2c2c2c;
 }
 
 * {
@@ -108,7 +118,7 @@ body {
 /* 4. Tabs */
 .tab-container {
     display: flex;
-    background: #f1f3f4;
+    background: var(--surface-bg);
     padding: 4px;
     border-radius: 10px;
     margin-bottom: 16px;
@@ -128,7 +138,7 @@ body {
 .tab-btn.active {
     background: var(--panel-bg);
     color: var(--accent-blue);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow);
     font-weight: 600;
 }
 .tab-content { display: none; }
@@ -144,7 +154,7 @@ body {
     transition: background 0.2s;
 }
 .collapse-btn-mobile:hover {
-    background: rgba(0,0,0,0.05);
+    background: var(--hover-bg);
 }
 
 /* 5. Route Planner & Inputs */
@@ -187,6 +197,8 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     height: 44px;
+    background-color: var(--input-bg);
+    color: var(--text-primary);
     transition: border-color 0.2s;
 }
 /* Prevent dropdown when location is set */
@@ -264,7 +276,7 @@ body {
     border-radius: 6px;
     font-weight: 500;
     cursor: pointer;
-    background-color: #f1f3f4;
+    background-color: var(--surface-bg);
     color: var(--text-secondary);
     border: 1px dashed var(--border-color);
     transition: all 0.2s;
@@ -272,7 +284,7 @@ body {
     min-height: 32px;
 }
 #add-destination-btn:hover {
-    background-color: #e8e8e8;
+    background-color: var(--hover-bg);
     border-style: solid;
     color: var(--text-primary);
 }
@@ -285,7 +297,7 @@ body {
     margin-bottom: 16px;
 }
 .stat-box {
-    background: #f8f9fa;
+    background: var(--surface-bg);
     padding: 14px 12px;
     border-radius: 8px;
     text-align: center;
@@ -329,12 +341,12 @@ body {
     align-items: flex-start;
     gap: 12px;
     padding: 12px 0;
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--border-color);
     cursor: pointer;
     transition: background 0.2s;
 }
 .direction-step:hover {
-    background: #f8f9fa;
+    background: var(--hover-bg);
 }
 .step-info {
     flex: 1;
@@ -364,7 +376,7 @@ body {
 /* Elevation Chart */
 #elevation-container {
     margin-bottom: 16px;
-    background: #f8f9fa;
+    background: var(--surface-bg);
     padding: 12px;
     border-radius: 8px;
     min-height: 200px;
@@ -394,7 +406,7 @@ body {
     align-items: center;
     gap: 12px;
 }
-.saved-route-item:hover { background-color: #f1f3f4; }
+.saved-route-item:hover { background-color: var(--hover-bg); }
 .empty-state { text-align: center; padding: 20px; color: var(--text-secondary); }
 .delete-route-btn {
     background: none;
@@ -624,7 +636,7 @@ body.nav-mode .map-controls-stack {
 /* POI Controls */
 .poi-container {
     margin-bottom: 16px;
-    background: #f8f9fa;
+    background: var(--surface-bg);
     padding: 8px 12px;
     border-radius: 8px;
     display: flex;
@@ -636,14 +648,14 @@ body.nav-mode .map-controls-stack {
     gap: 8px;
 }
 .poi-btn {
-    background: white;
+    background: var(--panel-bg);
     border: 1px solid var(--border-color);
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 0.85rem;
     cursor: pointer;
 }
-.poi-btn:hover { background: #eee; }
+.poi-btn:hover { background: var(--hover-bg); }
 .poi-marker {
     font-size: 20px;
     cursor: pointer;
@@ -652,7 +664,7 @@ body.nav-mode .map-controls-stack {
 
 /* Route Card UI */
 .route-card {
-    background: #fff;
+    background: var(--panel-bg);
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 16px;
@@ -670,7 +682,7 @@ body.nav-mode .map-controls-stack {
 
 /* Route Planning Options */
 .route-options-container {
-    background: #f8f9fa;
+    background: var(--surface-bg);
     padding: 12px;
     border-radius: 8px;
     margin-top: 12px;
@@ -687,6 +699,8 @@ body.nav-mode .map-controls-stack {
     padding: 6px;
     border: 1px solid var(--border-color);
     border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--text-primary);
 }
 .pace-input {
     width: 60px;
@@ -709,7 +723,7 @@ body.nav-mode .map-controls-stack {
     margin-top: 16px;
 }
 .share-card {
-    background: #f8f9fa;
+    background: var(--surface-bg);
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 16px;
@@ -724,7 +738,7 @@ body.nav-mode .map-controls-stack {
     min-height: 100px;
 }
 .share-card:hover {
-    background: #fff;
+    background: var(--panel-bg);
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     transform: translateY(-2px);
 }
@@ -749,7 +763,7 @@ body.nav-mode .map-controls-stack {
     border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 0.85rem;
-    background: #fff;
+    background: var(--input-bg);
     color: var(--text-primary);
 }
 .copy-btn {
@@ -904,7 +918,7 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
     color: var(--text-primary);
     transition: background 0.2s;
 }
-.style-option:hover { background: #f1f3f4; }
+.style-option:hover { background: var(--hover-bg); }
 .style-option.active { color: var(--accent-blue); background: rgba(26, 115, 232, 0.1); }
 
 /* --- WEATHER TAB --- */
@@ -940,7 +954,7 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
     gap: 12px;
 }
 .wx-stat-card {
-    background: #f8f9fa;
+    background: var(--surface-bg);
     padding: 12px;
     border-radius: 12px;
     display: flex;
@@ -964,7 +978,7 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
 }
 .forecast-card {
     flex: 0 0 auto;
-    background: #fff;
+    background: var(--panel-bg);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 8px;
@@ -979,3 +993,43 @@ body.nav-mode #nav-overlay-bottom { display: flex; }
 .fc-time { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; }
 .fc-temp { font-size: 0.9rem; font-weight: 700; }
 .fc-wind { font-size: 0.75rem; display: flex; align-items: center; gap: 2px; color: var(--text-secondary); }
+
+/* --- TUTORIAL MODE --- */
+.tutorial-tooltip {
+    position: fixed;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+    z-index: 10000;
+    width: 300px;
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    animation: fadeIn 0.3s ease;
+}
+.tutorial-tooltip.active { display: flex; }
+.tutorial-tooltip h3 { margin: 0; font-size: 1.1rem; color: var(--text-primary); }
+.tutorial-tooltip p { margin: 0; font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5; }
+.tutorial-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.tutorial-step-indicator { font-size: 0.8rem; color: var(--text-secondary); }
+.tutorial-btn-group { display: flex; gap: 8px; }
+.tutorial-btn {
+    padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+}
+.tutorial-btn.primary { background: var(--accent-blue); color: white; }
+.tutorial-btn.secondary { background: var(--surface-bg); color: var(--text-primary); border: 1px solid var(--border-color); }
+
+/* Highlight Target */
+.tutorial-highlight {
+    position: relative;
+    z-index: 9999 !important;
+    box-shadow: 0 0 0 4px var(--accent-blue), 0 0 20px rgba(26, 115, 232, 0.4) !important;
+    transition: box-shadow 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
