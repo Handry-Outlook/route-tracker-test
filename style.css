@@ -189,6 +189,11 @@ body {
     height: 44px;
     transition: border-color 0.2s;
 }
+/* Prevent dropdown when location is set */
+.location-input-wrapper.location-set .mapboxgl-ctrl-geocoder .suggestions {
+    display: none !important;
+}
+
 .icon-btn {
     flex-shrink: 0;
     background: none;
@@ -570,6 +575,12 @@ body.nav-mode .map-controls-stack {
 .round-trip-btn {
     margin-right: 0;
     color: var(--accent-blue);
+}
+
+/* Star Button */
+.star-btn.active {
+    color: #f1c40f;
+    border-color: #f1c40f;
 }
 
 /* Compass Icon */
