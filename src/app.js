@@ -1,5 +1,13 @@
 import { auth, googleProvider, saveRouteToCloud, fetchAllRoutes, deleteRouteFromCloud, createLiveSession, updateLiveSession, endLiveSession, subscribeToLiveSession, updateRouteName, saveSharedRoute, fetchSharedRoute, sendReaction, updateViewerCount, sendChatMessage, subscribeToChat, registerViewer, subscribeToViewers, kickViewer } from './firebase.js';
-import { onAuthStateChanged, signInWithPopup, signOut, getRedirectResult, signInWithRedirect } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+    onAuthStateChanged,
+    signInWithPopup,
+    signOut,
+    getRedirectResult,
+    signInWithRedirect,
+    setPersistence,
+    browserLocalPersistence
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { fetchWindAtLocation, fetchRouteForecast } from './weather-api.js';
 import { calculateWindImpact } from './geo-logic.js';
 import { initMap, fetchRouteAlternatives, drawStaticRoute, addRouteMarkers, clearRoute, getElevationProfile, playRouteAnimation, stopRouteAnimation, toggleTraffic, toggleWeather, setAnimationSpeed, togglePause, updateMetOfficeLayer, toggleTerrain, restoreWeather } from './map-engine.js';
