@@ -21,6 +21,7 @@ document.addEventListener('touchstart', unlockAudio);
 // --- GLOBAL STATE ---
 let currentUser = null;
 let currentRouteData = null;
+let importedGpxMetadata = null;
 let waypoints = [null, null]; // Array to hold coordinates for multi-stop routes
 let currentFeatures = [null, null]; // Store full GeoJSON features for favorites
 let geocoders = [];
@@ -434,6 +435,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('add-destination-btn').addEventListener('click', addDestination);
     document.getElementById('plan-btn').addEventListener('click', calculateRoute);
     document.getElementById('clear-route-btn').addEventListener('click', resetRoutePlanner);
+
+    const importGpxBtn = document.getElementById('import-gpx-btn');
+    const gpxFileInput = document.getElementById('gpx-file-input');
+    if (importGpxBtn && gpxFileInput) {
+        importGpxBtn.addEventListener('click', () => {
+            gpxFileInput.value = '';
+            gpxFileInput.click();
+        });
+        gpxFileInput.addEventListener('change', async (event) => {
+            const file = event.target.files?.[0];
+            if (file) await importGpxFile(file);
+        });
+    }
 
     initRouteOptionsUI();
 
@@ -1102,6 +1116,7 @@ async function calculateRoute(options = {}) {
 }
 
 function resetRoutePlanner() {
+    importedGpxMetadata = null;
     waypoints = [null, null];
     currentFeatures = [null, null];
     geocoders.forEach(g => g.clear());
@@ -1523,7 +1538,14 @@ async function handleRouteSelection(route, isNew = false, allOptions = null) {
 `;
 
     const updateElevation = async () => {
-        const elevationData = await getElevationProfile(map, route.geometry);
+        const embeddedElevations = route.importedGpx &&
+            importedGpxMetadata?.elevations?.length === route.geometry.coordinates.length &&
+            importedGpxMetadata.elevations.some(Number.isFinite)
+            ? importedGpxMetadata.elevations
+            : null;
+        const elevationData = embeddedElevations
+            ? createImportedElevationProfile(route.geometry.coordinates, embeddedElevations)
+            : await getElevationProfile(map, route.geometry);
 
         const allZero = elevationData.every(d => d.elevation === 0);
         if (elevationData.length < 2 || allZero) {
@@ -2065,9 +2087,17 @@ const loadSavedList = async () => {
                     distance: r.distance,
                     duration: r.duration || 0,
                     legs: JSON.parse(r.legs),
-                    weight_name: 'saved',
-                    weight: 0
+                    weight_name: r.routeSource === 'gpx-import' ? 'imported-gpx' : 'saved',
+                    weight: 0,
+                    importedGpx: r.routeSource === 'gpx-import',
+                    importedGpxName: r.importedGpxName || r.name
                 };
+                importedGpxMetadata = r.routeSource === 'gpx-import' ? {
+                    name: r.importedGpxName || r.name,
+                    fileName: r.importedGpxFileName || null,
+                    elevations: [],
+                    importedAt: null
+                } : null;
 
                 // 2. Restore Waypoints & Markers
                 waypoints = JSON.parse(r.savedWaypoints);
@@ -2169,7 +2199,10 @@ async function handleSaveButtonClick() {
         legs: JSON.stringify(compressedLegs), // Save compressed turn-by-turn info
         savedWaypoints: JSON.stringify(waypoints),   // Save exact stops
         tailwindScore: score.percentage,
-        rating: score.rating
+        rating: score.rating,
+        routeSource: currentRouteData.importedGpx ? 'gpx-import' : 'route-planner',
+        importedGpxName: importedGpxMetadata?.name || null,
+        importedGpxFileName: importedGpxMetadata?.fileName || null
     };
 
     await saveRouteToCloud(data);
@@ -3155,9 +3188,12 @@ function updateNavigationDashboard(userPos) {
         document.getElementById('nav-next-dist').innerText = distToTurn < 1 ? `${(distToTurn * 1000).toFixed(0)} m` : `${distToTurn.toFixed(1)} km`;
     }
 
-    // Update Remaining Stats (Approximate straight line to end for performance)
-    const endPoint = currentRouteData.geometry.coordinates[currentRouteData.geometry.coordinates.length - 1];
-    const totalDistKm = turf.distance(userPos, endPoint, { units: 'kilometers' });
+    // Follow the route geometry for an accurate remaining distance, including imported GPX tracks.
+    const routeLine = turf.lineString(currentRouteData.geometry.coordinates);
+    const snappedPoint = turf.nearestPointOnLine(routeLine, turf.point(userPos), { units: 'kilometers' });
+    const routeLengthKm = turf.length(routeLine, { units: 'kilometers' });
+    const travelledKm = Number.isFinite(snappedPoint.properties.location) ? snappedPoint.properties.location : 0;
+    const totalDistKm = Math.max(0, routeLengthKm - travelledKm);
     const pace = parseFloat(document.getElementById('user-pace')?.value) || 20;
 
     document.getElementById('nav-dist-rem').innerText = totalDistKm.toFixed(1);
@@ -3425,6 +3461,11 @@ function injectCustomStyles() {
         .location-input-wrapper:focus-within {
             z-index: 100;
         }
+        #import-gpx-btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; }
+        .gpx-import-notice { position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:2500; display:flex; align-items:center; gap:10px; width:min(90vw,520px); padding:12px 16px; color:#fff; background:#18864b; border-radius:10px; box-shadow:0 6px 24px rgba(0,0,0,.24); }
+        .gpx-import-notice span { flex:1; font-size:.9rem; line-height:1.4; }
+        .gpx-import-notice button { display:inline-flex; padding:4px; color:inherit; background:transparent; border:0; cursor:pointer; }
+        @media (max-width:768px) { .route-actions { flex-wrap:wrap; } #import-gpx-btn { flex:1 1 calc(50% - 6px); } .gpx-import-notice { top:12px; width:calc(100vw - 24px); } }
     `;
     document.head.appendChild(style);
 }
@@ -4291,6 +4332,110 @@ function showAutoShareModal(url) {
     setTimeout(() => {
         if (document.body.contains(modal)) modal.remove();
     }, 15000);
+}
+
+
+async function importGpxFile(file) {
+    const button = document.getElementById('import-gpx-btn');
+    const original = button?.innerHTML;
+    try {
+        if (!file.name.toLowerCase().endsWith('.gpx')) throw new Error('Please select a .gpx file.');
+        if (file.size > 20 * 1024 * 1024) throw new Error('The GPX file exceeds the 20 MB import limit.');
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = '<i data-feather="loader" class="spin-anim"></i> Importing...';
+            if (window.feather) feather.replace();
+        }
+        const parsed = parseGpx(await file.text(), file.name);
+        if (parsed.coordinates.length < 2) throw new Error('No usable track or route was found.');
+        const route = createRouteFromGpx(parsed);
+        importedGpxMetadata = { fileName: file.name, name: parsed.name, elevations: parsed.elevations, importedAt: new Date().toISOString() };
+        currentRouteData = route;
+        const first = route.geometry.coordinates[0];
+        const last = route.geometry.coordinates[route.geometry.coordinates.length - 1];
+        waypoints = [[...first], [...last]];
+        currentFeatures = [null, null];
+        if (geocoders[0]) geocoders[0].setInput(`${parsed.name} start`);
+        if (geocoders[1]) geocoders[1].setInput(`${parsed.name} finish`);
+        geocoders.slice(0, 2).forEach(g => g?._inputEl?.closest('.location-input-wrapper')?.classList.add('location-set'));
+        addRouteMarkers(map, waypoints, handleMarkerDrag);
+        switchTab('directions');
+        await handleRouteSelection(route, true);
+        const clearBtn = document.getElementById('clear-route-btn');
+        if (clearBtn) clearBtn.style.display = 'block';
+        showGpxImportNotice(currentUser ? `Imported "${parsed.name}". Use Save Route to keep it.` : `Imported "${parsed.name}". Log in to save it.`);
+    } catch (error) {
+        console.error('GPX import failed:', error);
+        alert(`Could not import GPX:\n\n${error.message}`);
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = original;
+            if (window.feather) feather.replace();
+        }
+    }
+}
+
+function parseGpx(xmlText, fallbackName = 'Imported GPX') {
+    const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+    if (xml.querySelector('parsererror')) throw new Error('The file contains invalid GPX XML.');
+    if (xml.documentElement?.localName?.toLowerCase() !== 'gpx') throw new Error('The selected file is not a GPX document.');
+    const elements = (parent, name) => Array.from(parent.getElementsByTagName('*')).filter(el => el.localName?.toLowerCase() === name);
+    const text = (parent, name) => elements(parent, name)[0]?.textContent?.trim() || '';
+    const name = text(xml, 'name') || fallbackName.replace(/\.[^/.]+$/, '') || 'Imported GPX Route';
+    let points = elements(xml, 'trkpt');
+    if (points.length < 2) points = elements(xml, 'rtept');
+    if (points.length < 2) points = elements(xml, 'wpt');
+    const coordinates = [], elevations = [];
+    for (const point of points) {
+        const lat = Number.parseFloat(point.getAttribute('lat'));
+        const lon = Number.parseFloat(point.getAttribute('lon'));
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+        const prev = coordinates[coordinates.length - 1];
+        if (prev && prev[0] === lon && prev[1] === lat) continue;
+        const ele = Number.parseFloat(text(point, 'ele'));
+        coordinates.push([lon, lat]);
+        elevations.push(Number.isFinite(ele) ? ele : null);
+    }
+    return { name, coordinates, elevations };
+}
+
+function createRouteFromGpx(parsed) {
+    const geometry = { type: 'LineString', coordinates: parsed.coordinates };
+    const distance = turf.length(turf.lineString(parsed.coordinates), { units: 'kilometers' }) * 1000;
+    const pace = Number.parseFloat(document.getElementById('user-pace')?.value) || 20;
+    const duration = (distance / 1000 / pace) * 3600;
+    const first = parsed.coordinates[0], last = parsed.coordinates[parsed.coordinates.length - 1];
+    return {
+        geometry, distance, duration, weight: duration, weight_name: 'imported-gpx', importedGpx: true, importedGpxName: parsed.name,
+        legs: [{ distance, duration, summary: parsed.name, steps: [
+            { distance, duration, name: parsed.name, maneuver: { type: 'depart', instruction: `Follow the imported GPX route: ${parsed.name}`, location: first } },
+            { distance: 0, duration: 0, name: parsed.name, maneuver: { type: 'arrive', instruction: 'You have arrived at your destination', location: last } }
+        ] }]
+    };
+}
+
+function createImportedElevationProfile(coordinates, elevations) {
+    let distance = 0;
+    return coordinates.map((coord, index) => {
+        if (index) distance += turf.distance(coordinates[index - 1], coord, { units: 'kilometers' }) * 1000;
+        return { distance, elevation: Number.isFinite(elevations[index]) ? elevations[index] : 0, coord };
+    });
+}
+
+function showGpxImportNotice(message) {
+    document.getElementById('gpx-import-notice')?.remove();
+    const notice = document.createElement('div');
+    notice.id = 'gpx-import-notice';
+    notice.className = 'gpx-import-notice';
+    const icon = document.createElement('i'); icon.setAttribute('data-feather', 'check-circle');
+    const span = document.createElement('span'); span.textContent = message;
+    const close = document.createElement('button'); close.type = 'button'; close.setAttribute('aria-label', 'Close'); close.innerHTML = '<i data-feather="x"></i>';
+    close.onclick = () => notice.remove();
+    notice.append(icon, span, close);
+    document.body.appendChild(notice);
+    if (window.feather) feather.replace();
+    setTimeout(() => notice.remove(), 7000);
 }
 
 function removeFavorite(index) {
