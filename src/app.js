@@ -21,6 +21,7 @@ document.addEventListener('touchstart', unlockAudio);
 // --- GLOBAL STATE ---
 let currentUser = null;
 let currentRouteData = null;
+let importedGpxMetadata = null;
 let waypoints = [null, null]; // Array to hold coordinates for multi-stop routes
 let currentFeatures = [null, null]; // Store full GeoJSON features for favorites
 let geocoders = [];
@@ -168,7 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 currentUser = { uid: user.uid, name: user.displayName, avatar: user.photoURL };
-<<<<<<< HEAD
                 // Preserve the logout button instead of replacing the entire profile container.
                 let avatar = document.getElementById('user-avatar');
                 if (!avatar && userProfile) {
@@ -182,13 +182,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     loginBtn.style.display = 'none';
                     loginBtn.disabled = false;
                 }
-=======
-                userProfile.innerHTML = `<img id="user-avatar" src="${user.photoURL || ''}" alt="User Avatar">`;
-                if (loginBtn) {
-                    loginBtn.style.display = 'none';
-                    loginBtn.disabled = false;
-                }
->>>>>>> 271cb1cb57eb157c5de449ad50386cfabba449bf
                 if (logoutBtn) logoutBtn.style.display = 'block';
                 if (userProfile) userProfile.style.display = 'flex';
                 if (trackId) initTrackingMode(trackId);
@@ -216,7 +209,6 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await setPersistence(auth, browserLocalPersistence);
 
-<<<<<<< HEAD
                 const userAgent = navigator.userAgent || '';
                 const isIOS = /iPad|iPhone|iPod/i.test(userAgent) ||
                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -234,35 +226,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (isIOS && isStandalone) {
                     alert('Open this website directly in Safari to sign in with Google. After signing in, you can return to the Home Screen app.');
-=======
-                const userAgent = navigator.userAgent || '';
-                const isIOS = /iPad|iPhone|iPod/i.test(userAgent) ||
-                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-                const isStandalone = window.navigator.standalone === true ||
-                    window.matchMedia('(display-mode: standalone)').matches;
-                const isAndroidWebView = /Android/i.test(userAgent) &&
-                    (/\bwv\b/i.test(userAgent) || /Version\/[\d.]+/i.test(userAgent));
-                const shouldUseRedirect = isIOS || isStandalone || isAndroidWebView;
-
-                if (shouldUseRedirect) {
-                    sessionStorage.setItem('firebaseLoginPending', 'true');
-                    await signInWithRedirect(auth, googleProvider);
-                    return;
-                }
-
-                await signInWithPopup(auth, googleProvider);
-                loginBtn.innerHTML = originalText;
-                loginBtn.disabled = false;
-            } catch (error) {
-                console.error('Google authentication error:', error);
-
-                if (error.code === 'auth/popup-closed-by-user' ||
-                    error.code === 'auth/cancelled-popup-request') {
-                    console.log('Login cancelled by user.');
->>>>>>> 271cb1cb57eb157c5de449ad50386cfabba449bf
                     loginBtn.innerHTML = originalText;
                     loginBtn.disabled = false;
-<<<<<<< HEAD
                     return;
                 }
 
@@ -296,30 +261,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert(message);
                 loginBtn.innerHTML = originalText;
                 loginBtn.disabled = false;
-=======
-                    return;
-                }
-
-                let message = 'Login failed: ' +
-                    (error.message || 'Google authentication could not be completed.');
-
-                if (error.code === 'auth/unauthorized-domain') {
-                    message = `Configuration error: The domain "${window.location.hostname}" is not authorized.\n\nAdd it in Firebase Console under Authentication > Settings > Authorized domains.`;
-                } else if (error.code === 'auth/popup-blocked') {
-                    message = 'The login popup was blocked. Please allow popups for this website.';
-                } else if (error.code === 'auth/operation-not-supported-in-this-environment') {
-                    message = 'Google login is not supported in this browser window. Please open the application directly in Safari.';
-                } else if (error.code === 'auth/web-storage-unsupported') {
-                    message = 'This browser is blocking the storage required for login. Please open the application directly in Safari and make sure private browsing is disabled.';
-                }
-
-                alert(message);
-                loginBtn.innerHTML = originalText;
-                loginBtn.disabled = false;
->>>>>>> 271cb1cb57eb157c5de449ad50386cfabba449bf
             }
         });
-<<<<<<< HEAD
 
         if (logoutBtn) logoutBtn.addEventListener('click', async () => {
             try {
@@ -330,17 +273,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Logout failed: ' + error.message);
             }
         });
-=======
-
-        logoutBtn.addEventListener('click', async () => {
-            try {
-                await signOut(auth);
-            } catch (error) {
-                console.error('Logout failed:', error);
-                alert('Logout failed: ' + error.message);
-            }
-        });
->>>>>>> 271cb1cb57eb157c5de449ad50386cfabba449bf
     } else if (loginBtn) {
         loginBtn.addEventListener('click', () => {
             alert('Authentication system failed to initialize. Check the browser console for details.');
