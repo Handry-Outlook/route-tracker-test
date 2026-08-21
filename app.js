@@ -1,8 +1,8 @@
 import { auth, googleProvider, saveRouteToCloud, fetchAllRoutes, deleteRouteFromCloud, createLiveSession, updateLiveSession, endLiveSession, subscribeToLiveSession, updateRouteName, saveSharedRoute, fetchSharedRoute, sendReaction, updateViewerCount, sendChatMessage, subscribeToChat, registerViewer, subscribeToViewers, kickViewer } from './firebase.js';
-import { onAuthStateChanged, signInWithPopup, signOut, getRedirectResult, signInWithRedirect } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { onAuthStateChanged, signInWithPopup, signOut, getRedirectResult, signInWithRedirect, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { fetchWindAtLocation, fetchRouteForecast } from './weather-api.js';
 import { calculateWindImpact } from './geo-logic.js';
-import { initMap, fetchRouteAlternatives, drawStaticRoute, addRouteMarkers, clearRoute, getElevationProfile, playRouteAnimation, stopRouteAnimation, toggleTraffic, toggleWeather, setAnimationSpeed, togglePause, updateMetOfficeLayer, toggleTerrain, restoreWeather } from './map-engine.js';
+import { initMap, fetchRouteAlternatives, drawStaticRoute, drawImportedTrainingRoute, clearImportedTrainingRoute, addRouteMarkers, clearRoute, getElevationProfile, playRouteAnimation, stopRouteAnimation, toggleTraffic, toggleWeather, setAnimationSpeed, togglePause, updateMetOfficeLayer, toggleTerrain, restoreWeather } from './map-engine.js';
 import { MAPBOX_TOKEN } from './config.js';
 
 // --- AUDIO UNLOCKER FOR ANDROID WEBVIEW ---
@@ -21,6 +21,10 @@ document.addEventListener('touchstart', unlockAudio);
 // --- GLOBAL STATE ---
 let currentUser = null;
 let currentRouteData = null;
+let importedGpxMetadata = null;
+let importedTrainingRoute = null;
+let approachRouteData = null;
+let navigationPhase = 'route';
 let waypoints = [null, null]; // Array to hold coordinates for multi-stop routes
 let currentFeatures = [null, null]; // Store full GeoJSON features for favorites
 let geocoders = [];
@@ -133,81 +137,72 @@ document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initTutorial(); // Initialize tutorial system
 
+
     // --- AUTH ---
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const userProfile = document.getElementById('user-profile');
 
     if (auth) {
-        getRedirectResult(auth)
-            .then((result) => {
-                if (result) {
-                    // This confirms the user has just signed in via redirect.
-                    // The onAuthStateChanged observer will handle the UI updates.
-                    console.log("Handled redirect sign-in for user:", result.user.displayName);
-                }
-            }).catch((error) => {
-                // Handle Errors here.
-                console.error("Redirect Result Error:", error);
-                alert("Login failed during redirect: " + error.message);
-            });
-
-        onAuthStateChanged(auth, (user) => {
+        setPersistence(auth, browserLocalPersistence).catch(console.error);
+        getRedirectResult(auth).catch(error => {
+            console.error('Redirect login failed:', error);
+            alert(`Login failed: ${error.message}`);
+        });
+        onAuthStateChanged(auth, user => {
             if (user) {
-                currentUser = { uid: user.uid, name: user.displayName, avatar: user.photoURL };
-                userProfile.innerHTML = `<img id="user-avatar" src="${user.photoURL}" alt="User Avatar">`;
-                if (loginBtn) loginBtn.style.display = 'none';
+                currentUser = { uid:user.uid, name:user.displayName, avatar:user.photoURL };
+                let avatar = document.getElementById('user-avatar');
+                if (!avatar && userProfile) {
+                    avatar = document.createElement('img');
+                    avatar.id = 'user-avatar';
+                    avatar.alt = 'User Avatar';
+                    userProfile.prepend(avatar);
+                }
+                if (avatar) avatar.src = user.photoURL || '';
+                loginBtn.style.display = 'none';
+                loginBtn.disabled = false;
                 if (logoutBtn) logoutBtn.style.display = 'block';
-                if (userProfile) userProfile.style.display = 'flex';
-                if (trackId) initTrackingMode(trackId);
-                else loadSavedList();
+                userProfile.style.display = 'flex';
+                if (trackId) initTrackingMode(trackId); else loadSavedList();
             } else {
                 currentUser = null;
-                if (userProfile) userProfile.style.display = 'none';
-                if (loginBtn) loginBtn.style.display = 'block';
+                userProfile.style.display = 'none';
+                loginBtn.style.display = 'block';
+                loginBtn.disabled = false;
                 if (logoutBtn) logoutBtn.style.display = 'none';
-                if (trackId) initTrackingMode(trackId);
-                else if (document.getElementById('saved-routes-list')) document.getElementById('saved-routes-list').innerHTML = '<p class="empty-state">Please log in to see your routes.</p>';
             }
         });
-
-        loginBtn.addEventListener('click', () => {
-            const originalText = loginBtn.innerHTML;
-            loginBtn.innerHTML = 'Wait...';
-            loginBtn.disabled = true;
-
-            // Check if the app is running in the Android WebView
-            // We look for 'Version/' which is common in Android WebView UserAgents
-            const isWebView = /Android|WV|Version\/[\d.]+/i.test(navigator.userAgent);
-
-            if (isWebView) {
-                // Use Redirect for Android App. The result will be handled by getRedirectResult.
-                signInWithRedirect(auth, googleProvider);
-            } else {
-                // Use Popup for standard browsers (Desktop/Chrome)
-                signInWithPopup(auth, googleProvider).catch(e => {
-                    console.error("Auth Error", e);
-                    let msg = "Login Failed: " + e.message;
-                    if (e.code === 'auth/unauthorized-domain') {
-                        msg = `Configuration Error: The domain "${window.location.hostname}" is not authorized.\n\nPlease add it to your Firebase Console under Authentication > Settings > Authorized Domains.`;
-                    } else if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
-                        // Don't show an alert if the user just closes the popup.
-                        console.log("Login cancelled by user.");
-                        loginBtn.innerHTML = originalText;
-                        loginBtn.disabled = false;
-                        return; // exit without alert
-                    } else if (e.code === 'auth/popup-blocked') {
-                        msg = "Login popup was blocked. Please allow popups for this site.";
-                    }
-                    alert(msg);
-                    loginBtn.innerHTML = originalText;
-                    loginBtn.disabled = false;
-                });
+        loginBtn.addEventListener('click', async () => {
+            const original = loginBtn.innerHTML;
+            loginBtn.innerHTML = 'Signing in...'; loginBtn.disabled = true;
+            try {
+                await setPersistence(auth, browserLocalPersistence);
+                googleProvider.setCustomParameters({ prompt:'select_account' });
+                const ua = navigator.userAgent || '';
+                const isIOS = /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                const isStandalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+                const isAndroidWebView = /Android/i.test(ua) && (/\bwv\b/i.test(ua) || /Version\/[\d.]+/i.test(ua));
+                // Home-screen apps require Firebase's auth helper to be on the same site.
+                // This code uses redirect there; config.js must set authDomain to the deployed Firebase Hosting domain.
+                if ((isIOS && isStandalone) || isAndroidWebView) {
+                    await signInWithRedirect(auth, googleProvider);
+                    return;
+                }
+                await signInWithPopup(auth, googleProvider);
+                loginBtn.innerHTML = original; loginBtn.disabled = false;
+            } catch (error) {
+                console.error('Authentication error:', error);
+                alert(`Login failed: ${error.message}`);
+                loginBtn.innerHTML = original; loginBtn.disabled = false;
             }
         });
-        logoutBtn.addEventListener('click', () => signOut(auth));
+        if (logoutBtn) logoutBtn.addEventListener('click', async () => {
+            try { await signOut(auth); currentUser = null; }
+            catch (error) { alert(`Logout failed: ${error.message}`); }
+        });
     } else if (loginBtn) {
-        loginBtn.addEventListener('click', () => alert("Authentication system failed to initialize. Check console for details."));
+        loginBtn.onclick = () => alert('Authentication failed to initialize.');
     }
 
     // --- TABS ---
@@ -434,6 +429,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('add-destination-btn').addEventListener('click', addDestination);
     document.getElementById('plan-btn').addEventListener('click', calculateRoute);
     document.getElementById('clear-route-btn').addEventListener('click', resetRoutePlanner);
+    const importGpxBtn = document.getElementById('import-gpx-btn');
+    const gpxFileInput = document.getElementById('gpx-file-input');
+    if (importGpxBtn && gpxFileInput) {
+        importGpxBtn.onclick = () => { gpxFileInput.value=''; gpxFileInput.click(); };
+        gpxFileInput.onchange = async e => { if (e.target.files?.[0]) await importGpxFile(e.target.files[0]); };
+    }
 
     initRouteOptionsUI();
 
@@ -1102,6 +1103,7 @@ async function calculateRoute(options = {}) {
 }
 
 function resetRoutePlanner() {
+    importedGpxMetadata=null; importedTrainingRoute=null; approachRouteData=null; navigationPhase='route'; clearImportedTrainingRoute(map);
     waypoints = [null, null];
     currentFeatures = [null, null];
     geocoders.forEach(g => g.clear());
@@ -2538,8 +2540,15 @@ function startLiveTracking() {
     }
 
     // Check if user is near the start point
-    const checkProximity = (pos) => {
+    const checkProximity = async (pos) => {
         const userPos = [pos.coords.longitude, pos.coords.latitude];
+        if (importedTrainingRoute) {
+            const startPoint = importedTrainingRoute.geometry.coordinates[0];
+            const distKm = turf.distance(userPos, startPoint, { units: 'kilometers' });
+            if (distKm > 0.1) await createApproachToImportedRoute(userPos, startPoint);
+            else activateImportedTrainingRoute();
+            return;
+        }
         if (currentRouteData) {
             const startPoint = currentRouteData.geometry.coordinates[0];
             const distKm = turf.distance(userPos, startPoint, { units: 'kilometers' });
@@ -2690,6 +2699,11 @@ function handlePositionUpdate(userPos, heading, speed) {
         map.easeTo(cameraOptions);
     }
 
+    if (isNavigating && navigationPhase === 'approach' && importedTrainingRoute) {
+        const start = importedTrainingRoute.geometry.coordinates[0];
+        if (turf.distance(userPos, start, {units:'meters'}) <= 60) activateImportedTrainingRoute();
+    }
+
     // --- OFF-ROUTE DETECTION & REROUTING ---
     // Track history for bearing calculation (Trend)
     const now = Date.now();
@@ -2697,7 +2711,7 @@ function handlePositionUpdate(userPos, heading, speed) {
     // Keep last 10s of history
     recentLocations = recentLocations.filter(l => now - l.timestamp < 10000);
 
-    if (isNavigating && currentRouteData && !isRerouting) {
+    if (isNavigating && currentRouteData && !isRerouting && navigationPhase !== 'approach') {
         const routeLine = turf.lineString(currentRouteData.geometry.coordinates);
         const pt = turf.point(userPos);
         // Check distance to route line
@@ -4315,4 +4329,71 @@ function updateStarButtons() {
         }
     });
     if (feather) feather.replace();
+}
+
+
+async function importGpxFile(file) {
+    if (!file.name.toLowerCase().endsWith('.gpx')) return alert('Please select a GPX file.');
+    const xml = new DOMParser().parseFromString(await file.text(),'application/xml');
+    if (xml.querySelector('parsererror')) return alert('Invalid GPX file.');
+    const all = name => Array.from(xml.getElementsByTagName('*')).filter(e => e.localName?.toLowerCase()===name);
+    let pts=all('trkpt'); if(pts.length<2) pts=all('rtept');
+    const coordinates=[], elevations=[];
+    for(const pt of pts){
+        const lat=parseFloat(pt.getAttribute('lat')), lon=parseFloat(pt.getAttribute('lon'));
+        if(!Number.isFinite(lat)||!Number.isFinite(lon)) continue;
+        const prev=coordinates.at(-1); if(prev&&prev[0]===lon&&prev[1]===lat) continue;
+        const ele=Array.from(pt.children).find(e=>e.localName==='ele');
+        coordinates.push([lon,lat]); elevations.push(ele?parseFloat(ele.textContent):null);
+    }
+    if(coordinates.length<2) return alert('No usable GPX track found.');
+    const name=(all('name')[0]?.textContent||file.name.replace(/\.gpx$/i,'')).trim();
+    const route=createRouteFromGpx({name,coordinates,elevations});
+    importedGpxMetadata={name,fileName:file.name,elevations};
+    importedTrainingRoute=structuredClone(route); approachRouteData=null; navigationPhase='training'; currentRouteData=route;
+    waypoints=[coordinates[0],coordinates.at(-1)]; currentFeatures=[null,null];
+    if(geocoders[0]) geocoders[0].setInput(`${name} start`); if(geocoders[1]) geocoders[1].setInput(`${name} finish`);
+    addRouteMarkers(map,waypoints,handleMarkerDrag);
+    drawStaticRoute(map,route.geometry,true); switchTab('directions'); await handleRouteSelection(route,true);
+    document.getElementById('clear-route-btn').style.display='block';
+}
+
+function createRouteFromGpx(parsed){
+    const geometry={type:'LineString',coordinates:parsed.coordinates};
+    const distance=turf.length(turf.lineString(parsed.coordinates),{units:'kilometers'})*1000;
+    const pace=parseFloat(document.getElementById('user-pace')?.value)||20;
+    const duration=distance/1000/pace*3600;
+    return {geometry,distance,duration,weight:duration,weight_name:'imported-gpx',importedGpx:true,importedGpxName:parsed.name,
+      legs:[{distance,duration,summary:parsed.name,steps:generateGpxNavigationSteps(parsed.coordinates,parsed.name,pace)}]};
+}
+
+function generateGpxNavigationSteps(coords,name,pace){
+    const steps=[{distance:0,duration:0,name,maneuver:{type:'depart',instruction:`Start ${name}`,location:coords[0]}}];
+    let last=0;
+    for(let i=2;i<coords.length-1;i++){
+        let a=turf.bearing(coords[i-1],coords[i]), b=turf.bearing(coords[i],coords[i+1]), d=b-a;
+        while(d>180)d-=360; while(d<-180)d+=360;
+        const metres=turf.length(turf.lineString(coords.slice(last,i+1)),{units:'kilometers'})*1000;
+        if(Math.abs(d)>=40 && metres>=120){
+            const sharp=Math.abs(d)>100?'sharp ':''; const dir=d>0?'right':'left';
+            steps.push({distance:metres,duration:metres/1000/pace*3600,name:'',maneuver:{type:'turn',modifier:`${sharp}${dir}`,instruction:`Turn ${sharp}${dir}`,location:coords[i]}}); last=i;
+        }
+    }
+    const metres=turf.length(turf.lineString(coords.slice(last)),{units:'kilometers'})*1000;
+    steps.push({distance:metres,duration:metres/1000/pace*3600,name,maneuver:{type:'arrive',instruction:'Training route complete',location:coords.at(-1)}});
+    return steps;
+}
+
+async function createApproachToImportedRoute(userPos,start){
+    const routes=await fetchRouteAlternatives([userPos,start],{suppressAlerts:true}); if(!routes?.length) return;
+    approachRouteData=routes[0]; currentRouteData=approachRouteData; navigationPhase='approach';
+    drawStaticRoute(map,approachRouteData.geometry,false); drawImportedTrainingRoute(map,importedTrainingRoute.geometry);
+    speak('Navigating to the start of your training route.');
+}
+
+function activateImportedTrainingRoute(){
+    if(!importedTrainingRoute)return;
+    navigationPhase='training'; approachRouteData=null; currentRouteData=structuredClone(importedTrainingRoute); lastSpokenStepIndex=-1;
+    clearImportedTrainingRoute(map); drawStaticRoute(map,currentRouteData.geometry,false);
+    speak('Training route started.');
 }

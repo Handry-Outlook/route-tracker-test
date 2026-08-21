@@ -609,3 +609,17 @@ export const updateMetOfficeLayer = (map, blobUrl, bbox) => {
         });
     }
 };  // It will reappear on the next animation frame update or needs manual re-adding here if static.
+
+
+export const clearImportedTrainingRoute = (map) => {
+    if (map.getLayer('training-route-line')) map.removeLayer('training-route-line');
+    if (map.getLayer('training-route-casing')) map.removeLayer('training-route-casing');
+    if (map.getSource('training-route')) map.removeSource('training-route');
+};
+
+export const drawImportedTrainingRoute = (map, geometry) => {
+    clearImportedTrainingRoute(map);
+    map.addSource('training-route',{type:'geojson',data:{type:'Feature',properties:{},geometry}});
+    map.addLayer({id:'training-route-casing',type:'line',source:'training-route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#fff','line-width':9,'line-opacity':.85}});
+    map.addLayer({id:'training-route-line',type:'line',source:'training-route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#f39c12','line-width':6,'line-opacity':.95}});
+};
