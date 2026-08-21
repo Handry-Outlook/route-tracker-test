@@ -149,17 +149,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (auth) {
         getRedirectResult(auth)
-            .then((result) => {
-                if (result) {
-                    // This confirms the user has just signed in via redirect.
-                    // The onAuthStateChanged observer will handle the UI updates.
-                    console.log("Handled redirect sign-in for user:", result.user.displayName);
-                }
-            }).catch((error) => {
-                // Handle Errors here.
-                console.error("Redirect Result Error:", error);
-                alert("Login failed during redirect: " + error.message);
-            });
+    .then(result => {
+        sessionStorage.removeItem(
+            'firebaseLoginPending'
+        );
+
+        if (result?.user) {
+            console.log(
+                'Google redirect login completed:',
+                result.user.uid
+            );
+        }
+
+        // It is normal for result to be null.
+        // onAuthStateChanged will restore and display the user.
+    })
+    .catch(error => {
+        sessionStorage.removeItem(
+            'firebaseLoginPending'
+        );
+
+        console.error(
+            'Google redirect login failed:',
+            error
+        );
+
+        let message =
+            error.message ||
+            'Google redirect login could not be completed.';
+
+        if (error.code === 'auth/unauthorized-domain') {
+            message =
+                `The domain "${window.location.hostname}" ` +
+                `is not authorized in Firebase Authentication.`;
+        }
+
+        alert(
+            `Login failed during redirect:\n\n${message}`
+        );
+    });
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -180,45 +208,107 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        loginBtn.addEventListener('click', () => {
-            const originalText = loginBtn.innerHTML;
-            loginBtn.innerHTML = 'Wait...';
-            loginBtn.disabled = true;
+        loginBtn.addEventListener('click', async () => {
+    const originalText = loginBtn.innerHTML;
 
-            // Check if the app is running in the Android WebView
-            // We look for 'Version/' which is common in Android WebView UserAgents
-            const isWebView = /Android|WV|Version\/[\d.]+/i.test(navigator.userAgent);
+    loginBtn.innerHTML = 'Signing in...';
+    loginBtn.disabled = true;
 
-            if (isWebView) {
-                // Use Redirect for Android App. The result will be handled by getRedirectResult.
-                signInWithRedirect(auth, googleProvider);
-            } else {
-                // Use Popup for standard browsers (Desktop/Chrome)
-                signInWithPopup(auth, googleProvider).catch(e => {
-                    console.error("Auth Error", e);
-                    let msg = "Login Failed: " + e.message;
-                    if (e.code === 'auth/unauthorized-domain') {
-                        msg = `Configuration Error: The domain "${window.location.hostname}" is not authorized.\n\nPlease add it to your Firebase Console under Authentication > Settings > Authorized Domains.`;
-                    } else if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
-                        // Don't show an alert if the user just closes the popup.
-                        console.log("Login cancelled by user.");
-                        loginBtn.innerHTML = originalText;
-                        loginBtn.disabled = false;
-                        return; // exit without alert
-                    } else if (e.code === 'auth/popup-blocked') {
-                        msg = "Login popup was blocked. Please allow popups for this site.";
-                    }
-                    alert(msg);
-                    loginBtn.innerHTML = originalText;
-                    loginBtn.disabled = false;
-                });
-            }
-        });
-        logoutBtn.addEventListener('click', () => signOut(auth));
-    } else if (loginBtn) {
-        loginBtn.addEventListener('click', () => alert("Authentication system failed to initialize. Check console for details."));
-    }
+    try {
+        // Keep the Firebase session after redirecting back from Google.
+        await setPersistence(
+            auth,
+            browserLocalPersistence
+        );
 
+        const userAgent = navigator.userAgent || '';
+
+        // Detect iPhone, iPad, and iPod.
+        // The second condition detects newer iPads reporting as Mac devices.
+        const isIOS =
+            /iPad|iPhone|iPod/i.test(userAgent) ||
+            (
+                navigator.platform === 'MacIntel' &&
+                navigator.maxTouchPoints > 1
+            );
+
+        // Detect a PWA launched from the home screen.
+        const isStandalone =
+            window.navigator.standalone === true ||
+            window
+                .matchMedia('(display-mode: standalone)')
+                .matches;
+
+        // Detect Android WebView without treating every Android browser
+        // as an embedded WebView.
+        const isAndroidWebView =
+            /Android/i.test(userAgent) &&
+            (
+                /\bwv\b/i.test(userAgent) ||
+                /Version\/[\d.]+/i.test(userAgent)
+            );
+
+        // Redirect is more reliable on iOS, Android WebView,
+        // and installed home-screen web apps.
+        const shouldUseRedirect =
+            isIOS ||
+            isStandalone ||
+            isAndroidWebView;
+
+        if (shouldUseRedirect) {
+            sessionStorage.setItem(
+                'firebaseLoginPending',
+                'true'
+            );
+
+            await signInWithRedirect(
+                auth,
+                googleProvider
+            );
+
+            // The page will navigate away, so no button reset is needed.
+            return;
+        }
+
+        // Use a popup on normal desktop and laptop browsers.
+        await signInWithPopup(
+            auth,
+            googleProvider
+        );
+
+        // The onAuthStateChanged listener will update the profile UI.
+        loginBtn.innerHTML = originalText;
+        loginBtn.disabled = false;
+    } catch (error) {
+        console.error('Google authentication error:', error);
+
+        // Do not show an error when the user intentionally closes
+        // or cancels the popup.
+        if (
+            error.code === 'auth/popup-closed-by-user' ||
+            error.code === 'auth/cancelled-popup-request'
+        ) {
+            console.log('Login cancelled by user.');
+
+            loginBtn.innerHTML = originalText;
+            loginBtn.disabled = false;
+            return;
+        }
+
+        let message =
+            'Login failed: ' +
+            (
+                error.message ||
+                'Google authentication could not be completed.'
+            );
+
+        if (error.code === 'auth/unauthorized-domain') {
+            message =
+                `Configuration error: The domain ` +
+                `"${window.location.hostname}" is not authorized.\n\n` +
+                `Add it in Firebase Console under:\n` +
+                `Authentication > Settings > Authorized domains.`;
+        } 
     // --- TABS ---
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
