@@ -58,8 +58,6 @@
                     <div class="route-actions">
                         <button id="add-destination-btn" class="secondary-btn"><i data-feather="plus"></i> Add
                             Destination</button>
-                        <button id="import-gpx-btn" class="secondary-btn"><i data-feather="upload"></i> Import GPX</button>
-                        <input id="gpx-file-input" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden>
                         <button id="plan-btn" class="primary-btn">Calculate Route</button>
                     </div>
                     <button id="clear-route-btn" class="secondary-btn" style="display: none;"><i data-feather="x"></i>
@@ -100,6 +98,8 @@
         src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf/turf.min.js"></script>
     <script src="https://cdn.aerisapi.com/sdk/js/mapsgl/latest/aerisweather.mapsgl.js"></script>
+
+    <script type="module" src="src/app.js"></script>
     <script>
         feather.replace()
     </script>
