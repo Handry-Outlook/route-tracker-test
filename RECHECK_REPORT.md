@@ -8,3 +8,7 @@
 - Radar remains usable when wind particles are unsupported by a device GPU.
 - Fixed the undeclared `usesNavigationStyle` runtime error.
 - Revalidated JavaScript syntax, module imports/exports, duplicate HTML IDs, required DOM IDs and ZIP integrity.
+
+- Removed the browser-incompatible Capacitor Text-to-Speech bundle that raised `capacitorExports is not defined`. Native Capacitor TTS is still detected at runtime; browsers use Web Speech.
+- Made Plan, Routes and Weather activation deterministic without depending on application timing.
+- Added an always-visible Account item to both desktop and mobile navigation for login/logout.
