@@ -52,6 +52,7 @@ let isMuted = false;
 let isTerrainEnabled = false;
 let mockIntervalId = null; // To track simulated movement on HTTP
 let currentMapStyle = 'mapbox://styles/mapbox/navigation-night-v1'; // Default
+let usesNavigationStyle = true;
 let lastWeatherFetchDist = 0; // Track distance for weather throttling
 const WEATHER_FETCH_INTERVAL_KM = 25; // Fetch weather every 25km during animation
 
@@ -552,9 +553,11 @@ document.addEventListener('DOMContentLoaded', () => {
             lastLogicalWeatherUrl = null; // Force update so it fetches even if URL hasn't changed
             // Load current radar immediately (Progress 0, Duration 0)
             updateWeatherForProgress(0, 0);
-            toggleWeather(map, true); // Enable Wind Layer
+            toggleWeather(map, true); // Enable radar and animated wind
+            weatherBtn.title = 'Weather overlay on: radar and animated wind';
         } else {
-            toggleWeather(map, false); // Hide all layers
+            toggleWeather(map, false); // Hide all weather layers
+            weatherBtn.title = 'Toggle weather radar and animated wind';
         }
     };
     controlsStack.appendChild(weatherBtn);
@@ -3236,7 +3239,7 @@ function toggleTheme() {
     // Optional: Switch Map Style (Requires redrawing route if active)
     const style = isDark ? 'mapbox://styles/mapbox/navigation-night-v1' : 'mapbox://styles/mapbox/navigation-day-v1';
     currentMapStyle = style; // Sync global state
-    let usesNavigationStyle = true; // Tracks whether current style is a navigation style (day/night)
+    usesNavigationStyle = true; // Tracks whether current style is a navigation style (day/night)
     map.setStyle(style);
 
     map.once('style.load', () => {

@@ -3,6 +3,9 @@ import { MAPBOX_TOKEN, X_WEATHER_ID, X_WEATHER_SECRET } from './config.js';
 // --- MODULE STATE ---
 let aerisController = null;
 let isWeatherEnabled = false;
+let aerisReady = false;
+let windLayerAdded = false;
+let aerisInitPromise = null;
 
 /**
  * Initializes or re-initializes the AerisWeather controller.
@@ -10,19 +13,33 @@ let isWeatherEnabled = false;
  * @param {mapboxgl.Map} map The map instance.
  */
 const initializeAerisController = (map) => {
-    aerisController = null; // Discard old controller
-
-    if (window.aerisweather) {
-        console.log("Initializing AerisWeather SDK...");
-        const { Account, MapboxMapController } = window.aerisweather.mapsgl;
-        const account = new Account(X_WEATHER_ID, X_WEATHER_SECRET);
-        const controller = new MapboxMapController(map, { account });
-
-        controller.on('error', (e) => console.error("❌ AerisWeather Controller Error:", e));
-        controller.on('load', () => onAerisControllerReady(map, controller));
-    } else {
-        console.error("AerisWeather SDK not loaded.");
-    }
+    if (aerisInitPromise) return aerisInitPromise;
+    aerisInitPromise = new Promise((resolve) => {
+        aerisReady = false;
+        windLayerAdded = false;
+        if (!window.aerisweather?.mapsgl) {
+            console.warn("AerisWeather MapsGL is unavailable; radar will remain available.");
+            resolve(null);
+            return;
+        }
+        try {
+            const { Account, MapboxMapController } = window.aerisweather.mapsgl;
+            const account = new Account(X_WEATHER_ID, X_WEATHER_SECRET);
+            const controller = new MapboxMapController(map, { account });
+            controller.on('error', (error) => console.warn("AerisWeather MapsGL error:", error));
+            controller.on('load', () => {
+                aerisController = controller;
+                aerisReady = true;
+                onAerisControllerReady(map, controller);
+                resolve(controller);
+            });
+        } catch (error) {
+            console.warn("AerisWeather initialization failed; radar remains usable:", error);
+            aerisController = null;
+            resolve(null);
+        }
+    });
+    return aerisInitPromise;
 };
 
 /**
@@ -64,19 +81,28 @@ export const initMap = (containerId) => {
  * @param {any} controller The new aerisweather controller instance.
  */
 const onAerisControllerReady = (map, controller) => {
-    console.log("✅ AerisWeather Controller is ready.");
-    aerisController = controller;
+    if (isWeatherEnabled) setWindAnimation(true);
+};
 
-    
-
-    if (isWeatherEnabled) {
-        console.log("Adding wind layers now that controller is ready...");
-        try {
-            aerisController.addWeatherLayer('wind-speeds', { paint: { 'raster-opacity': 0.5 } });
-            aerisController.addWeatherLayer('wind-particles');
-        } catch (e) {
-            console.warn("Weather layers already exist or failed to add:", e);
+const setWindAnimation = (visible) => {
+    if (!aerisReady || !aerisController) return false;
+    try {
+        if (visible && !windLayerAdded) {
+            aerisController.addWeatherLayer('wind-particles', {
+                paint: {
+                    particle: { density: 0.35, size: 1, speed: 1.2, trailsFade: 0.92 }
+                }
+            });
+            windLayerAdded = true;
+        } else if (!visible && windLayerAdded) {
+            aerisController.removeWeatherLayer('wind-particles');
+            windLayerAdded = false;
         }
+        return true;
+    } catch (error) {
+        console.warn('Wind animation unavailable on this GPU/browser:', error);
+        windLayerAdded = false;
+        return false;
     }
 };
 
@@ -542,18 +568,12 @@ export const toggleWeather = (map, forceVisible = null) => {
     // 1. Met Office Radar
     setVisibility('met-office-radar', isWeatherEnabled);
 
-    // 2. X Weather Wind Particles (MapsGL SDK)
-    if (aerisController) {
-        if (isWeatherEnabled) {
-
-            aerisController.addWeatherLayer('wind-particles');
-        } else {
-
-            aerisController.removeWeatherLayer('wind-particles');
-        }
-    } else if (isWeatherEnabled) {
-        if (!window.aerisweather) console.error("❌ AerisWeather SDK not found on window object.");
-        else console.log("⏳ Weather enabled, waiting for AerisWeather controller to load...");
+    // 2. Animated wind. Radar remains independent if WebGL particles are unsupported.
+    if (isWeatherEnabled) {
+        if (aerisReady) setWindAnimation(true);
+        else initializeAerisController(map).then(() => setWindAnimation(true));
+    } else {
+        setWindAnimation(false);
     }
 };
 
@@ -561,7 +581,9 @@ export const toggleWeather = (map, forceVisible = null) => {
  * Restores weather layers after a map style change
  */
 export const restoreWeather = (map) => {
-    // The AerisWeather controller is invalidated by a style change and must be re-initialized.
+    // Mapbox style changes invalidate custom WebGL layers and their controller.
+    try { aerisController?.dispose?.(); } catch (_) {}
+    aerisController = null; aerisReady = false; windLayerAdded = false; aerisInitPromise = null;
     initializeAerisController(map);
 
     // Note: Met Office radar (raster source) is also wiped by style change.
