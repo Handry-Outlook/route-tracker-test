@@ -2,18 +2,19 @@ const $=(s,r=document)=>r.querySelector(s);
 const tabs={plan:'plan',routes:'saved',weather:'weather'};
 function activate(name){
  document.querySelectorAll('.mobile-page').forEach(x=>x.classList.remove('active'));
- document.querySelectorAll('.mobile-nav-btn').forEach(x=>x.classList.toggle('active',x.dataset.page===name));
- if(tabs[name]) document.querySelector(`.tab-btn[data-tab="${tabs[name]}"]`)?.click();
- if(name==='map') document.body.classList.add('mobile-map-focus'); else document.body.classList.remove('mobile-map-focus');
- document.getElementById(`mobile-${name}`)?.classList.add('active');
- setTimeout(()=>window.handryApp?.getMap()?.resize(),80);
+ document.querySelectorAll('.app-nav-btn').forEach(x=>x.classList.toggle('active',x.dataset.page===name));
+ document.body.classList.toggle('map-focus',name==='map');
+ document.body.classList.toggle('utility-page',name==='ride'||name==='friends');
+ if(tabs[name]) window.handryApp?.openTab(tabs[name]);
+ if(name==='ride'||name==='friends') document.getElementById(`mobile-${name}`)?.classList.add('active');
+ setTimeout(()=>window.handryApp?.getMap()?.resize(),100);
 }
 function ridePage(){return `<section id="mobile-ride" class="mobile-page"><div class="mobile-card"><h2>Record ride</h2><div class="ride-grid"><div><b id="ride-speed">0.0</b><span>km/h</span></div><div><b id="ride-distance">0.00</b><span>km</span></div><div><b id="ride-elevation">0</b><span>m gain</span></div><div><b id="ride-elapsed">00:00:00</b><span>elapsed</span></div><div><b id="ride-total">00:00:00</b><span>total</span></div></div><div class="record-actions"><button id="record-start" class="primary-btn">Start ride</button><button id="record-pause" class="secondary-btn">Pause</button><button id="record-save" class="secondary-btn">Finish & save</button></div><h3>Ride history</h3><div id="ride-history"></div></div></section>`}
 function friendsPage(){return `<section id="mobile-friends" class="mobile-page"><div class="mobile-card"><h2>Friends & sharing</h2><p>Keep frequent riding contacts on this device, then share the current route or live tracking link.</p><div class="friend-add"><input id="friend-name" placeholder="Friend name"><input id="friend-contact" placeholder="Email or phone"><button id="friend-add" class="primary-btn">Add</button></div><div id="friend-list"></div><button id="native-share" class="secondary-btn">Share current route</button></div></section>`}
 function init(){
  const pages=document.createElement('div'); pages.id='mobile-pages'; pages.innerHTML=ridePage()+friendsPage(); document.body.appendChild(pages);
- const nav=document.createElement('nav');nav.className='mobile-bottom-nav';nav.innerHTML=[['map','map','Map'],['plan','edit-3','Plan'],['routes','bookmark','Routes'],['ride','activity','Record'],['weather','wind','Wind'],['friends','users','Friends']].map(([p,i,l])=>`<button class="mobile-nav-btn" data-page="${p}"><i data-feather="${i}"></i><span>${l}</span></button>`).join('');document.body.appendChild(nav);
- nav.onclick=e=>{const b=e.target.closest('button');if(b)activate(b.dataset.page)};
+ const nav=document.createElement('nav');nav.className='app-navigation';nav.setAttribute('aria-label','Main navigation');nav.innerHTML=`<div class="app-nav-brand"><img src="Handry_outlook_icon_pride (1).png" alt=""><b>Handry</b></div>`+[['map','map','Map'],['plan','edit-3','Plan'],['routes','bookmark','Routes'],['ride','activity','Record'],['weather','cloud-rain','Weather'],['friends','users','Friends']].map(([p,i,l])=>`<button class="app-nav-btn" data-page="${p}" aria-label="${l}"><i data-feather="${i}"></i><span>${l}</span></button>`).join('');document.body.appendChild(nav);
+ nav.onclick=e=>{const b=e.target.closest('.app-nav-btn');if(b)activate(b.dataset.page)};
  const helper=document.createElement('button');helper.id='edit-route-fab';helper.className='map-overlay-btn';helper.innerHTML='<i data-feather="map-pin"></i>';helper.title='Tap map to add a shaping waypoint';document.body.appendChild(helper);
  helper.onclick=()=>{const map=window.handryApp?.getMap();if(!map)return;helper.classList.add('active');const once=e=>{window.handryApp.insertWaypoint([e.lngLat.lng,e.lngLat.lat]);helper.classList.remove('active');};map.once('click',once)};
  setupRecorder(); setupFriends(); feather?.replace(); activate('map');

@@ -544,7 +544,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const weatherBtn = document.createElement('button');
     weatherBtn.className = 'map-overlay-btn';
     weatherBtn.innerHTML = `<i data-feather="cloud-rain"></i>`;
-    weatherBtn.title = "Toggle Rain Radar";
+    weatherBtn.title = "Toggle weather radar and animated wind";
+    weatherBtn.setAttribute('aria-label', 'Toggle weather radar and animated wind');
     weatherBtn.onclick = () => {
         const isActive = weatherBtn.classList.toggle('active');
         if (isActive) {
@@ -712,34 +713,27 @@ function initRouteOptionsUI() {
     }
 }
 
-function switchTab(tabId) {
+function switchTab(tabId, forceOpen = false) {
     const sidebar = document.getElementById('sidebar');
     const isMobile = window.innerWidth <= 768;
     const clickedTabBtn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
-    const isAlreadyActive = clickedTabBtn.classList.contains('active');
+    const target = document.getElementById(`${tabId}-tab`);
+    if (!clickedTabBtn || !target) return;
 
-    // Deactivate all first
+    const isAlreadyActive = clickedTabBtn.classList.contains('active');
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
-    if (isMobile) {
-        // If we click the currently active tab and the panel is expanded, we should collapse it.
-        if (isAlreadyActive && sidebar.classList.contains('expanded')) {
-            sidebar.classList.remove('expanded');
-            // By not re-adding the 'active' class, the tab is deselected and panel is collapsed.
-        } else {
-            // Otherwise, we expand the panel and show the new tab content.
-            sidebar.classList.add('expanded');
-            document.getElementById(`${tabId}-tab`).classList.add('active');
-            clickedTabBtn.classList.add('active');
-        }
-    } else {
-        // Desktop behavior remains simple: just switch the tab.
-        document.getElementById(`${tabId}-tab`).classList.add('active');
-        clickedTabBtn.classList.add('active');
+    if (isMobile && !forceOpen && isAlreadyActive && sidebar.classList.contains('expanded')) {
+        sidebar.classList.remove('expanded');
+        return;
     }
-}
 
+    sidebar.classList.add('expanded');
+    target.classList.add('active');
+    clickedTabBtn.classList.add('active');
+    requestAnimationFrame(() => map.resize());
+}
 // Add or update the createGeocoder function (likely already exists in app.js – replace or merge with this version)
 function createGeocoder(containerId, placeholder, index) {
     const geocoder = new MapboxGeocoder({
@@ -4410,4 +4404,4 @@ function activateImportedTrainingRoute(joinPoint=null){
     speak('Training route started.');
 }
 
-window.handryApp={getMap:()=>map,getRoute:()=>currentRouteData,getWaypoints:()=>waypoints.slice(),setWaypoint:(i,c)=>{waypoints[i]=c;addRouteMarkers(map,waypoints.filter(Boolean),handleMarkerDrag);calculateRoute();},insertWaypoint:(c)=>insertIntermediateWaypoint(c),startNavigation:()=>toggleNavigation()};
+window.handryApp={getMap:()=>map,getRoute:()=>currentRouteData,getWaypoints:()=>waypoints.slice(),openTab:(id)=>switchTab(id,true),setWaypoint:(i,c)=>{waypoints[i]=c;addRouteMarkers(map,waypoints.filter(Boolean),handleMarkerDrag);calculateRoute();},insertWaypoint:(c)=>insertIntermediateWaypoint(c),startNavigation:()=>toggleNavigation()};
