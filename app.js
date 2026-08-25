@@ -2543,10 +2543,13 @@ function startLiveTracking() {
     const checkProximity = async (pos) => {
         const userPos = [pos.coords.longitude, pos.coords.latitude];
         if (importedTrainingRoute) {
-            const startPoint = importedTrainingRoute.geometry.coordinates[0];
-            const distKm = turf.distance(userPos, startPoint, { units: 'kilometers' });
-            if (distKm > 0.1) await createApproachToImportedRoute(userPos, startPoint);
-            else activateImportedTrainingRoute();
+            const routeLine = turf.lineString(importedTrainingRoute.geometry.coordinates);
+            const nearest = turf.nearestPointOnLine(routeLine, turf.point(userPos), { units: 'kilometers' });
+            const joinPoint = nearest.geometry.coordinates;
+            const distKm = turf.distance(userPos, joinPoint, { units: 'kilometers' });
+            window.handryGpxJoinIndex = nearest.properties.index || 0;
+            if (distKm > 0.08) await createApproachToImportedRoute(userPos, joinPoint);
+            else activateImportedTrainingRoute(joinPoint);
             return;
         }
         if (currentRouteData) {
@@ -2674,6 +2677,7 @@ function manualReroute() {
 }
 
 function handlePositionUpdate(userPos, heading, speed) {
+    window.dispatchEvent(new CustomEvent('handry-position',{detail:{coords:userPos,heading,speed:speed||0,elevation:userMarker?0:null,time:Date.now()}}));
     lastKnownHeading = heading;
 
     // Update User Marker
@@ -4391,9 +4395,19 @@ async function createApproachToImportedRoute(userPos,start){
     speak('Navigating to the start of your training route.');
 }
 
-function activateImportedTrainingRoute(){
+function activateImportedTrainingRoute(joinPoint=null){
     if(!importedTrainingRoute)return;
+    if (joinPoint) {
+        const line=turf.lineString(importedTrainingRoute.geometry.coordinates);
+        const snap=turf.nearestPointOnLine(line,turf.point(joinPoint));
+        const idx=Math.max(0,snap.properties.index||0);
+        const c=importedTrainingRoute.geometry.coordinates;
+        const remaining=[snap.geometry.coordinates,...c.slice(idx+1)];
+        importedTrainingRoute={...importedTrainingRoute,geometry:{type:'LineString',coordinates:remaining},legs:[{...importedTrainingRoute.legs[0],steps:generateGpxNavigationSteps(remaining,importedTrainingRoute.importedGpxName||'GPX route',parseFloat(document.getElementById('user-pace')?.value)||20)}]};
+    }
     navigationPhase='training'; approachRouteData=null; currentRouteData=structuredClone(importedTrainingRoute); lastSpokenStepIndex=-1;
     clearImportedTrainingRoute(map); drawStaticRoute(map,currentRouteData.geometry,false);
     speak('Training route started.');
 }
+
+window.handryApp={getMap:()=>map,getRoute:()=>currentRouteData,getWaypoints:()=>waypoints.slice(),setWaypoint:(i,c)=>{waypoints[i]=c;addRouteMarkers(map,waypoints.filter(Boolean),handleMarkerDrag);calculateRoute();},insertWaypoint:(c)=>insertIntermediateWaypoint(c),startNavigation:()=>toggleNavigation()};
