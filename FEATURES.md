@@ -1,9 +1,18 @@
 # Handry Outlook Feature Register
 
-**Build:** v4.12  
+**Build:** v4.14  
 **Updated:** 26 August 2026
 
-## New in v4.12
+## New in v4.14
+- Home Screen email/password login remains available and persistent.
+- Current location now prefers the nearest street address, such as “28 Shepherds Walk”, rather than a nearby station or landmark.
+- Turn-node markers are removed when navigation starts.
+- Navigation guidance appears only on Explore and hides on all other tabs.
+- Navigation/recording dashboard leaves a right-side channel for weather and recenter controls.
+- Route cards use the same colour as their map route.
+- Point-to-point alternatives remain visible and selectable directly on Explore.
+- Current-location controls now prefer a nearby recognisable POI, station, landmark, park, university, hospital, or shopping centre instead of displaying only “Current location”.
+- Nearby candidates are distance-checked and scored, with reverse-geocoded address/locality fallback.
 - Coloured recommended routes can now be selected directly on the Explore map.
 - Route lines widen on hover and show a pointer cursor.
 - Tapping a route isolates it, opens Explore, and reveals the Navigation and record now control.
