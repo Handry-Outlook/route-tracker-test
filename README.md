@@ -1,2 +1,2 @@
-# Handry Outlook v4.5
-Serve over HTTPS or localhost. Clear the old service worker and cached app before deployment. See `FEATURES.md` for the continuously updated feature and change register.
+# Handry Outlook v4.8
+Serve through HTTPS or localhost. Clear old site storage and unregister previous service workers before deployment. Review `FEATURES.md` for the current feature register.
