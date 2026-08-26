@@ -1,11 +1,18 @@
 # Handry Outlook Feature Register
 
-**Build:** v4.1  
+**Build:** v4.3  
 **Updated:** 26 August 2026
 
-## New in v4.1
+## New in v4.3
 - 3D preview continues while the map is manually dragged, zoomed, or rotated. The next preview frame resumes the route camera sequence.
 - 3D preview still stops when another page, route, or non-preview panel action is selected.
+- Considered landmarks, scenic locations, and food stops are marked with gold stars on the map.
+- Optional CyclOSM bicycle-route overlay highlights known cycling infrastructure and touring routes.
+- Google login and logout restored in Profile.
+- Full current and hourly weather dashboard restored, including weather symbols, radar, and wind animation.
+- Point-to-point planning and Adventure planning are separate pages.
+- Every location search box has a dedicated current-location button.
+- Adventure mode can start and finish at either a searched location or the rider current location.
 - Five routes are generated initially and drawn together using distinct colours.
 - “Show 3 more routes” expands the comparison set.
 - Clicking a route isolates it; “Show all” restores every colour-coded alternative.
