@@ -1,9 +1,17 @@
 # Handry Outlook Feature Register
 
-**Build:** v4.15  
+**Build:** v4.18  
 **Updated:** 26 August 2026
 
-## New in v4.15
+## New in v4.18
+- Activities support up to six photos, with add, replace/remove, rename, route-on-map, sharing and portrait social PNG export.
+- Activity library sorting covers date, distance, elevation gain, average speed and effort in both directions.
+- Rider weight, height and bike weight support estimated cycling power, W/kg and an effort score.
+- Activity details include speed, elevation, wind and estimated-power profiles.
+- Google popup sign-in can now be attempted directly from the installed Home Screen app, while persistent email/password login remains available as a fallback.
+- Start and Finish geocoder dropdowns now use focus-controlled stacking and reserved vertical space, preventing the Finish field from covering Start suggestions.
+- The “Navigation and record now” button is hidden immediately after navigation or recording starts.
+- The same area switches to the live ride dashboard and Stop recording / End navigation controls.
 - Navigation and ride recording request a Screen Wake Lock so the display does not dim or lock during hands-free cycling.
 - Wake lock is reacquired automatically when the Home Screen app returns to the foreground.
 - Wake lock is released when recording ends to avoid unnecessary battery drain.

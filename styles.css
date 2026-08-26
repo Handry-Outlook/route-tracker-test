@@ -11,3 +11,11 @@
 @media(max-width:760px){#quick-nav{left:12px;right:70px;width:auto;bottom:78px}.tools{right:10px;bottom:76px}.mapboxgl-ctrl-top-right{top:10px;right:8px}.navigating .mapboxgl-ctrl-top-right{top:118px}body:not(.map-view) #nav-guidance{display:none!important}}
 
 .wake-lock-active #nav-guidance::after{content:"Screen awake";position:absolute;right:10px;top:8px;font-size:9px;color:#b7f5d5;background:#0d6845;padding:3px 6px;border-radius:99px}.wake-lock-active #quick-nav::after{content:"◉ screen awake";display:block;text-align:center;font-size:9px;color:#0d6845;margin-top:4px}
+
+#quick-nav.recording-active #quick-start{display:none!important}#quick-nav.recording-active #ride-live{display:block}
+
+/* Geocoder dropdown stacking: the focused field owns the suggestion layer without covering the other input. */
+.geocoder-field{position:relative;z-index:1;margin-bottom:14px}.geocoder-field.geocoder-active{z-index:80;margin-bottom:230px}.geocoder-field .mapboxgl-ctrl-geocoder--suggestion{line-height:1.25}.geocoder-field .suggestions{z-index:1000;max-height:220px;overflow-y:auto;border-radius:10px;box-shadow:0 10px 24px #10233d30}.geocoder-field:not(.geocoder-active) .suggestions{display:none!important}.location-row{align-items:start}
+@media(max-width:760px){.geocoder-field.geocoder-active{margin-bottom:210px}.geocoder-field .suggestions{max-height:200px}}
+.activity-toolbar{display:flex;justify-content:space-between;align-items:center;gap:8px}.activity-toolbar select{max-width:210px;padding:8px;border:1px solid var(--line);border-radius:9px}.photo-grid,.activity-gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0}.photo-grid div,.activity-gallery div{position:relative}.photo-grid img,.activity-gallery img{width:100%;aspect-ratio:1.2;object-fit:cover;border-radius:10px}.photo-grid button,.activity-gallery button{position:absolute;right:4px;top:4px;width:26px;height:26px;border:0;border-radius:50%;background:#000b;color:#fff}.file-label{display:inline-flex;align-items:center}.metric-note{font-size:10px;color:var(--muted);line-height:1.4}.activity-gallery{grid-template-columns:repeat(2,1fr)}
+@media(max-width:480px){.activity-toolbar{align-items:flex-start;flex-direction:column}.activity-toolbar select{max-width:none;width:100%}.photo-grid{grid-template-columns:repeat(2,1fr)}}
