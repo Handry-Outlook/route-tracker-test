@@ -1,11 +1,19 @@
 # Handry Outlook Feature Register
 
-**Build:** v4.3  
+**Build:** v4.5  
 **Updated:** 26 August 2026
 
-## New in v4.3
+## New in v4.5
 - 3D preview continues while the map is manually dragged, zoomed, or rotated. The next preview frame resumes the route camera sequence.
 - 3D preview still stops when another page, route, or non-preview panel action is selected.
+- Adventure page no longer contains a Point-to-point mode button.
+- Current-location buttons reverse-geocode coordinates and populate the visible location input with the location name.
+- Mobile navigation uses a fixed seven-column layout and hides labels on very narrow screens to prevent overflow.
+- Wind particles are brighter, longer, denser, and remain pointer-transparent.
+- Point-to-point mode no longer shows distance or elevation filters.
+- Point-to-point routes calculate automatically as soon as both endpoints are set.
+- Point-to-point expansion is labelled “Show more options”.
+- Adventure-mode navigation was removed from the point-to-point panel.
 - Considered landmarks, scenic locations, and food stops are marked with gold stars on the map.
 - Optional CyclOSM bicycle-route overlay highlights known cycling infrastructure and touring routes.
 - Google login and logout restored in Profile.
