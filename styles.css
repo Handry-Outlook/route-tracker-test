@@ -9,3 +9,5 @@
 
 .route{position:relative}.route::before{content:"";position:absolute;left:-1px;top:-1px;bottom:-1px;width:7px;border-radius:16px 0 0 16px;background:var(--route-color,#176bdb)}
 @media(max-width:760px){#quick-nav{left:12px;right:70px;width:auto;bottom:78px}.tools{right:10px;bottom:76px}.mapboxgl-ctrl-top-right{top:10px;right:8px}.navigating .mapboxgl-ctrl-top-right{top:118px}body:not(.map-view) #nav-guidance{display:none!important}}
+
+.wake-lock-active #nav-guidance::after{content:"Screen awake";position:absolute;right:10px;top:8px;font-size:9px;color:#b7f5d5;background:#0d6845;padding:3px 6px;border-radius:99px}.wake-lock-active #quick-nav::after{content:"◉ screen awake";display:block;text-align:center;font-size:9px;color:#0d6845;margin-top:4px}

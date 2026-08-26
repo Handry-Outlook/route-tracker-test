@@ -1,9 +1,12 @@
 # Handry Outlook Feature Register
 
-**Build:** v4.14  
+**Build:** v4.15  
 **Updated:** 26 August 2026
 
-## New in v4.14
+## New in v4.15
+- Navigation and ride recording request a Screen Wake Lock so the display does not dim or lock during hands-free cycling.
+- Wake lock is reacquired automatically when the Home Screen app returns to the foreground.
+- Wake lock is released when recording ends to avoid unnecessary battery drain.
 - Home Screen email/password login remains available and persistent.
 - Current location now prefers the nearest street address, such as “28 Shepherds Walk”, rather than a nearby station or landmark.
 - Turn-node markers are removed when navigation starts.
