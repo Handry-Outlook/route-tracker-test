@@ -1,4 +1,4 @@
-# Handry Outlook v4.18
+# Handry Outlook v4.19
 Serve through HTTPS or localhost. Clear old site storage and unregister previous service workers before deployment. Review `FEATURES.md` for the current feature register.
 
 

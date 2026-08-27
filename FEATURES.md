@@ -1,9 +1,14 @@
 # Handry Outlook Feature Register
 
-**Build:** v4.18  
+**Build:** v4.19  
 **Updated:** 26 August 2026
 
 ## New in v4.18
+- Point-to-point planning supports multiple searchable waypoints that can be added and removed.
+- Navigation uses a visible blue live-location marker with a heading arrow.
+- Restored animated 3D route preview and external Google Maps Street View preview.
+- Removed lane-selection hints from navigation.
+- Navigation guidance is fully cleared on Stop recording, End navigation, or arrival.
 - Activities support up to six photos, with add, replace/remove, rename, route-on-map, sharing and portrait social PNG export.
 - Activity library sorting covers date, distance, elevation gain, average speed and effort in both directions.
 - Rider weight, height and bike weight support estimated cycling power, W/kg and an effort score.
