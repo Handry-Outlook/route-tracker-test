@@ -1,6 +1,6 @@
 # Handry Outlook Feature Inventory
 
-**Build:** v4.21  
+**Build:** v4.25  
 **Inventory updated:** 27 August 2026  
 **Purpose:** This is the canonical checklist for every release. Before packaging a new build, each feature below must be checked against the application source and marked in `RELEASE_CHECKLIST.md`.
 
@@ -43,7 +43,7 @@
 
 - Loop routes beginning and ending at the chosen location.
 - Current-location start and finish.
-- Distance target control.
+- Dual-handle distance-range control with independent minimum and maximum values.
 - Balanced, scenic, landmark, food, and known-cycle-route preferences.
 - Multiple Adventure alternatives.
 - Considered points of interest shown as gold stars.
@@ -56,9 +56,11 @@
 - Draggable turn nodes before navigation.
 - Turn nodes hidden once navigation begins.
 - Editing changes only the selected route.
-- Animated 3D Mapbox route preview.
+- Animated 3D Mapbox route preview that stops when another button or route is selected.
+- Explore Undo Route Edit control with a ten-edit history.
+- Long-press or context-click a route or turn node to open a Google Maps preview popup.
 - External Google Maps Street View preview.
-- Elevation and wind previews before route selection.
+- Elevation and wind previews before route selection, with metres and kilometres-per-hour units.
 
 ## 6. Saved routes
 
@@ -90,6 +92,8 @@
 
 - Navigation and Record Now action for one selected route.
 - Live turn instruction, next-turn distance, remaining distance, and estimated remaining time.
+- Navigation route is split by progress: travelled route is grey, the next 1.25 km is bright cyan, the following 4.75 km is semi-transparent blue, and farther future route is faint blue.
+- Overlapping roads are visually prioritised so the imminent pass remains brightest above later passes.
 - Turn-direction symbols.
 - Lane-selection hints intentionally disabled.
 - Spoken guidance at advance, near-turn, and immediate-turn distances.
@@ -107,7 +111,9 @@
 - Automatic pause after more than ten seconds without meaningful movement.
 - Automatic resume after movement.
 - GPS samples with position, time, speed, elevation, wind, grade, and estimated power.
-- Stop Recording and End Navigation controls.
+- Pause/Resume Recording and Pause/Resume Navigation controls.
+- End Recording is revealed only after recording is paused.
+- End Navigation is revealed only after navigation is paused.
 - Completed-ride naming workflow.
 - Default activity name based on Start and Finish.
 

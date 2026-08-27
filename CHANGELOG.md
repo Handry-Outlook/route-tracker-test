@@ -2,6 +2,92 @@
 
 All future releases must add a dated entry at the top of this file. Entries must include Added, Changed, Fixed, Removed, Validation, and Known Limitations sections, even when a section contains “None”.
 
+## v4.25, 27 August 2026
+
+### Added
+- Dual-handle Adventure distance range with independent minimum and maximum values.
+
+### Changed
+- Adventure recommendations are distributed across the selected distance range.
+
+### Fixed
+- Removed all visible “Screen awake” labels while retaining the Wake Lock.
+
+### Removed
+- Navigation and recording wake-lock status text.
+
+### Validation
+- Range interaction, generated target distribution, wake-lock text removal, syntax, regression, and ZIP checks.
+
+### Known limitations
+- Actual route distance can vary from its target because the cycling router follows available roads and paths.
+
+## v4.24, 27 August 2026
+
+### Added
+- Progress-aware navigation route colours for overlapping roads.
+- Navigation colour legend for next, later, far-future, and travelled route sections.
+
+### Changed
+- The next 1.25 km is fully opaque cyan; later route sections progressively fade.
+- Travelled route sections become grey.
+
+### Fixed
+- Reduced ambiguity where a route uses the same road more than once.
+
+### Removed
+- None.
+
+### Validation
+- Route slicing, layer order, opacity stages, rerouting, cleanup, syntax, regression, and ZIP checks.
+
+### Known limitations
+- Very short overlapping sections may visually merge at low zoom levels.
+
+## v4.23, 27 August 2026
+
+### Added
+- Two-stage Pause/Resume and End controls for recording and navigation.
+
+### Changed
+- End actions appear only after their corresponding process is paused.
+- Pausing navigation leaves recording active; pausing recording leaves navigation available.
+
+### Fixed
+- Destructive End actions are no longer placed beside the default active controls.
+
+### Removed
+- Immediate Stop Recording and immediate End Navigation buttons from the default dashboard.
+
+### Validation
+- Pause, resume, end visibility, GPS accumulation, guidance suspension, syntax, regression, and ZIP checks.
+
+### Known limitations
+- Pausing navigation suppresses guidance and map following but keeps the GPS recorder running unless recording is separately paused.
+
+## v4.22, 27 August 2026
+
+### Added
+- Undo Route Edit on Explore with a ten-edit history.
+- Long-press/context-click Google Maps preview on routes and turn nodes.
+- Units on elevation and wind graphs.
+
+### Changed
+- Journey route actions are grouped in a collapsible More Route Actions menu.
+- Live sharing is labelled Share Live Progression with an explanatory note.
+
+### Fixed
+- 3D preview now stops whenever another button, summary action, page, or route is selected.
+
+### Removed
+- None.
+
+### Validation
+- Preview cancellation, undo, long-press popup, menu, graph units, route sharing, and live progression checks.
+
+### Known limitations
+- Google Maps preview depends on Street View imagery at the selected coordinate.
+
 ## v4.21, 27 August 2026
 
 ### Added
