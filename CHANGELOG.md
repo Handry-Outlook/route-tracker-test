@@ -2,6 +2,30 @@
 
 All future releases must add a dated entry at the top of this file. Entries must include Added, Changed, Fixed, Removed, Validation, and Known Limitations sections, even when a section contains “None”.
 
+## v4.26, 27 August 2026
+
+### Added
+- Pause and Resume Live Sharing.
+- Follower status card with live, paused, ended, last-update time, and Locate Rider.
+- Pulsing shared-rider marker with paused and ended states.
+
+### Changed
+- End Navigation is anchored to the right-hand destructive-action position.
+- Pause controls use delegated pointer handling, touch-action optimisation, and debounce protection.
+
+### Fixed
+- Intermittent unresponsive pause buttons after UI rerenders or touch interactions.
+- Insufficient indication of follower position and journey sharing state.
+
+### Removed
+- None.
+
+### Validation
+- Pause/resume controls, button placement, live sharing pause, follower status, marker state, syntax, regression, and ZIP checks.
+
+### Known limitations
+- Last-update timing depends on the viewer device clock and Firestore delivery latency.
+
 ## v4.25, 27 August 2026
 
 ### Added

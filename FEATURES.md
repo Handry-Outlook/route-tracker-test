@@ -1,6 +1,6 @@
 # Handry Outlook Feature Register
 
-**Build:** v4.25  
+**Build:** v4.26  
 **Updated:** 26 August 2026
 
 ## New in v4.18

@@ -1,6 +1,6 @@
 # Handry Outlook Feature Inventory
 
-**Build:** v4.25  
+**Build:** v4.26  
 **Inventory updated:** 27 August 2026  
 **Purpose:** This is the canonical checklist for every release. Before packaging a new build, each feature below must be checked against the application source and marked in `RELEASE_CHECKLIST.md`.
 
@@ -82,6 +82,8 @@
 - Publish the rider location continuously while recording.
 - Exact and approximate live-location privacy modes.
 - Copy live link.
+- Pause and resume live sharing without ending the journey.
+- Followers see a pulsing rider marker, active/paused/ended status, last-update age, and Locate Rider action.
 - Invite friends through the native share sheet.
 - Stop live sharing.
 - Viewer subscription to route progression and current rider position.
@@ -113,7 +115,8 @@
 - GPS samples with position, time, speed, elevation, wind, grade, and estimated power.
 - Pause/Resume Recording and Pause/Resume Navigation controls.
 - End Recording is revealed only after recording is paused.
-- End Navigation is revealed only after navigation is paused.
+- End Navigation is revealed only after navigation is paused and remains in the right-hand destructive-action position.
+- Pause controls use touch-safe delegated handling and input debouncing.
 - Completed-ride naming workflow.
 - Default activity name based on Start and Finish.
 
