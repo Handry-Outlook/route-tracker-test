@@ -1,6 +1,6 @@
-# Handry Outlook Feature Register
+# Ridewise Feature Register
 
-**Build:** v4.28  
+**Build:** v4.57  
 **Updated:** 26 August 2026
 
 ## New in v4.18
@@ -64,3 +64,23 @@
 - Explore map Share button offers Route Only or Route + Live Progress.
 - Saved activities include Use This Route.
 - Elevation and wind charts use responsive canvas sizing, visible axes, and units.
+
+
+### New in v4.29
+- Consolidated rebuild and regression governance.
+
+
+### New in v4.30
+- Strict low-repetition Adventure loop generation with sampled overlap rejection and candidate deduplication.
+
+
+### New in v4.31
+- GPX import, route-card animation preview, node cleanup, and real weather with direction, mean wind and gust.
+
+
+### New in v4.32
+- Direct live sharing, popup close controls, 3-day hourly weather, CyclOSM overlay, OSM route scoring and real signed route wind.
+
+
+### New in v4.57
+- Renamed to Ridewise, direction arrows, motorway rejection, stronger directness and repetition rules.

@@ -1,80 +1,19 @@
-// src/weather-api.js
 import { X_WEATHER_ID, X_WEATHER_SECRET } from './config.js';
+const BASE_URL='https://data.api.xweather.com/conditions';
+export async function fetchWindAtLocation(lat,lon,timestamp=null){
+  if(X_WEATHER_ID&&X_WEATHER_SECRET){
+    let url=`${BASE_URL}/${lat},${lon}?client_id=${encodeURIComponent(X_WEATHER_ID)}&client_secret=${encodeURIComponent(X_WEATHER_SECRET)}&units=metric`;
+    if(timestamp){const ts=timestamp instanceof Date?Math.floor(timestamp.getTime()/1000):timestamp;url+=`&for=${ts}`}
+    try{const response=await fetch(url);if(!response.ok)throw new Error(`Xweather ${response.status}`);const data=await response.json(),current=data?.response?.[0]?.periods?.[0];if(!data?.success||!current)throw new Error('No Xweather conditions');return{time:current.timestamp,speed:current.windSpeedMPS,bearing:current.windDirDEG,gust:current.windGustMPS,temp:current.tempC,feelsLike:current.feelslikeC,humidity:current.humidity,desc:current.weatherPrimary,icon:current.icon,source:'Xweather'}}catch(error){console.warn('Xweather failed; using Open-Meteo fallback',error)}
+  }
+  try{const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&timezone=auto`,data=await fetch(url).then(r=>{if(!r.ok)throw new Error(`Open-Meteo ${r.status}`);return r.json()}),c=data.current;return{time:Math.floor(new Date(c.time).getTime()/1000),speed:c.wind_speed_10m,bearing:c.wind_direction_10m,gust:c.wind_gusts_10m,temp:c.temperature_2m,feelsLike:c.apparent_temperature,humidity:c.relative_humidity_2m,desc:weatherCodeDescription(c.weather_code),icon:weatherCodeIcon(c.weather_code,new Date(c.time).getHours()),code:c.weather_code,source:'Open-Meteo'}}catch(error){console.error('Weather fetch failed',error);return null}
+}
+export async function fetchRouteForecast(points){const results=await Promise.all(points.slice(0,12).map(p=>fetchWindAtLocation(p.lat,p.lon,p.time)));return results.filter(Boolean)}
+export async function fetchHourlyForecast(lat,lon,hours=72){
+  if(X_WEATHER_ID&&X_WEATHER_SECRET){try{const now=Math.floor(Date.now()/1000),to=now+hours*3600,url=`${BASE_URL}/${lat},${lon}?client_id=${encodeURIComponent(X_WEATHER_ID)}&client_secret=${encodeURIComponent(X_WEATHER_SECRET)}&units=metric&from=${now}&to=${to}&limit=${hours}`,response=await fetch(url);if(response.ok){const data=await response.json(),periods=data?.response?.[0]?.periods||[];if(periods.length)return periods.slice(0,hours).map(p=>({time:p.timestamp,temp:p.tempC,feelsLike:p.feelslikeC,humidity:p.humidity,precip:p.precipMM??0,probability:p.pop??0,speed:p.windSpeedMPS,bearing:p.windDirDEG,gust:p.windGustMPS,desc:p.weatherPrimary,icon:p.icon,source:'Xweather'}))}}catch(e){console.warn('Xweather hourly failed',e)}}
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&forecast_days=4&timezone=auto`,d=await fetch(url).then(r=>r.json());return d.hourly.time.slice(0,hours).map((time,i)=>({time:Math.floor(new Date(time).getTime()/1000),temp:d.hourly.temperature_2m[i],feelsLike:d.hourly.apparent_temperature[i],humidity:d.hourly.relative_humidity_2m[i],probability:d.hourly.precipitation_probability[i],precip:d.hourly.precipitation[i],speed:d.hourly.wind_speed_10m[i],bearing:d.hourly.wind_direction_10m[i],gust:d.hourly.wind_gusts_10m[i],desc:weatherCodeDescription(d.hourly.weather_code[i]),icon:weatherCodeIcon(d.hourly.weather_code[i],new Date(time).getHours()),code:d.hourly.weather_code[i],source:'Open-Meteo'}))
+}
+export function cardinalDirection(deg){if(!Number.isFinite(deg))return'Unknown';return['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(((deg%360)+360)%360/22.5)%16]}
+function weatherCodeDescription(c){return c===0?'Clear':c<4?'Partly cloudy':c<50?'Fog':c<70?'Rain':c<80?'Snow':c<90?'Showers':'Thunderstorm'}
 
-const BASE_URL = 'https://data.api.xweather.com/conditions';
-
-/**
- * Fetches current weather conditions from X Weather
- * @param {number} lat - Latitude
- * @param {number} lon - Longitude
- * @param {Date|number} [timestamp] - Optional time for forecast (Date object or Unix seconds)
- * @returns {Promise<Object>}
- */
-export const fetchWindAtLocation = async (lat, lon, timestamp = null) => {
-    // X Weather format: "lat,lon"
-    const locationQuery = `${lat},${lon}`;
-    
-    // Construct URL with credentials
-    // Note: We request 'metric' units (m/s, celcius) specifically
-    let url = `${BASE_URL}/${locationQuery}?client_id=${X_WEATHER_ID}&client_secret=${X_WEATHER_SECRET}&units=metric`;
-
-    if (timestamp) {
-        // Convert to Unix timestamp (seconds) if it's a Date object
-        const ts = timestamp instanceof Date ? Math.floor(timestamp.getTime() / 1000) : timestamp;
-        url += `&for=${ts}`;
-    }
-
-    try {
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            throw new Error(`X Weather API Error: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        // X Weather Conditions response structure is data.response[0].periods[0]
-        if (!data.success || !data.response || data.response.length === 0) {
-            throw new Error('No weather data found for this location');
-        }
-
-        const current = data.response[0].periods[0];
-
-        // Return ONLY what Handry Outlook needs (Clean Data)
-        return {
-            time: current.timestamp, // Unix timestamp
-            speed: current.windSpeedMPS, // Meters per second
-            bearing: current.windDirDEG, // Degrees (0-360)
-            gust: current.windGustMPS,
-            temp: current.tempC,
-            feelsLike: current.feelslikeC,
-            humidity: current.humidity,
-            desc: current.weatherPrimary, // e.g., "Partly Cloudy"
-            icon: current.icon // e.g., "mcloudy.png"
-        };
-
-    } catch (error) {
-        console.error("Weather Fetch Failed:", error);
-        return null; // Handle null gracefully in your UI
-    }
-};
-
-/**
- * Fetches weather for multiple points along a route
- * @param {Array} points - Array of {lat, lon, time} objects
- */
-export const fetchRouteForecast = async (points) => {
-    // Xweather allows batching, but for simplicity and to match the existing single-point logic
-    // we will use Promise.all. If points > 10, we might want to batch or limit.
-    // The 'route' endpoint exists but requires specific formatting.
-    
-    const promises = points.map(pt => fetchWindAtLocation(pt.lat, pt.lon, pt.time));
-    
-    try {
-        const results = await Promise.all(promises);
-        return results.filter(r => r !== null);
-    } catch (e) {
-        console.error("Route Forecast Error:", e);
-        return [];
-    }
-};
+function weatherCodeIcon(c,hour=12){const night=hour<6||hour>=20,n=night?'n':'';if(c===0)return night?'clearn.png':'sunny.png';if(c<=2)return `pcloudy${n}.png`;if(c===3)return `cloudy${n}.png`;if(c<=48)return `fog${n}.png`;if(c<=57)return `drizzle${n}.png`;if(c<=67)return `rain${n}.png`;if(c<=77)return `snow${n}.png`;if(c<=82)return `showers${n}.png`;if(c<=86)return `snowshowers${n}.png`;return `tstorm${n}.png`}

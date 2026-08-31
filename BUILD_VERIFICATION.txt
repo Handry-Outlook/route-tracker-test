@@ -1,11 +1,13 @@
-Verified in the extracted ZIP:
-- Root app.js is the only app entrypoint
-- GPX import control and handler are present
-- importedTrainingRoute preserves the full loop
-- createApproachToImportedRoute creates a separate route to the loop start
-- drawImportedTrainingRoute renders the full loop in orange
-- navigation switches to the training loop near its start
-- generateGpxNavigationSteps creates bend-based prompts
-- Google account chooser is requested
-- iOS Home Screen uses redirect authentication
-- Logout button is preserved
+Ridewise v4.57
+Source baseline: verified Ridewise v4.56 ZIP
+
+PASS groupHourlyByDay declared exactly once
+PASS groupHourlyByDay declared before weather renderer
+PASS invalid forecast items ignored
+PASS forecasts grouped by local calendar day
+PASS four-day display limit
+PASS app.js syntax
+PASS weather-api.js syntax
+PASS sw.js syntax
+PASS feature regression verifier
+PASS ZIP integrity
