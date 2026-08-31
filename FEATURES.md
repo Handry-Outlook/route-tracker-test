@@ -1,6 +1,6 @@
 # Handry Outlook Feature Register
 
-**Build:** v4.27  
+**Build:** v4.28  
 **Updated:** 26 August 2026
 
 ## New in v4.18
@@ -54,12 +54,13 @@
 - Quick navigation opens Explore, starts GPS recording, and follows the selected route.
 
 
-### New in v4.27
-- Single-click Pause/Resume Recording and Navigation controls.
-- Voice Guidance toggle beneath Weather with iPhone user-gesture speech unlock.
-- Large heading arrow above a separate location dot.
-- Four-second movement-heading smoothing, map bearing follow, unstable-heading zoom-out, and delayed wrong-way rerouting.
-- Temporary manual zoom/pan with automatic camera return and immediate Recenter recovery.
-- Clickable alternative routes with concise time or cycle-lane reasons.
-- Active navigation state is restored after reopening; app resources and previously loaded route data are cached for offline use.
-- iOS limitation documented: continuous GPS and speech cannot continue after the PWA is suspended or closed.
+### New in v4.28
+- Right-click or long-press anywhere on the map to Navigate There or Add as Waypoint.
+- Journey actions reorganised: Show All Routes on Map sits beside Show More Options; Adventure-only navigation button no longer appears in Journey.
+- Finished navigation clears route layers.
+- Adventure supports optional waypoints and prioritises required waypoint reach over distance target.
+- Adventure candidates are ranked for loop distinctness and reduced out-and-back repetition.
+- Save and Share icon actions appear on every route card.
+- Explore map Share button offers Route Only or Route + Live Progress.
+- Saved activities include Use This Route.
+- Elevation and wind charts use responsive canvas sizing, visible axes, and units.
