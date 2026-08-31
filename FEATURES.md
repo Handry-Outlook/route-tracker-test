@@ -1,6 +1,6 @@
 # Handry Outlook Feature Register
 
-**Build:** v4.26  
+**Build:** v4.27  
 **Updated:** 26 August 2026
 
 ## New in v4.18
@@ -52,3 +52,14 @@
 - A persistent green **Navigation and record now** button appears directly above the mobile bottom bar whenever exactly one route is selected on the map.
 - The same quick action is centred above the map controls on desktop.
 - Quick navigation opens Explore, starts GPS recording, and follows the selected route.
+
+
+### New in v4.27
+- Single-click Pause/Resume Recording and Navigation controls.
+- Voice Guidance toggle beneath Weather with iPhone user-gesture speech unlock.
+- Large heading arrow above a separate location dot.
+- Four-second movement-heading smoothing, map bearing follow, unstable-heading zoom-out, and delayed wrong-way rerouting.
+- Temporary manual zoom/pan with automatic camera return and immediate Recenter recovery.
+- Clickable alternative routes with concise time or cycle-lane reasons.
+- Active navigation state is restored after reopening; app resources and previously loaded route data are cached for offline use.
+- iOS limitation documented: continuous GPS and speech cannot continue after the PWA is suspended or closed.
