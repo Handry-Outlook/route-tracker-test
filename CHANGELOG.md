@@ -1,3 +1,164 @@
+### v4.80 - 1 September 2026
+
+#### Fixed
+- Corrected saveRouteByIndex to be asynchronous before awaiting account cloud storage.
+- Resolves the browser parse failure: Unexpected reserved word at app.js line 112.
+- Preserves waypoint baseline routing, unlimited Adventure routes, 3D preview and Firestore JSON payload encoding.
+
+### v4.79 - 1 September 2026
+
+#### Restored waypoint routing
+- Restored shortest-baseline required-waypoint routing for examples such as Bristol → Weston-super-Mare → Bristol.
+- Alternatives are ranked by kilometres above the shortest safe baseline and normally capped at 16% above baseline.
+- Repeated access is allowed when it materially reduces distance.
+
+#### Fixed
+- Restored 3D route preview for active and saved routes.
+- Removed the five-route and twelve-route Adventure caps. Explicit extra-route requests can keep adding routes.
+- Firestore payloads now use a JSON string envelope, avoiding unsupported nested-array errors from route geometry, legs, waypoints, samples and profiles.
+
+### v4.78 - 1 September 2026
+
+#### Account-specific data
+- Saved routes and completed activities are stored under the signed-in Firebase account.
+- Route saving, GPX import, recording and activity saving require authentication.
+- Account routes and activities synchronise from Firestore across signed-in devices.
+- Offline account-specific caches are namespaced by Firebase UID.
+- Signing out clears in-memory route and activity libraries.
+- Legacy device-wide route and activity keys are removed to prevent cross-account visibility.
+- Active ride recovery is bound to the account that started the ride.
+
+### v4.77 - 1 September 2026
+
+#### Calculate one more route guarantee
+- Every explicit Calculate one more route action now tries up to eight additional full-route shapes.
+- If normal quality and diversity filters reject every candidate, Ridewise relaxes repetition, distinctness and range preferences for that extra route only.
+- Closure and motorway rejection remain mandatory.
+- Extra fallback routes are clearly labelled Extra route · quality filters relaxed.
+- Explicitly requested extra routes may resemble existing options rather than returning nothing.
+- Up to twelve Adventure routes can remain visible.
+
+### v4.76 - 1 September 2026
+
+#### Restored and consolidated
+- Restored the full saved-route card library lost in v4.75.
+- Saved cards include distance, duration, climb, cycling cues, wind profile and elevation profile.
+- Restored Open & edit, draggable route shaping, automatic persistence and manual Update saved route.
+- Preserved corridor-loop recognition for narrow and elongated loops.
+- Added six final availability fallback plans and relaxed only the final-stage diversity threshold to return more Adventure options.
+
+### v4.71 - 1 September 2026
+
+#### Fixed
+- Restored routeOverlapRatio required by Adventure route diversity checks.
+- Uses a bounded 36-point comparison against complete route geometry.
+- Added declaration-order and single-definition regression checks.
+
+### v4.70 - 1 September 2026
+
+#### Corridor-led Adventure recommendations
+- Searches for rivers, lakes, seaside locations, canals, greenways, cycle trails, railway paths, national cycle routes, parks and landmarks.
+- Generates Balanced, Scenic and Established-path recommendations.
+- Uses four ring points to reduce out-and-back branches.
+- Rejects routes sharing more than 55% of sampled corridors.
+- Rejects anonymous long dead-end spurs unless required by a user waypoint.
+- Ranks named and recognised corridor routes above arbitrary geometry.
+- Uses a second rotated destination set when fewer than three distinct routes survive.
+
+### v4.69 - 1 September 2026
+
+#### Destination-led Adventure routes
+- Uses fast Mapbox POI searches for named viewpoints, parks, historic places, castles, lakes, nature reserves, museums and cafes.
+- Adventure shaping points prefer named destinations instead of anonymous field coordinates.
+- Balanced, Scenic and Easy-flow plans select different angular sectors and target distances.
+- Routes sharing more than 68% of their sampled corridors are treated as duplicates.
+- If fewer than three distinct routes survive, Ridewise tries a second set of bearings.
+- Full geometry, full navigation steps, closure, repetition and motorway checks remain mandatory.
+
+### v4.68 - 1 September 2026
+
+#### Fixed
+- Removed the expensive delayed detailed-repetition callback that blocked the main thread for about one second per route.
+- A route that has already appeared is no longer removed by a later background quality pass.
+- Adventure acceptance now uses only the bounded quick repetition and closure checks before publication.
+- Removed unused delayed scenic-label sampling from the post-render path.
+
+### v4.67 - 1 September 2026
+
+#### Adventure performance rewrite
+- Uses one primary full-route Mapbox request with alternatives enabled to obtain up to three loops.
+- Only sends extra Scenic or Easy requests when the primary response returns fewer than three usable routes.
+- Replaces blocking detailed repetition analysis with a bounded quick check before first display.
+- Runs detailed repetition analysis after the full route is visible and removes a route only if the detailed check fails.
+- Keeps full geometry and turn steps in every response.
+
+### v4.66 - 1 September 2026
+
+#### Fixed
+- Removed all direct browser requests to public Overpass servers, including scenic-place discovery and cycling-infrastructure enrichment.
+- Adventure no longer produces Overpass CORS, 502 or timeout errors.
+- Route calculation no longer depends on third-party POI discovery.
+- Balanced, Scenic and Easy route shapes continue using full Mapbox cycling geometry and steps.
+
+#### Architecture
+- Future community/scenic place discovery should use a same-origin Ridewise backend or serverless proxy with caching, rate limits and CORS headers.
+
+### v4.65 - 1 September 2026
+
+#### Restored long-press location actions
+- Added View in Google Maps.
+- Added View in Google Maps 3D with satellite and tilt parameters where supported.
+- Added Copy coordinates with clipboard and prompt fallback.
+- Kept Navigate there and Add as waypoint.
+- Actions work from desktop right-click and mobile long-press.
+
+### v4.64 - 1 September 2026
+
+#### Performance
+- Three Adventure requests still start together, but each valid route is published immediately when its own request finishes.
+- The interface no longer waits for all three route requests before showing the first recommendation.
+- Mapbox alternatives are disabled because Ridewise already sends three purpose-built plans.
+- Per-route timeout reduced to 5.2 seconds.
+- Scenic place discovery remains entirely non-blocking.
+
+### v4.63 - 1 September 2026
+
+#### Performance
+- Adventure routing starts immediately and no longer waits for Overpass.
+- Scenic-place discovery runs as a non-blocking enhancement with a 1.2-second result budget.
+- Both Overpass endpoints run concurrently instead of sequentially.
+- Overpass server timeout reduced to 3 seconds and browser timeout to 3.5 seconds.
+- Reliable full-geometry loop plans are used immediately; nearby discovered places label routes afterward.
+- Scenic POIs are used for a second routing attempt only if immediate plans yield no clean loops.
+
+### v4.62 - 1 September 2026
+
+#### Fixed
+- Restored fastDirections after the meaningful Adventure refactor.
+- Added an explicit regression check that the function is declared before Adventure is used.
+
+#### Adventure
+- Discovers viewpoints, parks, water, historic places, attractions, cafes and route markers.
+- Connects selected places as full cycling loops with full geometry and steps.
+- Produces Balanced, Scenic and Easy recommendations.
+- Rejects open loops, motorways and excessive repetition.
+
+### v4.60 - 1 September 2026
+
+#### Adventure
+- Strictly rejects open routes, excessive repeated corridors and long out-and-back branches for no-waypoint loops.
+- Allows more overlap only for required-waypoint access.
+
+#### Recovery and offline navigation
+- Persists active recording and navigation sessions.
+- Restores route, steps, recording samples, current instruction and pause state after app termination.
+- Offers Resume, Save partial activity or Discard on reopen.
+- Continues stored-route GPS guidance offline and disables rerouting until connectivity returns.
+
+#### Added
+- Saved-route Rename control.
+- Current-location heading marker.
+
 ### v4.57 - 31 August 2026
 
 #### Fixed

@@ -1,13 +1,12 @@
-Ridewise v4.57
-Source baseline: verified Ridewise v4.56 ZIP
-
-PASS groupHourlyByDay declared exactly once
-PASS groupHourlyByDay declared before weather renderer
-PASS invalid forecast items ignored
-PASS forecasts grouped by local calendar day
-PASS four-day display limit
+Ridewise v4.80
+PASS saveRouteByIndex declared async
+PASS no await in synchronous saveRouteByIndex
+PASS browser module syntax
+PASS waypoint shortest-baseline routing retained
+PASS 3D preview retained
+PASS no Adventure route cap
+PASS Firestore payloadJson encoding retained
 PASS app.js syntax
 PASS weather-api.js syntax
 PASS sw.js syntax
-PASS feature regression verifier
 PASS ZIP integrity
