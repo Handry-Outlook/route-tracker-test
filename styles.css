@@ -39,4 +39,4 @@
 
 .account-required{text-align:center;padding:28px 20px}.account-required h2{margin:0 0 8px}.account-required p{color:var(--muted);line-height:1.5;margin:0 0 16px}
 
-body.navigating #quick-nav{display:block!important;visibility:visible!important;opacity:1!important;z-index:90!important}body.navigating #quick-nav #ride-live{display:block!important}body.navigating #quick-nav #quick-start{display:none!important}@media(max-width:760px){body.navigating #quick-nav{position:absolute!important;left:10px!important;right:10px!important;bottom:76px!important;width:auto!important;transform:none!important}body.navigating #ride-live{max-height:calc(100vh - 170px);overflow:auto}body.navigating .tools{bottom:76px}}
+body.navigating #quick-nav{display:block!important;visibility:visible!important;opacity:1!important;z-index:90!important}body.navigating #quick-nav #ride-live{display:block!important}body.navigating #quick-nav #quick-start{display:none!important}@media(max-width:760px){body.navigating #quick-nav{position:absolute!important;left:10px!important;right:10px!important;bottom:76px!important;width:auto!important;transform:none!important}}

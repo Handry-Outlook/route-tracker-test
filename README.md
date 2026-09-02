@@ -1,4 +1,4 @@
-# Ridewise v4.86
+# Ridewise v4.87
 
 **Plan smarter. Ride better.**
 

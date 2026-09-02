@@ -1,5 +1,5 @@
 # Ridewise Feature Inventory
-**Build:** v4.86
+**Build:** v4.87
 
 This is the canonical feature baseline. Future releases must preserve every applicable item.
 

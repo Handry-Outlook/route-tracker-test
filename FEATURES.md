@@ -1,9 +1,9 @@
 # Ridewise Feature Register
 
-**Build:** v4.86  
+**Build:** v4.87  
 **Updated:** 26 August 2026
 
-## New in v4.86
+## New in v4.87
 - Activities support up to six photos, with add, replace/remove, rename, route-on-map, sharing and portrait social PNG export.
 - Activity library sorting covers date, distance, elevation gain, average speed and effort in both directions.
 - Rider weight, height and bike weight support estimated cycling power, W/kg and an effort score.
@@ -54,7 +54,7 @@
 - Quick navigation opens Explore, starts GPS recording, and follows the selected route.
 
 
-### New in v4.86
+### New in v4.87
 - Right-click or long-press anywhere on the map to Navigate There or Add as Waypoint.
 - Journey actions reorganised: Show All Routes on Map sits beside Show More Options; Adventure-only navigation button no longer appears in Journey.
 - Finished navigation clears route layers.
@@ -66,21 +66,21 @@
 - Elevation and wind charts use responsive canvas sizing, visible axes, and units.
 
 
-### New in v4.86
+### New in v4.87
 - Consolidated rebuild and regression governance.
 
 
-### New in v4.86
+### New in v4.87
 - Strict low-repetition Adventure loop generation with sampled overlap rejection and candidate deduplication.
 
 
-### New in v4.86
+### New in v4.87
 - GPX import, route-card animation preview, node cleanup, and real weather with direction, mean wind and gust.
 
 
-### New in v4.86
+### New in v4.87
 - Direct live sharing, popup close controls, 3-day hourly weather, CyclOSM overlay, OSM route scoring and real signed route wind.
 
 
-### New in v4.86
+### New in v4.87
 - Renamed to Ridewise, direction arrows, motorway rejection, stronger directness and repetition rules.

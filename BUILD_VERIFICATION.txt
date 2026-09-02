@@ -1,12 +1,12 @@
-Ridewise v4.86
-PASS startNavigation awaits startRecord
-PASS active navigation shows quick-nav
-PASS ride-live panel explicitly visible
-PASS quick-start explicitly hidden
-PASS mobile controls above bottom navigation
-PASS pause controls synchronised on start
+Ridewise v4.87
+PASS adaptive navigation camera states
+PASS cruise zoom-out
+PASS turn and complex-junction zoom-in
+PASS speed-aware camera
+PASS post-turn hold
+PASS rate-limited smooth camera
+PASS manual exploration timeout
+PASS recenter restores adaptive camera
+PASS bottom navigation controls retained
 PASS all v4.85 and previous features retained
-PASS app.js syntax
-PASS weather-api.js syntax
-PASS sw.js syntax
-PASS ZIP integrity
+PASS syntax and ZIP integrity

@@ -1,11 +1,14 @@
-### v4.86 - 2 September 2026
+### v4.87 - 2 September 2026
 
-#### Navigation controls visibility
-- startNavigation now awaits recording startup before rendering navigation controls.
-- The bottom live navigation panel is explicitly shown after map-page rendering.
-- Added a second requestAnimationFrame and short delayed visibility pass to survive mobile layout rerenders.
-- Navigation mode CSS forces the live controls above the bottom app navigation bar.
-- Pause controls are synchronised immediately when navigation starts.
+#### Adaptive Google Maps-style navigation camera
+- Long simple sections use a wider 14.8 to 15.6 zoom with more road ahead.
+- Normal navigation uses approximately 16.1 zoom.
+- Approaching turns progressively increases zoom to 16.35 and 16.85.
+- Complex junctions, roundabouts, forks, merges and clustered turns use up to 17.65 zoom.
+- Cycling speed adjusts the target zoom and a four-and-a-half-second post-turn hold prevents premature zoom-out.
+- Camera updates are smoothed, rate-limited and suspended for 15 seconds after manual map interaction.
+- Locate/re-centre immediately restores the adaptive camera.
+- Bottom live navigation controls remain forced visible.
 
 ### v4.85 - 2 September 2026
 
