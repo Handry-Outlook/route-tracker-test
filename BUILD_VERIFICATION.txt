@@ -1,11 +1,11 @@
-Ridewise v4.80
-PASS saveRouteByIndex declared async
-PASS no await in synchronous saveRouteByIndex
-PASS browser module syntax
-PASS waypoint shortest-baseline routing retained
-PASS 3D preview retained
-PASS no Adventure route cap
-PASS Firestore payloadJson encoding retained
+Ridewise v4.86
+PASS startNavigation awaits startRecord
+PASS active navigation shows quick-nav
+PASS ride-live panel explicitly visible
+PASS quick-start explicitly hidden
+PASS mobile controls above bottom navigation
+PASS pause controls synchronised on start
+PASS all v4.85 and previous features retained
 PASS app.js syntax
 PASS weather-api.js syntax
 PASS sw.js syntax

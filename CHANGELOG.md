@@ -1,3 +1,51 @@
+### v4.86 - 2 September 2026
+
+#### Navigation controls visibility
+- startNavigation now awaits recording startup before rendering navigation controls.
+- The bottom live navigation panel is explicitly shown after map-page rendering.
+- Added a second requestAnimationFrame and short delayed visibility pass to survive mobile layout rerenders.
+- Navigation mode CSS forces the live controls above the bottom app navigation bar.
+- Pause controls are synchronised immediately when navigation starts.
+
+### v4.85 - 2 September 2026
+
+#### Fixed drag-edit runtime dependencies
+- Restored isClosedLoop used by saved-route badges, loop validation and waypoint-preserving drag editing.
+- Restored buildLoopViaPoints and dedupeViaPoints used when editing a loop without explicit required waypoints.
+- Added coordinate validation and explicit loop tolerance.
+- Preserved the v4.84 waypoint-preserving drag request and post-route waypoint validation.
+
+### v4.84 - 2 September 2026
+
+#### Waypoint-preserving drag edit
+- Dragging a route node now rebuilds through every required waypoint instead of using only start, dragged point and finish.
+- The dragged shaping point is inserted into the correct section of the ordered waypoint journey.
+- Required waypoints come from immutable route metadata, with request points and UI state used only as fallbacks.
+- The edited route is rejected and the previous route restored if any required waypoint is omitted.
+- Waypoint names, waypoint-return metadata, quality labels, range status and saved-route identity survive editing.
+- Saved-route drag edits await cloud persistence before reporting success.
+
+### v4.83 - 2 September 2026
+
+#### Strict waypoint preservation
+- Every route carries an immutable requiredNavigationWaypoints list.
+- Navigation reads required waypoints from the selected route, not mutable page state.
+- A waypoint requires two consecutive reliable GPS fixes within 25 metres before completion.
+- Passing on a parallel road or receiving one inaccurate GPS fix cannot clear a waypoint.
+- Rerouting cannot advance waypoint progress; only GPS arrival can do so.
+- Rerouted and saved routes retain the original required waypoint list.
+
+### v4.82 - 2 September 2026
+
+#### Waypoint-preserving navigation rerouting
+- Navigation stores an ordered, immutable list of required waypoints when the ride starts.
+- A waypoint is removed from the remaining list only after GPS reaches that waypoint.
+- Off-route recalculation requests Current position → every unvisited waypoint in order → destination/start.
+- Rerouting no longer decides that a waypoint is complete merely because the current position is geographically nearby.
+- Required Adventure waypoints and point-to-point intermediate waypoints use the same progress cursor.
+- Waypoint progress survives active-session recovery.
+- Rerouted route metadata, saved-route identity, range labels, elevation and wind data are preserved.
+
 ### v4.80 - 1 September 2026
 
 #### Fixed
