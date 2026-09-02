@@ -1,3 +1,35 @@
+### v4.90 - 2 September 2026
+
+#### Complete live journey viewer
+- Live journey URLs now draw the shared route geometry on the map.
+- Firestore snapshots update a dedicated Rider marker in real time.
+- The viewing device requests GPS and displays a separate You marker.
+- Initial map framing includes the route, rider and viewer locations.
+- A live status card shows active, paused, ended, waiting-for-GPS and last-updated states.
+- Rider broadcasts include accuracy and travel heading and are rate-limited to one update per 1.5 seconds.
+- Live viewer waits for Firebase Authentication under the existing authenticated-only rules.
+
+### v4.89 - 2 September 2026
+
+#### Shared-route authentication race fixed
+- Shared route URLs wait for Firebase Authentication persistence to restore before reading Firestore.
+- Signed-out users are sent to the sign-in page while the share ID remains in the URL.
+- After successful sign-in, Ridewise automatically retries the pending shared route.
+- Permission-denied responses caused by a late auth restore receive a short automatic retry.
+- Duplicate simultaneous shared-route loads are blocked.
+- No Firestore rule change is required for the existing authenticated-only ruleset.
+
+### v4.88 - 2 September 2026
+
+#### URL sharing repaired and completed
+- Adventure and journey route-card Share buttons now create a working URL and open a visible share window.
+- Explore Share now displays the URL and provides Share URL, Copy and Open actions.
+- Saved-route cards now include a Share button.
+- Live navigation sharing starts or reuses a live journey, then displays its journey URL.
+- Native mobile sharing uses navigator.share with clipboard fallback.
+- Shared route URLs are loaded directly by Ridewise.
+- Firestore shared-route storage uses JSON payload encoding, with compact URL fallback if cloud sharing is unavailable.
+
 ### v4.87 - 2 September 2026
 
 #### Adaptive Google Maps-style navigation camera

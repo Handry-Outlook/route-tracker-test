@@ -1,12 +1,11 @@
-Ridewise v4.87
-PASS adaptive navigation camera states
-PASS cruise zoom-out
-PASS turn and complex-junction zoom-in
-PASS speed-aware camera
-PASS post-turn hold
-PASS rate-limited smooth camera
-PASS manual exploration timeout
-PASS recenter restores adaptive camera
-PASS bottom navigation controls retained
-PASS all v4.85 and previous features retained
+Ridewise v4.90
+PASS live journey URL parser
+PASS shared route geometry layer
+PASS real-time rider marker
+PASS viewing-device location marker
+PASS route rider viewer initial fit
+PASS live status and last updated
+PASS authenticated snapshot subscription
+PASS rate-limited rider location writes
+PASS all v4.89 and previous features retained
 PASS syntax and ZIP integrity
