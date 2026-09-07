@@ -1,3 +1,9 @@
+var __defProp = Object.defineProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
 // src/config.js
 var MAPBOX_TOKEN = "pk.eyJ1IjoibWV0ZW9ncm91cC1tYXBib3giLCJhIjoiY2pudWJyMWVhMDQ0bjNxdXFsNWJ5M2ZtbSJ9.ANOKYyv5s0VFVbnesnGGUQ";
 var firebaseConfig = { apiKey: "AIzaSyBjfLYgpiZLJ8ucR7XqY7cBsrfD1UCs_V4", authDomain: "route-planner-942bd.firebaseapp.com", projectId: "route-planner-942bd", storageBucket: "route-planner-942bd.firebasestorage.app", messagingSenderId: "305443119883", appId: "1:305443119883:web:e83a8ef2dc5334a753380e" };
@@ -75,10 +81,10 @@ function weatherCodeIcon(c, hour = 12) {
 }
 
 // src/ui/components/bottomSheet.js
-var SNAP_HEIGHTS = { peek: 0.16, half: 0.5, full: 0.92 };
+var SNAP_HEIGHTS = { closed: 0.07, peek: 0.16, half: 0.5, full: 0.92 };
 var VELOCITY_FLING_PX_PER_MS = 0.5;
 function createBottomSheet(panel2, { mobile: mobile2 }) {
-  let state = "half";
+  let state4 = "half";
   let handle = panel2.querySelector(".sheet-handle");
   if (!handle) {
     handle = document.createElement("div");
@@ -99,13 +105,15 @@ function createBottomSheet(panel2, { mobile: mobile2 }) {
   }
   function applyHeight(value, animate) {
     panel2.style.transition = animate ? "" : "none";
+    const container = panel2.offsetParent || panel2.parentElement;
+    if (container) container.style.setProperty("--sheet-height", value);
     panel2.style.setProperty("--sheet-height", value);
   }
   function setState(next, { animate = true } = {}) {
     if (!SNAP_HEIGHTS[next]) next = "half";
-    state = next;
-    panel2.dataset.sheetState = state;
-    if (mobile2()) applyHeight(`${SNAP_HEIGHTS[state] * 100}%`, animate);
+    state4 = next;
+    panel2.dataset.sheetState = state4;
+    if (mobile2()) applyHeight(`${SNAP_HEIGHTS[state4] * 100}%`, animate);
   }
   function onPointerDown(e) {
     if (!mobile2()) return;
@@ -126,10 +134,10 @@ function createBottomSheet(panel2, { mobile: mobile2 }) {
     lastY = e.clientY;
     lastT = now;
     const nextHeight = Math.max(
-      heightPxFor(SNAP_HEIGHTS.peek) * 0.6,
+      heightPxFor(SNAP_HEIGHTS.closed),
       Math.min(heightPxFor(0.97), dragStartHeight - dy)
     );
-    panel2.style.setProperty("--sheet-height", `${nextHeight}px`);
+    applyHeight(`${nextHeight}px`, false);
   }
   function onPointerUp() {
     if (dragStartY === null) return;
@@ -150,72 +158,9 @@ function createBottomSheet(panel2, { mobile: mobile2 }) {
   addEventListener("pointermove", onPointerMove);
   addEventListener("pointerup", onPointerUp);
   addEventListener("pointercancel", onPointerUp);
-  addEventListener("resize", () => setState(state, { animate: false }));
+  addEventListener("resize", () => setState(state4, { animate: false }));
   setState("half", { animate: false });
-  return { setState, getState: () => state };
-}
-
-// src/ui/pages/feed.js
-function feedSignInPromptHtml(head2) {
-  return head2("Feed", "Rides from people you follow") + `<div class="card account-required">
-      <h2>Sign in required</h2>
-      <p>Follow other riders to see their rides here, give kudos, and leave comments.</p>
-      <button class="btn primary" id="feedSignIn">Sign in</button>
-    </div>`;
-}
-function findPeopleHtml() {
-  return `<div class="card find-people-card">
-    <h3>Find people</h3>
-    <div class="location-row">
-      <input id="findPeopleInput" placeholder="Search riders by name" autocomplete="off">
-      <button class="btn light" id="findPeopleBtn">Search</button>
-    </div>
-    <div id="findPeopleResults"></div>
-  </div>`;
-}
-function personResultHtml(person, isFollowing2, isSelf) {
-  const escape2 = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  return `<div class="item person-result" data-uid="${escape2(person.uid)}">
-    <span>${escape2(person.displayName)}</span>
-    ${isSelf ? '<small class="muted">You</small>' : `<button class="btn ${isFollowing2 ? "light" : "primary"}" data-follow-toggle="${escape2(person.uid)}" data-following="${isFollowing2 ? "1" : "0"}">${isFollowing2 ? "Following" : "Follow"}</button>`}
-  </div>`;
-}
-function feedEmptyHtml(hasFollows) {
-  return `<div class="empty">${hasFollows ? "No recent rides from people you follow yet." : "Follow some riders above to see their rides here."}</div>`;
-}
-function activityCardHtml(activity, hasKudos) {
-  const escape2 = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  const when = activity.startedAt ? new Date(activity.startedAt).toLocaleDateString([], { day: "numeric", month: "short" }) : "";
-  const cover = activity.photoUrls?.[0];
-  return `<article class="card feed-activity-card" data-activity-id="${escape2(activity.id)}">
-    <div class="row">
-      <div><b>${escape2(activity.ownerDisplayName)}</b><br><small class="muted">${escape2(when)}</small></div>
-    </div>
-    <h3 style="margin:8px 0 4px">${escape2(activity.title)}</h3>
-    ${cover ? `<img class="activity-photo" src="${escape2(cover)}" alt="Activity photo">` : ""}
-    <div class="stats">
-      <div class="stat"><b>${(activity.distanceKm || 0).toFixed(1)}</b><small>km</small></div>
-      <div class="stat"><b>${Math.round(activity.elevationGainM || 0)}</b><small>gain m</small></div>
-      <div class="stat"><b>${(activity.avgSpeedKmh || 0).toFixed(1)}</b><small>avg km/h</small></div>
-    </div>
-    <div class="actions">
-      <button class="btn ${hasKudos ? "primary" : "light"}" data-kudos="${escape2(activity.id)}" data-given="${hasKudos ? "1" : "0"}">\u{1F44D} Kudos${activity.kudosCount ? ` (${activity.kudosCount})` : ""}</button>
-      <button class="btn light" data-comments="${escape2(activity.id)}">\u{1F4AC} Comments${activity.commentCount ? ` (${activity.commentCount})` : ""}</button>
-    </div>
-    <div class="feed-comments" id="comments-${escape2(activity.id)}" hidden></div>
-  </article>`;
-}
-function commentHtml(comment) {
-  const escape2 = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  return `<div class="item"><b>${escape2(comment.authorDisplayName)}</b><span>${escape2(comment.text)}</span></div>`;
-}
-function commentsPanelHtml(comments, activityId) {
-  const escape2 = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  return `${comments.map(commentHtml).join("") || '<p class="muted">No comments yet.</p>'}
-    <div class="location-row">
-      <input id="commentInput-${escape2(activityId)}" placeholder="Add a comment" autocomplete="off">
-      <button class="btn light" data-send-comment="${escape2(activityId)}">Send</button>
-    </div>`;
+  return { setState, getState: () => state4 };
 }
 
 // src/social/firestoreClient.js
@@ -247,13 +192,13 @@ async function ensurePublicProfile(user) {
   }
   return ref;
 }
-async function updateRiderMeasurements(uid, { weightKg, heightCm, bikeWeightKg }) {
+async function updateRiderMeasurements(uid2, { weightKg, heightCm, bikeWeightKg }) {
   const db = await getCloud();
-  await db.setDoc(db.doc(db.firestore, "users", uid), { weightKg, heightCm, bikeWeightKg }, { merge: true });
+  await db.setDoc(db.doc(db.firestore, "users", uid2), { weightKg, heightCm, bikeWeightKg }, { merge: true });
 }
-async function incrementRiderStats(uid, { distanceKm = 0, elevationM = 0 }) {
+async function incrementRiderStats(uid2, { distanceKm = 0, elevationM = 0 }) {
   const db = await getCloud();
-  const ref = db.doc(db.firestore, "users", uid);
+  const ref = db.doc(db.firestore, "users", uid2);
   const snap = await db.getDoc(ref);
   const stats = snap.exists() ? snap.data().stats || {} : {};
   await db.setDoc(
@@ -305,10 +250,15 @@ async function isFollowing(followerUid, followeeUid) {
   const snap = await db.getDoc(db.doc(db.firestore, "follows", followDocId(followerUid, followeeUid)));
   return snap.exists();
 }
-async function listFollowingUids(uid) {
+async function listFollowingUids(uid2) {
   const db = await getCloud();
-  const snap = await db.getDocs(db.query(db.collection(db.firestore, "follows"), db.where("followerUid", "==", uid)));
+  const snap = await db.getDocs(db.query(db.collection(db.firestore, "follows"), db.where("followerUid", "==", uid2)));
   return snap.docs.map((d) => d.data().followeeUid);
+}
+async function listFollowerUids(uid2) {
+  const db = await getCloud();
+  const snap = await db.getDocs(db.query(db.collection(db.firestore, "follows"), db.where("followeeUid", "==", uid2)));
+  return snap.docs.map((d) => d.data().followerUid);
 }
 
 // src/social/storageUpload.js
@@ -329,16 +279,16 @@ async function dataUrlToBlob(dataUrl) {
   const response = await fetch(dataUrl);
   return response.blob();
 }
-async function uploadActivityPhoto(uid, activityId, index, photo) {
+async function uploadActivityPhoto(uid2, activityId, index, photo) {
   const storage = await getStorage();
   const blob = typeof photo === "string" ? await dataUrlToBlob(photo) : photo;
-  const path = `activity-photos/${uid}/${activityId}/${index}.jpg`;
+  const path = `activity-photos/${uid2}/${activityId}/${index}.jpg`;
   const ref = storage.ref(storage.storage, path);
   await storage.uploadBytes(ref, blob, { contentType: "image/jpeg" });
   return storage.getDownloadURL(ref);
 }
-async function uploadActivityPhotos(uid, activityId, photos) {
-  return Promise.all(photos.map((photo, i) => uploadActivityPhoto(uid, activityId, i, photo)));
+async function uploadActivityPhotos(uid2, activityId, photos) {
+  return Promise.all(photos.map((photo, i) => uploadActivityPhoto(uid2, activityId, i, photo)));
 }
 
 // src/social/activities.js
@@ -403,21 +353,21 @@ async function fetchFeed(ownFollowedUids, { limitPerChunk = 20 } = {}) {
   items.sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
   return items;
 }
-async function toggleKudos(activityId, uid, currentlyGiven) {
+async function toggleKudos(activityId, uid2, currentlyGiven) {
   const db = await getCloud();
-  const kudosRef = db.doc(db.firestore, "activities", activityId, "kudos", uid);
+  const kudosRef = db.doc(db.firestore, "activities", activityId, "kudos", uid2);
   const activityRef = db.doc(db.firestore, "activities", activityId);
   if (currentlyGiven) {
     await db.deleteDoc(kudosRef);
     await db.setDoc(activityRef, { kudosCount: db.increment(-1) }, { merge: true });
   } else {
-    await db.setDoc(kudosRef, { uid, createdAt: db.serverTimestamp() });
+    await db.setDoc(kudosRef, { uid: uid2, createdAt: db.serverTimestamp() });
     await db.setDoc(activityRef, { kudosCount: db.increment(1) }, { merge: true });
   }
 }
-async function hasGivenKudos(activityId, uid) {
+async function hasGivenKudos(activityId, uid2) {
   const db = await getCloud();
-  const snap = await db.getDoc(db.doc(db.firestore, "activities", activityId, "kudos", uid));
+  const snap = await db.getDoc(db.doc(db.firestore, "activities", activityId, "kudos", uid2));
   return snap.exists();
 }
 async function addComment(activityId, author, text) {
@@ -492,6 +442,2830 @@ function isCompassAvailable() {
   return compassAvailable;
 }
 
+// src/ui/icons.js
+var ICONS = {
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
+  route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8 17h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5"/>',
+  record: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/>',
+  flag: '<path d="M5 21V4h11l-2 4 2 4H5"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  sliders: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8M4 12h14"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/><circle cx="20" cy="12" r="2"/>',
+  shuffle: '<path d="M4 7h4l8 10h4M4 17h4l2-2.5M14 9.5l2-2.5h4M18 4l3 3-3 3M18 14l3 3-3 3"/>',
+  heart: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',
+  share: '<path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V4M8 8l4-4 4 4"/>',
+  leaf: '<path d="M5 19C5 9 11 4 20 4c0 9-5 15-15 15zM5 19c3-4 6-7 10-9"/>',
+  sun: '<path d="M4 18h16M6 14a6 6 0 0 1 12 0M12 4v2M5 8l1.5 1.5M19 8l-1.5 1.5"/>',
+  star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" fill="currentColor" stroke="none"/>',
+  eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  landmark: '<path d="M3 21h18M5 21V10M10 21V10M14 21V10M19 21V10M3 10l9-6 9 6z"/>',
+  cup: '<path d="M5 8h11v6a5 5 0 0 1-10 0zM16 9h2a2 2 0 0 1 0 4h-2M4 20h13"/>',
+  drop: '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>',
+  wrench: '<path d="M14 6a4 4 0 0 0 5 5l-9 9-3-3 9-9a4 4 0 0 1-2-2z"/>',
+  turnRight: '<path d="M6 20V10a4 4 0 0 1 4-4h8M14 2l4 4-4 4"/>',
+  speaker: '<path d="M4 10v4h4l5 4V6L8 10zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>',
+  cloudDown: '<path d="M7 18a4 4 0 0 1-.5-8A6 6 0 0 1 18 9a4 4 0 0 1 0 9h-1M12 12v8M9 17l3 3 3-3"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>',
+  chevL: '<path d="M15 5l-7 7 7 7"/>',
+  chevR: '<path d="M9 5l7 7-7 7"/>',
+  trophy: '<path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 14v4M8 21h8"/>',
+  crown: '<path d="M3 18h18l-1-10-5 4-3-6-3 6-5-4z"/>',
+  bubble: '<path d="M4 5h16v11H9l-5 4z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>',
+  navArrow: '<path d="M12 3l7 18-7-4-7 4z" fill="currentColor" stroke="none"/>',
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  list: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  check: '<path d="M5 12l4 4L19 7"/>',
+  drag: '<path d="M8 6h.01M16 6h.01M8 12h.01M16 12h.01M8 18h.01M16 18h.01"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  mtn: '<path d="M3 20l6-10 4 6 3-4 5 8z"/>',
+  bolt: '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
+  heartRate: '<path d="M3 12h4l2-5 3 10 2-6 2 3h5"/>',
+  cadence: '<circle cx="12" cy="12" r="8"/><path d="M12 12l4-3M12 12v-6"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  more: '<circle cx="6" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="18" cy="12" r="1.5" fill="currentColor"/>',
+  pin: '<path d="M12 21s6-6.5 6-11a6 6 0 0 0-12 0c0 4.5 6 11 6 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  send: '<path d="M4 4l16 8-16 8 3-8z"/>'
+};
+function icon(name, size = 20, extraAttrs = "") {
+  const path = ICONS[name];
+  if (!path) return "";
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${extraAttrs}>${path}</svg>`;
+}
+
+// src/ui/components/routeProgress.js
+var STEPS = [
+  { id: "places", label: "Finding places worth riding to" },
+  { id: "connect", label: "Connecting candidate loops" },
+  { id: "score", label: "Scoring cycle infrastructure" },
+  { id: "enrich", label: "Adding elevation and wind" }
+];
+var state = { active: false, index: -1, detail: "", host: null };
+var CHECK = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4L19 7"/></svg>';
+function skeletons(n = 2) {
+  return Array.from({ length: n }, () => `<div class="card skel-card">
+    <div class="skel" style="width:44px;height:44px;border-radius:10px"></div>
+    <div class="body">
+      <div class="skel" style="height:12px;width:54%"></div>
+      <div class="skel" style="height:10px;width:34%;margin-top:8px"></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px">
+        <div class="skel" style="height:34px"></div><div class="skel" style="height:34px"></div><div class="skel" style="height:34px"></div>
+      </div>
+      <div class="skel" style="height:48px;margin-top:10px"></div>
+    </div>
+  </div>`).join("");
+}
+function html() {
+  const pct = Math.round((state.index + 1) / STEPS.length * 100);
+  return `<div class="route-progress">
+    <div class="between"><b style="font-size:13px">Building your route</b>
+      <span class="muted" style="font-size:12px;font-weight:700">Step ${Math.min(STEPS.length, state.index + 1)} of ${STEPS.length}</span></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="stage">${state.detail || STEPS[Math.max(0, state.index)]?.label || ""}</div>
+    <div class="steps">${STEPS.map((s, i) => {
+    const cls = i < state.index ? "done" : i === state.index ? "active" : "";
+    return `<div class="${cls}"><span class="dot">${i < state.index ? CHECK : ""}</span>${s.label}</div>`;
+  }).join("")}</div>
+  </div>
+  ${skeletons(2)}`;
+}
+function paint() {
+  const host = document.querySelector("#planResults") || document.querySelector("#routeProgressHost");
+  if (!host) return;
+  state.host = host;
+  host.innerHTML = html();
+}
+function start(detail2 = "") {
+  state.active = true;
+  state.index = 0;
+  state.detail = detail2 || STEPS[0].label;
+  paint();
+}
+function step(stepId, detail2 = "") {
+  if (!state.active) return;
+  const i = STEPS.findIndex((s) => s.id === stepId);
+  if (i < 0) return;
+  if (i > state.index) state.index = i;
+  state.detail = detail2 || STEPS[state.index].label;
+  paint();
+}
+function detail(text) {
+  if (!state.active) return;
+  state.detail = text;
+  paint();
+}
+function finish() {
+  state.active = false;
+  state.index = -1;
+  state.detail = "";
+}
+function isActive() {
+  return state.active;
+}
+
+// src/ui/components/carousel.js
+var CARD_GAP = 12;
+function cardStep(track) {
+  const first = track.querySelector(":scope > *");
+  return first ? first.getBoundingClientRect().width + CARD_GAP : track.clientWidth * 0.8;
+}
+function updateControls(track, prev, next, counter) {
+  const max = track.scrollWidth - track.clientWidth;
+  track.parentNode?.classList?.toggle("no-scroll", max <= 2);
+  const atStart = track.scrollLeft <= 2;
+  const atEnd = track.scrollLeft >= max - 2;
+  if (prev) prev.disabled = atStart;
+  if (next) next.disabled = atEnd;
+  if (counter) {
+    if (max <= 2) {
+      counter.textContent = "";
+      return;
+    }
+    const step2 = cardStep(track);
+    const total = track.children.length;
+    const index = Math.min(total, Math.round(track.scrollLeft / Math.max(1, step2)) + 1);
+    counter.textContent = total > 1 ? `${index} / ${total}` : "";
+  }
+}
+function enhanceCarousel(track, { counter } = {}) {
+  if (!track || track.dataset.carousel === "on") return;
+  const pointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  track.dataset.carousel = "on";
+  track.tabIndex = 0;
+  if (!pointer) return;
+  const wrap = document.createElement("div");
+  wrap.className = "carousel-wrap";
+  track.parentNode.insertBefore(wrap, track);
+  wrap.appendChild(track);
+  const mk = (dir, label) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `carousel-arrow ${dir}`;
+    b.setAttribute("aria-label", label);
+    b.innerHTML = dir === "prev" ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>' : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>';
+    wrap.appendChild(b);
+    return b;
+  };
+  const prev = mk("prev", "Scroll left");
+  const next = mk("next", "Scroll right");
+  const by = (dir) => track.scrollBy({ left: dir * cardStep(track), behavior: "smooth" });
+  prev.onclick = () => by(-1);
+  next.onclick = () => by(1);
+  track.addEventListener("wheel", (e) => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    const max = track.scrollWidth - track.clientWidth;
+    if (max <= 0) return;
+    const atStart = track.scrollLeft <= 0 && e.deltaY < 0;
+    const atEnd = track.scrollLeft >= max && e.deltaY > 0;
+    if (atStart || atEnd) return;
+    e.preventDefault();
+    track.scrollLeft += e.deltaY;
+  }, { passive: false });
+  let down = false, startX = 0, startLeft = 0, moved = 0;
+  track.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    down = true;
+    moved = 0;
+    startX = e.clientX;
+    startLeft = track.scrollLeft;
+    track.classList.add("dragging");
+  });
+  addEventListener("pointermove", (e) => {
+    if (!down) return;
+    const dx = e.clientX - startX;
+    moved = Math.max(moved, Math.abs(dx));
+    track.scrollLeft = startLeft - dx;
+  });
+  addEventListener("pointerup", (e) => {
+    if (!down) return;
+    down = false;
+    track.classList.remove("dragging");
+    if (moved > 6) {
+      const kill = (ev) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+      };
+      track.addEventListener("click", kill, { capture: true, once: true });
+      setTimeout(() => track.removeEventListener("click", kill, { capture: true }), 0);
+    }
+  });
+  track.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      by(1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      by(-1);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      track.scrollTo({ left: 0, behavior: "smooth" });
+    } else if (e.key === "End") {
+      e.preventDefault();
+      track.scrollTo({ left: track.scrollWidth, behavior: "smooth" });
+    }
+  });
+  const sync = () => updateControls(track, prev, next, counter);
+  track.addEventListener("scroll", sync, { passive: true });
+  addEventListener("resize", sync);
+  requestAnimationFrame(sync);
+}
+function enhanceAll(root) {
+  (root || document).querySelectorAll(".hscroll").forEach((track) => {
+    const counter = track.closest("section")?.querySelector("[data-carousel-count]") || track.parentElement?.querySelector?.("[data-carousel-count]") || track.previousElementSibling?.querySelector?.("[data-carousel-count]");
+    enhanceCarousel(track, { counter });
+  });
+}
+
+// src/nav/sensors.js
+var sensors_exports = {};
+__export(sensors_exports, {
+  cadenceConnected: () => cadenceConnected,
+  connectCadence: () => connectCadence,
+  connectHeartRate: () => connectHeartRate,
+  disconnectAll: () => disconnectAll,
+  getCadence: () => getCadence,
+  getHeartRate: () => getHeartRate,
+  heartRateZone: () => heartRateZone,
+  hrConnected: () => hrConnected,
+  isSupported: () => isSupported
+});
+var HR_SERVICE = "heart_rate";
+var HR_CHAR = "heart_rate_measurement";
+var CSC_SERVICE = "cycling_speed_and_cadence";
+var CSC_CHAR = "csc_measurement";
+var state2 = {
+  heartRate: null,
+  cadence: null,
+  hrDevice: null,
+  cscDevice: null,
+  lastCrankRevs: null,
+  lastCrankTime: null
+};
+function isSupported() {
+  return typeof navigator !== "undefined" && !!navigator.bluetooth;
+}
+function getHeartRate() {
+  return state2.heartRate;
+}
+function getCadence() {
+  return state2.cadence;
+}
+function hrConnected() {
+  return !!state2.hrDevice?.gatt?.connected;
+}
+function cadenceConnected() {
+  return !!state2.cscDevice?.gatt?.connected;
+}
+function parseHeartRate(view3) {
+  const flags = view3.getUint8(0);
+  return flags & 1 ? view3.getUint16(1, true) : view3.getUint8(1);
+}
+function parseCadence(view3) {
+  const flags = view3.getUint8(0);
+  const hasCrank = flags & 2;
+  if (!hasCrank) return null;
+  const offset = flags & 1 ? 7 : 1;
+  const revs = view3.getUint16(offset, true);
+  const time = view3.getUint16(offset + 2, true);
+  const prevRevs = state2.lastCrankRevs;
+  const prevTime = state2.lastCrankTime;
+  state2.lastCrankRevs = revs;
+  state2.lastCrankTime = time;
+  if (prevRevs === null || prevTime === null) return null;
+  let dRev = revs - prevRevs;
+  let dTime = time - prevTime;
+  if (dRev < 0) dRev += 65536;
+  if (dTime < 0) dTime += 65536;
+  if (dTime <= 0) return state2.cadence;
+  const rpm = dRev * 1024 * 60 / dTime;
+  return rpm >= 0 && rpm < 250 ? Math.round(rpm) : state2.cadence;
+}
+async function startNotifications(device, serviceName, charName, onValue) {
+  const server = await device.gatt.connect();
+  const service = await server.getPrimaryService(serviceName);
+  const characteristic = await service.getCharacteristic(charName);
+  await characteristic.startNotifications();
+  characteristic.addEventListener("characteristicvaluechanged", (e) => onValue(e.target.value));
+  return characteristic;
+}
+async function connectHeartRate() {
+  if (!isSupported()) throw new Error("Web Bluetooth is not available on this browser");
+  const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [HR_SERVICE] }] });
+  state2.hrDevice = device;
+  device.addEventListener("gattserverdisconnected", () => {
+    state2.heartRate = null;
+  });
+  await startNotifications(device, HR_SERVICE, HR_CHAR, (view3) => {
+    state2.heartRate = parseHeartRate(view3);
+  });
+  return device.name || "Heart-rate monitor";
+}
+async function connectCadence() {
+  if (!isSupported()) throw new Error("Web Bluetooth is not available on this browser");
+  const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [CSC_SERVICE] }] });
+  state2.cscDevice = device;
+  state2.lastCrankRevs = null;
+  state2.lastCrankTime = null;
+  device.addEventListener("gattserverdisconnected", () => {
+    state2.cadence = null;
+  });
+  await startNotifications(device, CSC_SERVICE, CSC_CHAR, (view3) => {
+    const rpm = parseCadence(view3);
+    if (rpm !== null) state2.cadence = rpm;
+  });
+  return device.name || "Cadence sensor";
+}
+function disconnectAll() {
+  [state2.hrDevice, state2.cscDevice].forEach((d) => {
+    try {
+      d?.gatt?.disconnect();
+    } catch {
+    }
+  });
+  state2.hrDevice = state2.cscDevice = null;
+  state2.heartRate = state2.cadence = null;
+}
+function heartRateZone(bpm, age) {
+  if (!Number.isFinite(bpm) || !Number.isFinite(age)) return null;
+  const max = 208 - 0.7 * age;
+  const pct = bpm / max;
+  if (pct < 0.6) return 1;
+  if (pct < 0.7) return 2;
+  if (pct < 0.8) return 3;
+  if (pct < 0.9) return 4;
+  return 5;
+}
+
+// src/ui/shell.js
+function viewHeader(title, subtitle, { back = true, actions = "" } = {}) {
+  return `<header class="view-header">
+    ${back ? `<button class="iconbtn" id="viewBack" aria-label="Back">${icon("chevL", 20)}</button>` : ""}
+    <div class="view-title">
+      <h1>${APP.escapeHtml(title)}</h1>
+      ${subtitle ? `<p class="muted">${APP.escapeHtml(subtitle)}</p>` : ""}
+    </div>
+    ${actions ? `<div class="row" style="gap:6px">${actions}</div>` : ""}
+  </header>`;
+}
+function rootHeader(title, subtitle, { actions = "" } = {}) {
+  return `<header class="view-header">
+    <div class="view-title">
+      <h1>${APP.escapeHtml(title)}</h1>
+      ${subtitle ? `<p class="muted">${APP.escapeHtml(subtitle)}</p>` : ""}
+    </div>
+    ${actions ? `<div class="row" style="gap:6px">${actions}</div>` : ""}
+  </header>`;
+}
+function wireHeader(onBack) {
+  const b = APP.$("#viewBack");
+  if (b && onBack) b.onclick = onBack;
+}
+function searchField(label = "Search routes, places, riders", id = "openSearch") {
+  return `<button class="search-field" id="${id}" type="button">${icon("search", 20)}<span>${APP.escapeHtml(label)}</span></button>`;
+}
+function mountSearch(containerId, onPick, placeholder = "Search for a place") {
+  const host = APP.$(`#${containerId}`);
+  if (!host || typeof MapboxGeocoder === "undefined") return null;
+  const pos = APP.state.pos || APP.map?.getCenter?.() && [APP.map.getCenter().lng, APP.map.getCenter().lat];
+  const g = new MapboxGeocoder({
+    accessToken: APP.MAPBOX_TOKEN,
+    mapboxgl: window.mapboxgl,
+    marker: false,
+    placeholder,
+    proximity: Array.isArray(pos) ? { longitude: pos[0], latitude: pos[1] } : void 0
+  });
+  g.addTo(`#${containerId}`);
+  g.on("result", (e) => onPick(e.result));
+  setTimeout(() => host.querySelector("input")?.focus(), 60);
+  return g;
+}
+
+// src/ui/graphics.js
+var ORANGE = "#f28b30";
+var BLUE = "#176bdb";
+var uid = 0;
+var nextId = (p) => `${p}${++uid}`;
+function project(coords, w, h, pad = 6) {
+  const lons = coords.map((c) => c[0]);
+  const lats = coords.map((c) => c[1]);
+  const minX = Math.min(...lons), maxX = Math.max(...lons);
+  const minY = Math.min(...lats), maxY = Math.max(...lats);
+  const midLat = (minY + maxY) / 2;
+  const kx = Math.cos(midLat * Math.PI / 180) || 1;
+  const spanX = Math.max(1e-6, (maxX - minX) * kx);
+  const spanY = Math.max(1e-6, maxY - minY);
+  const scale = Math.min((w - pad * 2) / spanX, (h - pad * 2) / spanY);
+  const offX = (w - spanX * scale) / 2;
+  const offY = (h - spanY * scale) / 2;
+  return coords.map(([lng, lat]) => [
+    offX + (lng - minX) * kx * scale,
+    h - (offY + (lat - minY) * scale)
+    // flip: SVG y grows downward
+  ]);
+}
+function thin(coords, max = 120) {
+  if (!Array.isArray(coords) || coords.length <= max) return coords || [];
+  const step2 = (coords.length - 1) / (max - 1);
+  return Array.from({ length: max }, (_, i) => coords[Math.round(i * step2)]);
+}
+function routeThumb(coords, w = 64, h = 64, { radius = 12, bg = "#eef2f6", showStart = true } = {}) {
+  const id = nextId("rt");
+  const pts = thin(coords, 90);
+  if (pts.length < 2) {
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block"><rect width="${w}" height="${h}" rx="${radius}" fill="${bg}"/></svg>`;
+  }
+  const p = project(pts, w, h, Math.max(5, Math.round(w * 0.1)));
+  const d = p.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const [sx, sy] = p[0];
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="display:block">
+    <defs><linearGradient id="${id}" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="${ORANGE}"/><stop offset="1" stop-color="${BLUE}"/></linearGradient></defs>
+    <rect width="${w}" height="${h}" rx="${radius}" fill="${bg}"/>
+    <path d="${d}" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity=".75"/>
+    <path d="${d}" fill="none" stroke="url(#${id})" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    ${showStart ? `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="3.2" fill="#fff" stroke="${ORANGE}" stroke-width="2"/>` : ""}
+  </svg>`;
+}
+function elevationChart(elev, w = 358, h = 92, { distanceKm = 0, dark = false } = {}) {
+  const vals = (elev || []).filter(Number.isFinite);
+  if (vals.length < 2) {
+    return `<div style="height:${h}px;display:grid;place-items:center;border-radius:12px;background:var(--surface-muted);color:var(--muted);font-size:11px;font-weight:600">Elevation unavailable</div>`;
+  }
+  const id = nextId("ev");
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const range = hi - lo || 1;
+  const pad = 4;
+  const x = (i) => i / (vals.length - 1) * w;
+  const y = (v) => pad + (1 - (v - lo) / range) * (h - pad * 2);
+  const pts = vals.map((v, i) => [x(i), y(v)]);
+  const line2 = pts.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" ");
+  const segMetres = (distanceKm || 0) * 1e3 / Math.max(1, vals.length - 1);
+  let segs = "";
+  for (let i = 1; i < pts.length; i++) {
+    const rise = vals[i] - vals[i - 1];
+    const grade = segMetres > 0 ? rise / segMetres * 100 : 0;
+    const color = grade >= 8 ? "#d94d4d" : grade >= 4 ? ORANGE : grade > 0 ? "#139b66" : null;
+    if (!color) continue;
+    segs += `<line x1="${pts[i - 1][0].toFixed(1)}" y1="${pts[i - 1][1].toFixed(1)}" x2="${pts[i][0].toFixed(1)}" y2="${pts[i][1].toFixed(1)}" stroke="${color}" stroke-width="3.4" stroke-linecap="round"/>`;
+  }
+  return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${BLUE}" stop-opacity=".22"/><stop offset="1" stop-color="${BLUE}" stop-opacity="0"/></linearGradient></defs>
+    <polygon points="0,${h} ${line2} ${w},${h}" fill="url(#${id})"/>
+    <polyline points="${line2}" fill="none" stroke="${dark ? "#93a3b8" : "#9fb0c2"}" stroke-width="2"/>
+    ${segs}
+  </svg>`;
+}
+function gradientLegend() {
+  const item = (c, l) => `<span class="row" style="gap:4px"><i style="width:10px;height:3px;border-radius:2px;background:${c}"></i>${l}</span>`;
+  return `<span class="row muted" style="gap:10px;font-size:11px;font-weight:700">${item("#139b66", "&lt;4%")}${item(ORANGE, "4-8%")}${item("#d94d4d", "8%+")}</span>`;
+}
+function staticRouteImage(coords, token, { w = 600, h = 300, style = "outdoors-v12", retina = true } = {}) {
+  const pts = thin(coords, 60);
+  if (pts.length < 2 || !token) return null;
+  const encoded = encodeURIComponent(
+    JSON.stringify({ type: "LineString", coordinates: pts.map(([a, b]) => [+a.toFixed(5), +b.toFixed(5)]) })
+  );
+  const overlay = `geojson(${encoded})`;
+  const size = `${w}x${h}${retina ? "@2x" : ""}`;
+  const url = `https://api.mapbox.com/styles/v1/mapbox/${style}/static/${overlay}/auto/${size}?padding=24&access_token=${token}&attribution=false&logo=false`;
+  if (url.length > 7800) {
+    const mid = pts[Math.floor(pts.length / 2)];
+    return `https://api.mapbox.com/styles/v1/mapbox/${style}/static/${mid[0].toFixed(4)},${mid[1].toFixed(4)},11/${size}?access_token=${token}&attribution=false&logo=false`;
+  }
+  return url;
+}
+function terrainPlaceholder(w, h, hue = "warm", radius = 0) {
+  const skies = { warm: ["#f9d8a8", "#f4a76a"], cool: ["#cfe3f5", "#7fb3e6"], forest: ["#d9ead0", "#6f9f6a"], coast: ["#dbeefc", "#5aa2d8"] };
+  const [a, b] = skies[hue] || skies.warm;
+  const id = nextId("tp");
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="display:block;border-radius:${radius}px">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs>
+    <rect width="${w}" height="${h}" fill="url(#${id})"/>
+    <path d="M0 ${h * 0.62} C ${w * 0.2} ${h * 0.45}, ${w * 0.35} ${h * 0.7}, ${w * 0.55} ${h * 0.5} S ${w * 0.85} ${h * 0.35}, ${w} ${h * 0.55} L ${w} ${h} L 0 ${h}z" fill="#2f5d4a" opacity=".55"/>
+    <path d="M0 ${h * 0.78} C ${w * 0.25} ${h * 0.62}, ${w * 0.5} ${h * 0.9}, ${w * 0.7} ${h * 0.72} S ${w * 0.9} ${h * 0.6}, ${w} ${h * 0.75} L ${w} ${h} L 0 ${h}z" fill="#1f4a3a" opacity=".8"/>
+  </svg>`;
+}
+function difficultyFor(distanceKm, elevationM) {
+  const km = distanceKm || 0;
+  const m = elevationM || 0;
+  const score = km + m / 12;
+  if (score < 30) return { label: "Easy", tone: "green" };
+  if (score < 75) return { label: "Moderate", tone: "orange" };
+  return { label: "Hard", tone: "red" };
+}
+var fmtKm = (km) => `${(km || 0).toFixed((km || 0) < 100 ? 1 : 0)} km`;
+var fmtM = (m) => `${Math.round(m || 0)} m`;
+function fmtDuration(seconds) {
+  const s = Math.max(0, Math.round(seconds || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.round(s % 3600 / 60);
+  return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m} min`;
+}
+
+// src/social/discover.js
+async function queryActivities(build) {
+  try {
+    const db = await getCloud();
+    const snap = await db.getDocs(build(db));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.warn("Discovery query unavailable", error);
+    return [];
+  }
+}
+function popularActivities(max = 10) {
+  return queryActivities(
+    (db) => db.query(
+      db.collection(db.firestore, "activities"),
+      db.where("visibility", "==", "public"),
+      db.orderBy("kudosCount", "desc"),
+      db.limit(max)
+    )
+  );
+}
+function recentActivities(max = 10, sinceMs) {
+  const cutoff = sinceMs ?? 0;
+  return queryActivities(
+    (db) => db.query(
+      db.collection(db.firestore, "activities"),
+      db.where("visibility", "==", "public"),
+      db.where("startedAt", ">=", cutoff),
+      db.orderBy("startedAt", "desc"),
+      db.limit(max)
+    )
+  );
+}
+async function ridingNowCount(followedUids) {
+  if (!followedUids?.length) return 0;
+  try {
+    const db = await getCloud();
+    const chunks = [];
+    for (let i = 0; i < followedUids.length; i += 30) chunks.push(followedUids.slice(i, i + 30));
+    const snaps = await Promise.all(
+      chunks.map(
+        (chunk) => db.getDocs(db.query(db.collection(db.firestore, "journeys_v4"), db.where("ownerId", "in", chunk), db.where("active", "==", true)))
+      )
+    );
+    return snaps.reduce((n, s) => n + s.size, 0);
+  } catch (error) {
+    console.warn("Riding-now count unavailable", error);
+    return 0;
+  }
+}
+
+// src/ui/pages/adventure.js
+var RIDE_TYPES = [{ id: "road", label: "Road" }, { id: "gravel", label: "Gravel" }, { id: "mtb", label: "MTB" }];
+var DIFFICULTIES = ["Easy", "Moderate", "Hard"];
+var SCENERY = [
+  { id: "coastal", label: "Coastal", icon: "drop" },
+  { id: "forest", label: "Forest", icon: "leaf" },
+  { id: "mountain", label: "Mountain", icon: "mtn" },
+  { id: "countryside", label: "Countryside", icon: "sun" }
+];
+function defaultFilters() {
+  return { rideType: "road", hours: 2.5, difficulty: "Moderate", scenery: ["forest"] };
+}
+function filters() {
+  const S2 = APP.state;
+  if (!S2.adventureFilters) S2.adventureFilters = defaultFilters();
+  return S2.adventureFilters;
+}
+function filterDistanceRange() {
+  const f = filters();
+  const speed = f.rideType === "mtb" ? 14 : f.rideType === "gravel" ? 18 : 22;
+  const target = Math.max(6, f.hours * speed);
+  return { minKm: Math.round(target * 0.75), maxKm: Math.round(target * 1.25) };
+}
+var goHome = () => {
+  APP.state.adventureView = "home";
+  render();
+};
+function infraLine(route) {
+  if (Number.isFinite(route.osmCycleScore)) return `${route.osmCycleScore}% on cycle infrastructure`;
+  if (route.cycleScorePending) return "Checking cycle infrastructure\u2026";
+  return `${Number.isFinite(route.cycleScore) ? route.cycleScore : 0}% cycle-route estimate`;
+}
+function heroMedia(route, hue) {
+  const coords = route?.geometry?.coordinates;
+  const url = coords ? staticRouteImage(coords, APP.MAPBOX_TOKEN, { w: 600, h: 264 }) : null;
+  return url ? `<img src="${url}" alt="" loading="lazy">` : terrainPlaceholder(300, 132, hue, 0);
+}
+function deckCardHtml(route, i, selected) {
+  const km = (route.distance || 0) / 1e3;
+  const diff = difficultyFor(km, route.ascent || 0);
+  return `<article class="card hero-card deck-card" style="${selected ? "border-color:var(--blue);border-width:2px" : ""}">
+    <div class="hero-media">${heroMedia(route, ["warm", "forest", "cool", "coast"][i % 4])}
+      <div class="hero-badges">${route.qualityLabel ? `<span class="badge dark">${APP.escapeHtml(String(route.qualityLabel).split("\xB7")[0].trim())}</span>` : ""}</div>
+      <div class="hero-actions">
+        <button class="iconbtn" data-save="${i}" title="Save route">${icon("heart", 18)}</button>
+        <button class="iconbtn" data-share="${i}" title="Share route">${icon("share", 18)}</button>
+      </div>
+      <div class="hero-thumb">${routeThumb(route.geometry?.coordinates, 48, 48)}</div>
+    </div>
+    <div class="hero-body">
+      <div>
+        <h2 style="font-size:16px">${APP.escapeHtml(route.name || `Adventure ${i + 1}`)}</h2>
+        <p class="muted" style="font-size:12px;font-weight:600">${infraLine(route)}</p>
+      </div>
+      ${route.whyThisRoute ? `<p style="font-size:12px;font-weight:600;color:var(--blue);line-height:1.4">${APP.escapeHtml(route.whyThisRoute)}</p>` : ""}
+      <div class="route-facts">
+        <span class="row">${icon("route", 15)}${fmtKm(km)}</span>
+        <span class="row">${icon("mtn", 15)}${Number.isFinite(route.ascent) ? fmtM(route.ascent) : "\u2014"}</span>
+        <span class="row">${icon("clock", 15)}${fmtDuration(route.duration)}</span>
+        <span class="badge ${diff.tone}">${diff.label}</span>
+      </div>
+      <div class="row" style="gap:8px">
+        <button class="btn light sm" data-show="${i}" style="flex:1">${icon("eye", 16)}Show on map</button>
+        <button class="btn primary sm" data-details="${i}" style="flex:1">Details</button>
+      </div>
+    </div>
+  </article>`;
+}
+function safeCoords(json) {
+  try {
+    const g = typeof json === "string" ? JSON.parse(json) : json;
+    return g?.coordinates?.length >= 2 ? g.coordinates : null;
+  } catch {
+    return null;
+  }
+}
+function communityCardHtml(a) {
+  const coords = safeCoords(a.routeSummaryGeoJson);
+  const url = coords ? staticRouteImage(coords, APP.MAPBOX_TOKEN, { w: 320, h: 160 }) : null;
+  return `<button class="card mini-card" data-community="${APP.escapeHtml(a.id)}">
+    <div class="mini-media">${url ? `<img src="${url}" alt="" loading="lazy">` : terrainPlaceholder(152, 74, "cool", 0)}
+      ${a.kudosCount ? `<span class="badge dark" style="position:absolute;left:8px;top:8px;min-height:20px;font-size:10px">${icon("heart", 11)}${a.kudosCount}</span>` : ""}
+    </div>
+    <div class="mini-body"><b>${APP.escapeHtml(a.title || "Ride")}</b>
+      <span>${fmtKm(a.distanceKm)} \xB7 ${fmtM(a.elevationGainM)} \xB7 ${APP.escapeHtml(a.ownerDisplayName || "Rider")}</span></div>
+  </button>`;
+}
+function railHtml(title, items, emptyText) {
+  return `<section>
+    <div class="between" style="margin-bottom:8px"><span class="section-title">${title}</span></div>
+    ${items.length ? `<div class="hscroll">${items.map(communityCardHtml).join("")}</div>` : `<div class="empty" style="padding:14px">${emptyText}</div>`}
+  </section>`;
+}
+function searchView() {
+  APP.panel.innerHTML = `<div class="page">
+    ${viewHeader("Search", "Find a place to ride to")}
+    <div id="searchBox"></div>
+    <p class="muted" style="font-size:12px;font-weight:600">Pick a place and Ridewise plans a route to it from where you are.</p>
+  </div>`;
+  wireHeader(goHome);
+  mountSearch("searchBox", async (result) => {
+    const S2 = APP.state;
+    const start2 = S2.waypoints?.[0] || await APP.current();
+    if (!start2) {
+      APP.toast("Allow location access to plan from here");
+      return;
+    }
+    S2.mode = "point";
+    S2.waypoints = [start2, result.center];
+    S2.names = [S2.names?.[0] || "Current location", result.place_name];
+    S2.adventureView = "home";
+    S2.planView = "planner";
+    APP.open("plan");
+    APP.pointRoutes(false);
+  });
+}
+function filtersView() {
+  const f = filters();
+  const { minKm, maxKm } = filterDistanceRange();
+  APP.panel.innerHTML = `<div class="page">
+    ${viewHeader("Filters", "Shapes the loops Ridewise generates")}
+    <section><p class="section-title" style="margin-bottom:8px">Ride type</p>
+      <div class="segmented" id="rideType">${RIDE_TYPES.map((r) => `<button data-ride="${r.id}" class="${f.rideType === r.id ? "on" : ""}">${r.label}</button>`).join("")}</div>
+    </section>
+    <section>
+      <div class="between" style="margin-bottom:4px"><span class="section-title">Duration</span><b style="color:var(--blue)" id="hoursLabel">${f.hours.toFixed(1)} h</b></div>
+      <div class="slider"><div class="track"></div><div class="fill" id="hoursFill"></div><div class="knob" id="hoursKnob"></div>
+        <input id="hoursInput" type="range" min="0.5" max="6" step="0.5" value="${f.hours}"></div>
+      <p class="muted" style="font-size:12px;font-weight:600" id="rangeHint">Targets roughly ${minKm}\u2013${maxKm} km</p>
+    </section>
+    <section><p class="section-title" style="margin-bottom:8px">Difficulty</p>
+      <div class="row" id="difficulty" style="gap:8px">${DIFFICULTIES.map((d) => `<button class="chip ${f.difficulty === d ? "on" : ""}" data-diff="${d}">${d}</button>`).join("")}</div>
+    </section>
+    <section><p class="section-title" style="margin-bottom:8px">Preferences</p>
+      <div class="row" id="ridePrefs" style="gap:8px;flex-wrap:wrap">
+        ${[["avoidHills", "Avoid hills", "mtn"], ["quietRoads", "Quiet roads", "leaf"], ["pavedOnly", "Paved only", "route"], ["tailwindHome", "Tailwind home", "wind"], ["beforeSunset", "Back before sunset", "clock"]].map(([id, label, ico]) => `<button class="chip ${APP.ridePrefs()[id] ? "on" : ""}" data-pref="${id}">${icon(ico, 15)}${label}</button>`).join("")}
+      </div>
+      <p class="muted" style="font-size:12px;font-weight:600;margin-top:8px">These change how candidates are ranked, using the elevation, OpenStreetMap surface and live wind the app already reads.</p>
+    </section>
+    <div class="card pad flat between">
+      <div><b style="font-size:14px;display:block">Round trip</b><span class="muted" style="font-size:12px;font-weight:600">Loop back to where you start</span></div>
+      <button class="toggle ${f.roundTrip !== false ? "on" : ""}" id="filterRoundTrip" aria-pressed="${f.roundTrip !== false}"><i></i></button>
+    </div>
+    <section><p class="section-title" style="margin-bottom:8px">Scenery</p>
+      <div class="row" id="scenery" style="gap:8px;flex-wrap:wrap">${SCENERY.map((s) => `<button class="chip ${f.scenery.includes(s.id) ? "on" : ""}" data-scenery="${s.id}">${icon(s.icon, 16)}${s.label}</button>`).join("")}</div>
+    </section>
+    <div class="action-bar"><button class="btn cta" id="applyFilters">${icon("compass", 18)}Find adventures</button></div>
+  </div>`;
+  wireHeader(goHome);
+  const { $: $2 } = APP;
+  const sync = () => {
+    const pct = (f.hours - 0.5) / 5.5 * 100;
+    $2("#hoursFill").style.width = `${pct}%`;
+    $2("#hoursKnob").style.left = `${pct}%`;
+    $2("#hoursLabel").textContent = `${f.hours.toFixed(1)} h`;
+    const r = filterDistanceRange();
+    $2("#rangeHint").textContent = `Targets roughly ${r.minKm}\u2013${r.maxKm} km`;
+  };
+  sync();
+  $2("#hoursInput").oninput = (e) => {
+    f.hours = +e.target.value;
+    sync();
+  };
+  $2("#rideType").onclick = (e) => {
+    const b = e.target.closest("[data-ride]");
+    if (!b) return;
+    f.rideType = b.dataset.ride;
+    $2("#rideType").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    sync();
+  };
+  $2("#difficulty").onclick = (e) => {
+    const b = e.target.closest("[data-diff]");
+    if (!b) return;
+    f.difficulty = b.dataset.diff;
+    $2("#difficulty").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+  };
+  $2("#scenery").onclick = (e) => {
+    const b = e.target.closest("[data-scenery]");
+    if (!b) return;
+    const id = b.dataset.scenery;
+    f.scenery = f.scenery.includes(id) ? f.scenery.filter((x) => x !== id) : [...f.scenery, id];
+    b.classList.toggle("on", f.scenery.includes(id));
+  };
+  $2("#ridePrefs").onclick = (e) => {
+    const b = e.target.closest("[data-pref]");
+    if (!b) return;
+    const prefs = APP.ridePrefs();
+    prefs[b.dataset.pref] = !prefs[b.dataset.pref];
+    b.classList.toggle("on", prefs[b.dataset.pref]);
+    if (b.dataset.pref === "beforeSunset" && prefs.beforeSunset) APP.refreshDaylightLimit();
+  };
+  $2("#filterRoundTrip").onclick = (e) => {
+    f.roundTrip = f.roundTrip === false;
+    e.currentTarget.classList.toggle("on", f.roundTrip !== false);
+  };
+  $2("#applyFilters").onclick = () => generate(false);
+}
+async function generate(surprise) {
+  const S2 = APP.state;
+  const { minKm, maxKm } = filterDistanceRange();
+  S2.mode = "loop";
+  S2.adventureView = "home";
+  const start2 = S2.waypoints?.[0] || await APP.current();
+  if (!start2) {
+    APP.toast("Allow location access to find adventures nearby");
+    return;
+  }
+  S2.waypoints = [start2, start2];
+  if (surprise) {
+    const spread = Math.max(1, maxKm - minKm);
+    S2.adventureSurpriseSeed = (S2.adventureSurpriseSeed || 0) + 1;
+    const jitter = S2.adventureSurpriseSeed * 11 % spread;
+    S2.adventureRange = { minKm: Math.max(5, minKm + jitter * 0.3), maxKm: maxKm + jitter * 0.5 };
+  } else {
+    S2.adventureRange = { minKm, maxKm };
+  }
+  APP.open("explore");
+  await APP.adventureRoutes(false);
+  await render();
+}
+async function homeView() {
+  const S2 = APP.state;
+  const loops = S2.mode === "loop" && Array.isArray(S2.routes) ? S2.routes : [];
+  const sel = Number.isInteger(S2.selected) ? S2.selected : null;
+  const selRoute = sel !== null ? loops[sel] : null;
+  APP.panel.innerHTML = `<div class="page">
+    ${rootHeader("Adventure", loops.length ? `${loops.length} loop${loops.length === 1 ? "" : "s"} near you` : "Loops near you")}
+    ${searchField()}
+    <div class="row" style="gap:8px">
+      <button class="btn light sm" id="openFilters" style="flex:1">${icon("sliders", 16)}Filters</button>
+      <button class="btn cta sm" id="surpriseMe" style="flex:1">${icon("shuffle", 16)}Surprise me</button>
+    </div>
+    ${selRoute ? `<div class="selected-strip">
+        <span>${routeThumb(selRoute.geometry?.coordinates, 40, 40, { radius: 9 })}</span>
+        <span class="grow"><b>${APP.escapeHtml(selRoute.name || "Selected route")}</b><span>${fmtKm((selRoute.distance || 0) / 1e3)} \xB7 shown on map</span></span>
+        <button class="btn primary sm" id="selDetails">Details</button>
+      </div>` : ""}
+    <div id="routeProgressHost"></div>
+    ${loops.length ? `<div class="hscroll deck-grid" id="deck">${loops.map((r, i) => deckCardHtml(r, i, i === sel)).join("")}</div>
+         <div class="row" style="gap:8px">
+           <span class="muted" data-carousel-count style="font-size:12px;font-weight:700"></span>
+           ${loops.length > 1 ? `<button class="btn light" id="compareRoutes" style="flex:1">${icon("layers", 16)}Compare</button>` : ""}
+           <button class="btn light" id="regenerate" style="flex:1">${icon("shuffle", 16)}Different loops</button>
+         </div>` : `<div class="card pad flat" style="text-align:center">
+           <p class="muted" style="font-size:13px;line-height:1.5;margin-bottom:12px">Ridewise builds loops from real OpenStreetMap cycle infrastructure around your location.</p>
+           <button class="btn cta block" id="findAdventures">${icon("compass", 18)}Find adventures near me</button>
+         </div>`}
+    <div id="communityRails"><div class="empty" style="padding:14px">Loading community rides\u2026</div></div>
+  </div>`;
+  const { $: $2 } = APP;
+  $2("#openSearch").onclick = () => {
+    S2.adventureView = "search";
+    render();
+  };
+  $2("#openFilters").onclick = () => {
+    S2.adventureView = "filters";
+    render();
+  };
+  $2("#surpriseMe").onclick = () => generate(true);
+  const find = $2("#findAdventures");
+  if (find) find.onclick = () => generate(false);
+  const regen = $2("#regenerate");
+  if (regen) regen.onclick = () => generate(true);
+  const cmp = $2("#compareRoutes");
+  if (cmp) cmp.onclick = () => {
+    S2.adventureView = "compare";
+    render();
+  };
+  const selDetails = $2("#selDetails");
+  if (selDetails) selDetails.onclick = () => {
+    S2.routeDetailOpen = true;
+    APP.open("explore");
+  };
+  const deck = $2("#deck");
+  if (deck) deck.onclick = (e) => {
+    const save = e.target.closest("[data-save]");
+    const share = e.target.closest("[data-share]");
+    if (save) {
+      e.stopPropagation();
+      APP.saveRouteByIndex(+save.dataset.save);
+      return;
+    }
+    if (share) {
+      e.stopPropagation();
+      APP.shareRouteByIndex(+share.dataset.share);
+      return;
+    }
+    const show = e.target.closest("[data-show]");
+    const details = e.target.closest("[data-details]");
+    if (show) {
+      APP.select(+show.dataset.show);
+      render();
+      return;
+    }
+    if (details) {
+      APP.select(+details.dataset.details);
+      S2.routeDetailOpen = true;
+      APP.open("explore");
+    }
+  };
+  const weekAgo = Date.now() - 7 * 864e5;
+  const [popular, recent] = await Promise.all([popularActivities(8), recentActivities(8, weekAgo)]);
+  const rails = $2("#communityRails");
+  if (!rails) return;
+  rails.innerHTML = railHtml("Community favourites", popular, "No shared rides yet. Rides you and riders you follow share appear here.") + railHtml("New this week", recent, "Nothing shared in the last seven days.");
+  rails.onclick = (e) => {
+    const b = e.target.closest("[data-community]");
+    if (!b) return;
+    S2.profileView = "feed";
+    APP.open("profile");
+  };
+}
+function compareView() {
+  const S2 = APP.state;
+  const loops = Array.isArray(S2.routes) ? S2.routes : [];
+  if (loops.length < 2) {
+    S2.adventureView = "home";
+    return render();
+  }
+  if (!Number.isInteger(S2.compareA) || S2.compareA >= loops.length) S2.compareA = 0;
+  if (!Number.isInteger(S2.compareB) || S2.compareB >= loops.length || S2.compareB === S2.compareA) S2.compareB = S2.compareA === 0 ? 1 : 0;
+  const a = loops[S2.compareA], b = loops[S2.compareB];
+  const rows = APP.quality.compareRoutes(a, b);
+  const picker = (which, current2) => `<select data-pick="${which}" style="min-height:40px;font-size:13px">${loops.map((r, i) => `<option value="${i}" ${i === current2 ? "selected" : ""}>${APP.escapeHtml(r.name || "Adventure " + (i + 1))}</option>`).join("")}</select>`;
+  APP.panel.innerHTML = `<div class="page">
+    ${viewHeader("Compare routes", "Same numbers, side by side")}
+    <div class="row" style="gap:8px">${picker("a", S2.compareA)}${picker("b", S2.compareB)}</div>
+    <div class="row" style="gap:8px">
+      <div style="flex:1">${routeThumb(a.geometry?.coordinates, 150, 90, { radius: 12 })}</div>
+      <div style="flex:1">${routeThumb(b.geometry?.coordinates, 150, 90, { radius: 12 })}</div>
+    </div>
+    <div class="card flat" style="padding:4px 14px">
+      ${rows.map((r) => `<div class="item" style="gap:8px">
+        <span style="flex:1;font-size:13px;font-weight:${r.winner === "a" ? 800 : 600};color:${r.winner === "a" ? "var(--green)" : "inherit"}">${r.a}</span>
+        <span class="muted" style="font-size:11px;font-weight:700;text-align:center;width:92px">${r.label}</span>
+        <span style="flex:1;text-align:right;font-size:13px;font-weight:${r.winner === "b" ? 800 : 600};color:${r.winner === "b" ? "var(--green)" : "inherit"}">${r.b}</span>
+      </div>`).join("")}
+    </div>
+    ${[a, b].some((r) => r.whyThisRoute) ? `<div class="card pad flat">
+      ${[a, b].map((r, i) => r.whyThisRoute ? `<p style="font-size:12px;font-weight:600;margin-bottom:6px"><b>${APP.escapeHtml(r.name || (i ? "B" : "A"))}:</b> ${APP.escapeHtml(r.whyThisRoute)}</p>` : "").join("")}
+    </div>` : ""}
+    <div class="action-bar">
+      <button class="btn light" id="cmpA">Use ${APP.escapeHtml(a.name || "A")}</button>
+      <button class="btn cta" id="cmpB">Use ${APP.escapeHtml(b.name || "B")}</button>
+    </div>
+  </div>`;
+  wireHeader(goHome);
+  APP.panel.querySelectorAll("[data-pick]").forEach((sel) => {
+    sel.onchange = (e) => {
+      const which = sel.dataset.pick === "a" ? "compareA" : "compareB";
+      S2[which] = +e.target.value;
+      compareView();
+    };
+  });
+  APP.$("#cmpA").onclick = () => {
+    APP.select(S2.compareA);
+    S2.adventureView = "home";
+    S2.routeDetailOpen = true;
+    APP.open("explore");
+  };
+  APP.$("#cmpB").onclick = () => {
+    APP.select(S2.compareB);
+    S2.adventureView = "home";
+    S2.routeDetailOpen = true;
+    APP.open("explore");
+  };
+}
+async function render() {
+  const S2 = APP.state;
+  if (S2.adventureView === "compare") return compareView();
+  if (S2.adventureView === "search") return searchView();
+  if (S2.adventureView === "filters") return filtersView();
+  return homeView();
+}
+
+// src/ui/pages/plan.js
+var SURFACES = ["Road", "Gravel", "MTB", "Mixed"];
+function state3() {
+  const S2 = APP.state;
+  if (!S2.planView) S2.planView = "planner";
+  if (!S2.libraryLayout) S2.libraryLayout = "grid";
+  if (S2.planRoundTrip === void 0) S2.planRoundTrip = false;
+  if (!S2.planSurface) S2.planSurface = "Road";
+  if (!Number.isFinite(S2.planBearing)) S2.planBearing = 35;
+  if (!S2.adventureRange) S2.adventureRange = { minKm: 20, maxKm: 70 };
+  return S2;
+}
+function segmentedHtml(view3) {
+  return `<div class="segmented" id="planTabs">
+    <button data-view="planner" class="${view3 === "planner" ? "on" : ""}">Planner</button>
+    <button data-view="library" class="${view3 === "library" ? "on" : ""}">My routes</button>
+  </div>`;
+}
+function dialHtml(bearing) {
+  const label = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round((bearing % 360 + 360) % 360 / 45) % 8];
+  return `<div style="text-align:center">
+    <svg id="dirDial" width="96" height="96" viewBox="0 0 96 96" style="display:block;touch-action:none;cursor:pointer">
+      <circle cx="48" cy="48" r="44" fill="var(--surface-muted)" stroke="var(--line)"/>
+      <g font-family="inherit" font-size="10" font-weight="700" fill="var(--muted)" text-anchor="middle">
+        <text x="48" y="16">N</text><text x="84" y="52">E</text><text x="48" y="88">S</text><text x="12" y="52">W</text>
+      </g>
+      <g transform="rotate(${bearing} 48 48)">
+        <path d="M48 18 L55 48 L48 43 L41 48z" fill="var(--accent)"/>
+        <path d="M48 78 L41 48 L48 53 L55 48z" fill="var(--line)"/>
+      </g>
+      <circle cx="48" cy="48" r="5" fill="var(--surface)" stroke="var(--navy)" stroke-width="2"/>
+    </svg>
+    <small class="muted" style="font-size:11px;font-weight:700">Head ${label} \xB7 ${Math.round(bearing)}\xB0</small>
+  </div>`;
+}
+function routeResultHtml(route, i, selected) {
+  const km = (route.distance || 0) / 1e3;
+  const diff = difficultyFor(km, route.ascent || 0);
+  const infra = Number.isFinite(route.osmCycleScore) ? route.osmCycleScore : route.cycleScore;
+  return `<article class="card ${selected ? "" : "flat"}" style="padding:12px;${selected ? "border-color:var(--blue);border-width:2px" : ""}" data-result="${i}">
+    <div class="between">
+      <div class="row" style="gap:10px">
+        ${routeThumb(route.geometry?.coordinates, 44, 44, { radius: 10 })}
+        <div>
+          <b style="font-size:14px">${i === 0 ? "Recommended" : `Option ${i + 1}`}</b>
+          <div class="muted" style="font-size:11px;font-weight:600">${Number.isFinite(infra) ? `${infra}% cycle infrastructure` : "Scoring\u2026"}${route.cycleScorePending ? " \xB7 refining" : ""}</div>
+        </div>
+      </div>
+      <span class="badge ${diff.tone}">${diff.label}</span>
+    </div>
+    <div class="stats three" style="margin-top:10px">
+      <div class="stat"><b>${fmtKm(km)}</b><small>distance</small></div>
+      <div class="stat"><b>${Number.isFinite(route.ascent) ? fmtM(route.ascent) : "\u2014"}</b><small>climb</small></div>
+      <div class="stat"><b>${fmtDuration(route.duration)}</b><small>est. time</small></div>
+    </div>
+    <div style="margin-top:10px">
+      <div class="between" style="margin-bottom:4px"><span class="label">Elevation</span>${gradientLegend()}</div>
+      ${elevationChart(route.elev, 340, 78, { distanceKm: km })}
+    </div>
+    <div class="actions">
+      <button class="btn primary sm" data-nav="${i}">${icon("navArrow", 16)}Navigate</button>
+      <button class="btn light sm" data-save="${i}">${icon("heart", 16)}Save</button>
+      <button class="btn light sm" data-share="${i}">${icon("share", 16)}Share</button>
+      <button class="btn light sm" data-preview="${i}">${icon("eye", 16)}Preview</button>
+      <button class="btn light sm" data-gpx="${i}">${icon("download", 16)}GPX</button>
+    </div>
+  </article>`;
+}
+function plannerHtml() {
+  const S2 = state3();
+  const routes2 = Array.isArray(S2.routes) ? S2.routes : [];
+  const finishIndex = Math.max(1, (S2.waypoints?.length || 2) - 1);
+  return `
+  <div class="card pad flat">
+    <div class="field">
+      <label>Start</label>
+      <div class="location-row"><div id="g0"></div><button class="iconbtn" id="useHereStart" title="Use my location">${icon("pin", 20)}</button></div>
+    </div>
+    <div id="waypointList"></div>
+    <div id="waypointFields"></div>
+    <button class="btn light sm" id="addWaypoint">${icon("plus", 16)}Add waypoint</button>
+    <div class="field" style="margin-top:12px">
+      <label>Finish</label>
+      <div class="location-row"><div id="gFinish"></div><button class="iconbtn" id="useHereFinish" title="Use my location">${icon("pin", 20)}</button></div>
+    </div>
+  </div>
+
+  <div class="card pad flat">
+    <div class="between">
+      <div><b style="font-size:14px;display:block">Round trip</b><span class="muted" style="font-size:12px;font-weight:600">Generate a loop back to the start</span></div>
+      <button class="toggle ${S2.planRoundTrip ? "on" : ""}" id="roundTrip" aria-pressed="${S2.planRoundTrip}"><i></i></button>
+    </div>
+    <div id="roundTripControls" ${S2.planRoundTrip ? "" : "hidden"} style="margin-top:12px">
+      <div class="row" style="gap:14px;align-items:flex-start">
+        <div style="flex:1">
+          <div class="between" style="margin-bottom:2px"><span class="label">Distance</span><b style="color:var(--blue)" id="rangeLabel">${Math.round(S2.adventureRange.minKm)}\u2013${Math.round(S2.adventureRange.maxKm)} km</b></div>
+          <div class="dual-range">
+            <div class="track"></div><div class="fill" id="rangeFill"></div>
+            <input id="rangeMin" type="range" min="5" max="150" step="5" value="${Math.round(S2.adventureRange.minKm)}">
+            <input id="rangeMax" type="range" min="5" max="150" step="5" value="${Math.round(S2.adventureRange.maxKm)}">
+          </div>
+        </div>
+        ${dialHtml(S2.planBearing)}
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="section-title" style="margin-bottom:8px">Surface</p>
+    <div class="row" id="surfaceChips" style="gap:8px;flex-wrap:wrap">${SURFACES.map((x) => `<button class="chip ${S2.planSurface === x ? "on" : ""}" data-surface="${x}">${x}</button>`).join("")}</div>
+  </div>
+
+  <button class="btn cta block" id="calcRoute">${icon("route", 18)}${S2.planRoundTrip ? "Generate loop" : "Find routes"}</button>
+
+  <div id="planResults" class="page" style="gap:12px">
+    ${routes2.length ? routes2.map((r, i) => routeResultHtml(r, i, S2.selected === i)).join("") : '<div class="empty">Set a start and finish, then find routes. Results show real distance, climbing and OpenStreetMap cycle-infrastructure coverage.</div>'}
+  </div>`;
+}
+function wirePlanner() {
+  const S2 = state3();
+  const { $: $2 } = APP;
+  APP.geo("#g0", 0);
+  APP.geo("#gFinish", Math.max(1, (S2.waypoints?.length || 2) - 1));
+  if (S2.names?.[0]) S2.geocoders["#g0"]?.setInput(S2.names[0]);
+  const fi = Math.max(1, (S2.waypoints?.length || 2) - 1);
+  if (S2.names?.[fi]) S2.geocoders["#gFinish"]?.setInput(S2.names[fi]);
+  APP.renderWaypointFields();
+  renderWaypointOrder();
+  $2("#useHereStart").onclick = () => APP.setHere(0);
+  $2("#useHereFinish").onclick = () => APP.setHere(Math.max(1, (S2.waypoints?.length || 2) - 1));
+  $2("#addWaypoint").onclick = () => APP.addPointToPointWaypoint();
+  $2("#roundTrip").onclick = (e) => {
+    S2.planRoundTrip = !S2.planRoundTrip;
+    e.currentTarget.classList.toggle("on", S2.planRoundTrip);
+    const box = $2("#roundTripControls");
+    if (box) box.hidden = !S2.planRoundTrip;
+    const btn = $2("#calcRoute");
+    if (btn) btn.innerHTML = `${icon("route", 18)}${S2.planRoundTrip ? "Generate loop" : "Find routes"}`;
+  };
+  const syncRange = () => {
+    let lo = +$2("#rangeMin").value, hi = +$2("#rangeMax").value;
+    if (lo > hi) [lo, hi] = [hi, lo];
+    S2.adventureRange = { minKm: lo, maxKm: hi };
+    $2("#rangeLabel").textContent = `${lo}\u2013${hi} km`;
+    const a = (lo - 5) / 145 * 100, b = (hi - 5) / 145 * 100;
+    const fill = $2("#rangeFill");
+    fill.style.left = `${a}%`;
+    fill.style.width = `${Math.max(0, b - a)}%`;
+  };
+  if ($2("#rangeMin")) {
+    $2("#rangeMin").oninput = syncRange;
+    $2("#rangeMax").oninput = syncRange;
+    syncRange();
+  }
+  const dial = $2("#dirDial");
+  if (dial) {
+    const setFromEvent = (e) => {
+      const r = dial.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2);
+      const dy = e.clientY - (r.top + r.height / 2);
+      S2.planBearing = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+      const g = dial.querySelector("g[transform]");
+      if (g) g.setAttribute("transform", `rotate(${S2.planBearing} 48 48)`);
+      const lbl = dial.parentElement.querySelector("small");
+      const name = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(S2.planBearing / 45) % 8];
+      if (lbl) lbl.textContent = `Head ${name} \xB7 ${Math.round(S2.planBearing)}\xB0`;
+    };
+    dial.onpointerdown = (e) => {
+      dial.setPointerCapture(e.pointerId);
+      setFromEvent(e);
+      dial.onpointermove = setFromEvent;
+    };
+    dial.onpointerup = () => {
+      dial.onpointermove = null;
+    };
+  }
+  $2("#surfaceChips").onclick = (e) => {
+    const b = e.target.closest("[data-surface]");
+    if (!b) return;
+    S2.planSurface = b.dataset.surface;
+    $2("#surfaceChips").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+  };
+  $2("#calcRoute").onclick = async () => {
+    if (S2.planRoundTrip) {
+      const start2 = S2.waypoints?.[0] || await APP.current();
+      if (!start2) return APP.toast("Set a start point first");
+      S2.mode = "loop";
+      S2.waypoints = [start2, start2];
+      await APP.adventureRoutes(false);
+    } else {
+      if (!S2.waypoints?.[0] || !S2.waypoints?.at(-1)) return APP.toast("Set both a start and a finish");
+      S2.mode = "point";
+      await APP.pointRoutes(false);
+    }
+    render2();
+  };
+  wireResults();
+}
+function wireResults() {
+  const { $: $2 } = APP;
+  const results = $2("#planResults");
+  if (results) results.onclick = (e) => {
+    const hit = (sel) => e.target.closest(`[data-${sel}]`);
+    const nav = hit("nav"), save = hit("save"), share = hit("share"), prev = hit("preview"), gpx = hit("gpx"), card = hit("result");
+    if (nav) {
+      e.stopPropagation();
+      APP.select(+nav.dataset.nav);
+      APP.startNavigation();
+      return;
+    }
+    if (save) {
+      e.stopPropagation();
+      APP.saveRouteByIndex(+save.dataset.save);
+      return;
+    }
+    if (share) {
+      e.stopPropagation();
+      APP.shareRouteByIndex(+share.dataset.share);
+      return;
+    }
+    if (prev) {
+      e.stopPropagation();
+      APP.select(+prev.dataset.preview);
+      APP.previewRoute3D();
+      return;
+    }
+    if (gpx) {
+      e.stopPropagation();
+      APP.select(+gpx.dataset.gpx);
+      APP.exportSelectedRouteGpx();
+      return;
+    }
+    if (card) {
+      APP.select(+card.dataset.result);
+      refreshResults();
+    }
+  };
+}
+function renderWaypointOrder() {
+  const S2 = state3();
+  const host = APP.$("#waypointList");
+  if (!host) return;
+  const pts = (S2.waypoints || []).map((coord, i) => ({ coord, name: S2.names?.[i] || "", i })).filter((p) => Array.isArray(p.coord));
+  if (pts.length < 2) {
+    host.innerHTML = "";
+    return;
+  }
+  const letter = (i) => String.fromCharCode(65 + i);
+  const tone = (i) => i === 0 ? "var(--accent)" : i === pts.length - 1 ? "var(--blue)" : "var(--navy)";
+  host.innerHTML = `<div class="card flat" style="padding:4px 12px;margin-bottom:10px">
+    ${pts.map((p, i) => `<div class="item waypoint-row" draggable="true" data-wp="${p.i}" data-pos="${i}" style="gap:10px;padding:9px 0;cursor:grab">
+      <span class="muted">${icon("drag", 18)}</span>
+      <span style="width:26px;height:26px;border-radius:50%;background:${tone(i)};color:#fff;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">${letter(i)}</span>
+      <span style="flex:1;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${APP.escapeHtml(p.name || "Dropped pin")}</span>
+      ${pts.length > 2 ? `<button class="iconbtn plain" data-wp-remove="${p.i}" title="Remove">${icon("x", 16)}</button>` : ""}
+    </div>`).join("")}
+  </div>`;
+  let dragFrom = null;
+  host.querySelectorAll("[data-wp]").forEach((row) => {
+    row.ondragstart = (e) => {
+      dragFrom = +row.dataset.pos;
+      row.style.opacity = ".5";
+      e.dataTransfer.effectAllowed = "move";
+    };
+    row.ondragend = () => {
+      row.style.opacity = "";
+    };
+    row.ondragover = (e) => {
+      e.preventDefault();
+      row.style.borderTop = "2px solid var(--blue)";
+    };
+    row.ondragleave = () => {
+      row.style.borderTop = "";
+    };
+    row.ondrop = (e) => {
+      e.preventDefault();
+      row.style.borderTop = "";
+      const to = +row.dataset.pos;
+      if (dragFrom === null || dragFrom === to) return;
+      const wp = [...S2.waypoints], nm = [...S2.names || []];
+      const [movedWp] = wp.splice(dragFrom, 1);
+      const [movedNm] = nm.splice(dragFrom, 1);
+      wp.splice(to, 0, movedWp);
+      nm.splice(to, 0, movedNm);
+      S2.waypoints = wp;
+      S2.names = nm;
+      dragFrom = null;
+      render2();
+      if (S2.waypoints.length > 1 && S2.waypoints.every(Boolean)) APP.pointRoutes(false);
+    };
+  });
+  host.querySelectorAll("[data-wp-remove]").forEach((b) => {
+    b.onclick = () => {
+      const i = +b.dataset.wpRemove;
+      S2.waypoints.splice(i, 1);
+      (S2.names || []).splice(i, 1);
+      render2();
+      if (S2.waypoints.length > 1 && S2.waypoints.every(Boolean)) APP.pointRoutes(false);
+    };
+  });
+}
+function collectionsOf(items) {
+  const set = /* @__PURE__ */ new Set();
+  items.forEach((x) => {
+    if (x.collection) set.add(x.collection);
+  });
+  return [...set];
+}
+function savedCardHtml(item, i) {
+  const route = item.route || {};
+  const km = (route.distance || 0) / 1e3;
+  const diff = difficultyFor(km, route.ascent || 0);
+  const coords = route.geometry?.coordinates;
+  const img = coords ? staticRouteImage(coords, APP.MAPBOX_TOKEN, { w: 340, h: 190 }) : null;
+  return `<article class="route-card" data-saved="${i}">
+    <div class="route-media">
+      ${img ? `<img src="${img}" alt="" loading="lazy">` : routeThumb(coords, 170, 96, { radius: 0 })}
+      <div class="thumb-chip">${routeThumb(coords, 34, 34, { radius: 8 })}</div>
+    </div>
+    <div class="route-body">
+      <b>${APP.escapeHtml(item.name || "Saved route")}</b>
+      <span>${fmtKm(km)} \xB7 ${fmtM(route.ascent || 0)}${item.mode === "loop" ? " \xB7 loop" : ""}</span>
+      <div class="between">
+        <span class="badge ${diff.tone}">${diff.label}</span>
+        <div class="row" style="gap:4px">
+          <button class="iconbtn plain" data-open="${i}" title="Open">${icon("route", 18)}</button>
+          <button class="iconbtn plain" data-share-saved="${i}" title="Share">${icon("share", 18)}</button>
+          <button class="iconbtn plain" data-del="${i}" title="Delete">${icon("x", 18)}</button>
+        </div>
+      </div>
+    </div>
+  </article>`;
+}
+function libraryHtml() {
+  const S2 = state3();
+  if (!S2.user) {
+    return `<div class="card account-required"><h2>Sign in required</h2><p>Saved routes are private to your account and sync across your devices.</p><button class="btn primary" id="libSignIn">Sign in</button></div>`;
+  }
+  const all = S2.accountRoutes || [];
+  const cols = collectionsOf(all);
+  const active = S2.libraryCollection || "All routes";
+  const items = active === "All routes" ? all : all.filter((x) => x.collection === active);
+  return `
+  <div class="between">
+    <div class="hscroll" id="collections" style="flex:1">
+      ${["All routes", ...cols].map((c) => `<button class="chip ${active === c ? "on" : ""}" data-collection="${APP.escapeHtml(c)}">${c === "All routes" ? "" : icon("folder", 14)}${APP.escapeHtml(c)}</button>`).join("")}
+    </div>
+    <div class="segmented" id="layoutToggle" style="width:88px;flex:0 0 auto">
+      <button data-layout="grid" class="${S2.libraryLayout === "grid" ? "on" : ""}">${icon("grid", 18)}</button>
+      <button data-layout="list" class="${S2.libraryLayout === "list" ? "on" : ""}">${icon("list", 18)}</button>
+    </div>
+  </div>
+  <label class="btn light block" style="cursor:pointer">${icon("download", 18)}Import GPX<input id="importGpx" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden></label>
+  ${items.length ? `<div class="route-grid ${S2.libraryLayout === "list" ? "list" : ""}" id="savedGrid">${items.map((item) => savedCardHtml(item, all.indexOf(item))).join("")}</div>` : `<div class="empty">${all.length ? "Nothing saved in this collection yet." : "No saved routes yet. Save a route from the planner or Adventure and it appears here."}</div>`}`;
+}
+function wireLibrary() {
+  const S2 = state3();
+  const { $: $2 } = APP;
+  if (!S2.user) {
+    const b = $2("#libSignIn");
+    if (b) b.onclick = () => APP.open("profile");
+    return;
+  }
+  $2("#importGpx").onchange = (e) => APP.importGpxFile(e.target.files[0]);
+  $2("#layoutToggle").onclick = (e) => {
+    const b = e.target.closest("[data-layout]");
+    if (!b) return;
+    S2.libraryLayout = b.dataset.layout;
+    render2();
+  };
+  $2("#collections").onclick = (e) => {
+    const b = e.target.closest("[data-collection]");
+    if (!b) return;
+    S2.libraryCollection = b.dataset.collection;
+    render2();
+  };
+  const grid = $2("#savedGrid");
+  if (grid) grid.onclick = async (e) => {
+    const saved = S2.accountRoutes || [];
+    const open2 = e.target.closest("[data-open]");
+    const share = e.target.closest("[data-share-saved]");
+    const del = e.target.closest("[data-del]");
+    const card = e.target.closest("[data-saved]");
+    if (open2) {
+      e.stopPropagation();
+      APP.loadSavedRoute(saved[+open2.dataset.open], true);
+      return;
+    }
+    if (share) {
+      e.stopPropagation();
+      APP.shareSavedRouteByIndex(+share.dataset.shareSaved);
+      return;
+    }
+    if (del) {
+      e.stopPropagation();
+      const item = saved[+del.dataset.del];
+      if (!item || !confirm(`Delete "${item.name || "this route"}"?`)) return;
+      await APP.deleteAccountItem("routes", item.id);
+      render2();
+      return;
+    }
+    if (card) APP.loadSavedRoute(saved[+card.dataset.saved], true);
+  };
+}
+function refreshResults() {
+  const S2 = state3();
+  const host = APP.$("#planResults");
+  if (!host) return false;
+  const routes2 = Array.isArray(S2.routes) ? S2.routes : [];
+  host.innerHTML = routes2.length ? routes2.map((r, i) => routeResultHtml(r, i, S2.selected === i)).join("") : '<div class="empty">Set a start and finish, then find routes.</div>';
+  wireResults();
+  return true;
+}
+async function render2() {
+  const S2 = state3();
+  APP.panel.innerHTML = `<div class="page">
+    ${rootHeader("Plan route", "Build a route, or open one you saved")}
+    ${segmentedHtml(S2.planView)}
+    <div id="planBody" class="page">${S2.planView === "library" ? libraryHtml() : plannerHtml()}</div>
+  </div>`;
+  APP.$("#planTabs").onclick = (e) => {
+    const b = e.target.closest("[data-view]");
+    if (!b) return;
+    S2.planView = b.dataset.view;
+    render2();
+  };
+  if (S2.planView === "library") wireLibrary();
+  else wirePlanner();
+}
+
+// src/ui/pages/record.js
+var SORTS = [
+  ["date-desc", "Newest first"],
+  ["distance-desc", "Distance: high to low"],
+  ["distance-asc", "Distance: low to high"],
+  ["gain-desc", "Elevation: high to low"],
+  ["gain-asc", "Elevation: low to high"],
+  ["speed-desc", "Speed: high to low"],
+  ["speed-asc", "Speed: low to high"],
+  ["effort-desc", "Effort: high to low"],
+  ["effort-asc", "Effort: low to high"]
+];
+var traceOf = (a) => (a?.samples || []).map((s) => s.pos).filter(Boolean);
+function achievementsFor(activity, others) {
+  const out = [];
+  const rest = others.filter((x) => x !== activity && x.id !== activity.id);
+  if (!rest.length) {
+    out.push({ icon: "flag", label: "First saved ride", tone: "var(--green)" });
+    return out;
+  }
+  if (rest.every((x) => (x.distance || 0) < (activity.distance || 0))) out.push({ icon: "route", label: "Longest ride yet", tone: "var(--blue)" });
+  if (rest.every((x) => (x.gain || 0) < (activity.gain || 0))) out.push({ icon: "mtn", label: "Biggest climb yet", tone: "var(--accent)" });
+  if (rest.every((x) => (x.avgSpeed || 0) < (activity.avgSpeed || 0))) out.push({ icon: "bolt", label: "Fastest average yet", tone: "var(--gold)" });
+  return out;
+}
+function detailHtml(a, index) {
+  const S2 = APP.state;
+  const trace = traceOf(a);
+  const img = trace.length > 1 ? staticRouteImage(trace, APP.MAPBOX_TOKEN, { w: 640, h: 300 }) : null;
+  const weight = APP.profileData().weight || 70;
+  const photos = a.photos || [a.photo].filter(Boolean);
+  const wins = achievementsFor(a, S2.accountActivities || []);
+  return `<div class="page">
+    ${viewHeader(a.name || "Activity", new Date(a.ended || a.started || Date.now()).toLocaleString())}
+    <div class="card hero-card">
+      <div class="hero-media" style="height:170px">${img ? `<img src="${img}" alt="" loading="lazy">` : routeThumb(trace, 358, 170, { radius: 0 })}</div>
+    </div>
+    ${wins.length ? `<section><p class="section-title" style="margin-bottom:8px">Achievements</p><div class="row" style="gap:8px;flex-wrap:wrap">${wins.map((w) => `<span class="badge gold" style="min-height:30px;padding:0 12px">${icon(w.icon, 14)}${w.label}</span>`).join("")}</div></section>` : ""}
+    <div class="stats">
+      <div class="stat tile"><b>${fmtKm(a.distance)}</b><small>distance</small></div>
+      <div class="stat tile"><b>${(a.avgSpeed || 0).toFixed(1)}</b><small>avg km/h</small></div>
+      <div class="stat tile"><b>${fmtM(a.gain)}</b><small>climb</small></div>
+      <div class="stat tile"><b>${APP.formatClock(a.elapsed || 0)}</b><small>moving</small></div>
+      <div class="stat tile"><b>${Math.round(a.effortScore || 0)}</b><small>effort</small></div>
+      <div class="stat tile"><b>${Math.round(a.avgPower || 0)}</b><small>est. watts</small></div>
+      <div class="stat tile"><b>${((a.avgPower || 0) / weight).toFixed(2)}</b><small>W/kg</small></div>
+      <div class="stat tile"><b>${Math.round(a.maxSpeed || 0)}</b><small>max km/h</small></div>
+    </div>
+    <p class="metric-note">Power and effort are estimates from GPS speed, elevation and your rider profile \u2014 not power-meter readings.</p>
+    <section>
+      <div class="between" style="margin-bottom:6px"><span class="section-title">Photos</span>
+        <label class="btn light sm" style="cursor:pointer">${icon("plus", 16)}Add<input id="addPhotos" type="file" accept="image/*" multiple hidden></label>
+      </div>
+      ${photos.length ? `<div class="photo-grid">${photos.map((p, i) => `<div><img src="${p}" alt=""><button data-del-photo="${i}">\xD7</button></div>`).join("")}</div>` : '<div class="empty" style="padding:14px">No photos on this ride.</div>'}
+    </section>
+    <section class="card pad flat">
+      <div class="label">Speed (km/h)</div><canvas id="activitySpeed" class="chart detail-chart"></canvas>
+      <div class="label">Elevation (m)</div><canvas id="activityElevation" class="chart detail-chart"></canvas>
+      <div class="label">Wind at ride time</div><canvas id="activityWind" class="chart detail-chart"></canvas>
+      <div class="label">Estimated power (W)</div><canvas id="activityPower" class="chart detail-chart"></canvas>
+      ${(a.samples || []).some((x) => Number.isFinite(x.heartRate)) ? '<div class="label">Heart rate (bpm)</div><canvas id="activityHr" class="chart detail-chart"></canvas>' : ""}
+      ${(a.samples || []).some((x) => Number.isFinite(x.cadence)) ? '<div class="label">Cadence (rpm)</div><canvas id="activityCad" class="chart detail-chart"></canvas>' : ""}
+    </section>
+    <div class="actions">
+      <button class="btn primary" id="useRoute">${icon("route", 16)}Use this route</button>
+      <button class="btn light" id="renameAct">${icon("sliders", 16)}Rename</button>
+      <button class="btn light" id="shareAct">${icon("share", 16)}Share</button>
+      <button class="btn light" id="pngAct">${icon("camera", 16)}Export PNG</button>
+    </div>
+  </div>`;
+}
+function wireDetail(a, index) {
+  const S2 = APP.state;
+  const { $: $2 } = APP;
+  APP.displayActivityRoute(a);
+  requestAnimationFrame(() => {
+    const s = a.samples || [];
+    APP.plot($2("#activitySpeed"), s.map((x) => (x.speed || 0) * 3.6), "#f28b30", "km/h");
+    APP.plot($2("#activityElevation"), s.map((x) => x.elevation).filter(Number.isFinite), "#139b66", "m");
+    APP.plot($2("#activityWind"), s.map((x) => x.windSpeed).filter(Number.isFinite), "#176bdb", "km/h");
+    APP.plot($2("#activityPower"), s.map((x) => x.estimatedPower || 0), "#8b5bd6", "W");
+    if ($2("#activityHr")) APP.plot($2("#activityHr"), s.map((x) => x.heartRate).filter(Number.isFinite), "#d94d4d", "bpm");
+    if ($2("#activityCad")) APP.plot($2("#activityCad"), s.map((x) => x.cadence).filter(Number.isFinite), "#00a6a6", "rpm");
+  });
+  wireHeader(() => {
+    S2.activityDetailIndex = null;
+    render3();
+  });
+  $2("#addPhotos").onchange = (e) => APP.addPhotosToSavedActivity(index, [...e.target.files]);
+  $2("#useRoute").onclick = () => APP.useSavedActivityRoute(a);
+  $2("#renameAct").onclick = () => APP.renameSavedActivity(index);
+  $2("#shareAct").onclick = () => APP.shareSavedActivity(a);
+  $2("#pngAct").onclick = () => APP.exportActivityPng(a);
+  APP.panel.querySelectorAll("[data-del-photo]").forEach((b) => {
+    b.onclick = () => APP.deleteSavedPhoto(index, +b.dataset.delPhoto);
+  });
+}
+function pendingHtml(d) {
+  const S2 = APP.state;
+  const trace = traceOf(d);
+  const img = trace.length > 1 ? staticRouteImage(trace, APP.MAPBOX_TOKEN, { w: 640, h: 300 }) : null;
+  const photos = d.photos || [];
+  const wins = achievementsFor(d, S2.accountActivities || []);
+  return `<div class="page">
+    ${rootHeader("Ride complete", "Name it, add photos, then save")}
+    <div class="card hero-card"><div class="hero-media" style="height:170px">${img ? `<img src="${img}" alt="">` : routeThumb(trace, 358, 170, { radius: 0 })}</div></div>
+    <div class="field"><label>Activity name</label><input id="activityName" type="text" value="${APP.escapeHtml(d.name || "")}"></div>
+    <div class="stats">
+      <div class="stat tile"><b>${fmtKm(d.distance)}</b><small>distance</small></div>
+      <div class="stat tile"><b>${(d.avgSpeed || 0).toFixed(1)}</b><small>avg km/h</small></div>
+      <div class="stat tile"><b>${fmtM(d.gain)}</b><small>climb</small></div>
+      <div class="stat tile"><b>${Math.round(d.effortScore || 0)}</b><small>effort</small></div>
+    </div>
+    ${wins.length ? `<section><p class="section-title" style="margin-bottom:8px">Achievements</p><div class="row" style="gap:8px;flex-wrap:wrap">${wins.map((w) => `<span class="badge gold" style="min-height:30px;padding:0 12px">${icon(w.icon, 14)}${w.label}</span>`).join("")}</div></section>` : ""}
+    <section>
+      <div class="between" style="margin-bottom:6px"><span class="section-title">Photos</span><span class="muted" style="font-size:12px;font-weight:600">${photos.length}/6</span></div>
+      <div class="photo-grid">
+        ${photos.map((p, i) => `<div><img src="${p}" alt=""><button data-del-pending="${i}">\xD7</button></div>`).join("")}
+        ${photos.length < 6 ? `<label class="photo-add" style="cursor:pointer">${icon("plus", 22)}<input id="activityPhotos" type="file" accept="image/*" multiple hidden></label>` : ""}
+      </div>
+    </section>
+    <div class="card pad flat between">
+      <div><b style="font-size:14px;display:block">Share to feed</b><span class="muted" style="font-size:12px;font-weight:600">Visible to riders who follow you</span></div>
+      <input type="checkbox" id="shareToFeed" checked hidden>
+      <button class="toggle on" id="shareToggle" aria-pressed="true"><i></i></button>
+    </div>
+    <div class="row" style="gap:10px">
+      <button class="btn light" id="discardActivity" style="flex:1">Discard</button>
+      <button class="btn cta" id="saveActivity" style="flex:2">Save ride</button>
+    </div>
+  </div>`;
+}
+function wirePending() {
+  const S2 = APP.state;
+  const { $: $2 } = APP;
+  const photos = $2("#activityPhotos");
+  if (photos) photos.onchange = (e) => APP.attachActivityPhotos([...e.target.files]);
+  $2("#shareToggle").onclick = (e) => {
+    const box = $2("#shareToFeed");
+    box.checked = !box.checked;
+    e.currentTarget.classList.toggle("on", box.checked);
+    e.currentTarget.setAttribute("aria-pressed", String(box.checked));
+  };
+  $2("#saveActivity").onclick = () => APP.savePendingActivity();
+  $2("#discardActivity").onclick = () => {
+    S2.pendingActivity = null;
+    render3();
+  };
+  APP.panel.querySelectorAll("[data-del-pending]").forEach((b) => {
+    b.onclick = () => {
+      S2.pendingActivity.photos.splice(+b.dataset.delPending, 1);
+      render3();
+    };
+  });
+}
+function activityRowHtml(a, index) {
+  const trace = traceOf(a);
+  return `<article class="route-card" data-activity="${index}" style="display:grid;grid-template-columns:96px 1fr">
+    <div class="route-media" style="height:100%;min-height:86px">${routeThumb(trace, 96, 86, { radius: 0 })}</div>
+    <div class="route-body">
+      <b>${APP.escapeHtml(a.name || "Cycling activity")}</b>
+      <span>${new Date(a.ended || a.started || Date.now()).toLocaleDateString()}</span>
+      <div class="row" style="gap:12px;font-size:12px;font-weight:700">
+        <span>${fmtKm(a.distance)}</span><span>${fmtM(a.gain)}</span><span>${(a.avgSpeed || 0).toFixed(1)} km/h</span>
+      </div>
+    </div>
+  </article>`;
+}
+function homeHtml() {
+  const S2 = APP.state;
+  const r = S2.record;
+  const list = APP.sortedActivities();
+  const live = r ? `<div class="card pad flat">
+        <div class="between" style="margin-bottom:10px"><span class="row" style="gap:8px;font-weight:800">${icon("record", 18)}${r.paused ? "Paused" : "Recording"}</span><span class="badge ${r.paused ? "orange" : "green"}">${APP.formatClock(r.movingMs)}</span></div>
+        <div class="stats">
+          <div class="stat tile"><b>${APP.displaySpeed(r).toFixed(1)}</b><small>${r.paused ? "avg" : "current"} km/h</small></div>
+          <div class="stat tile"><b>${(r.distance || 0).toFixed(2)}</b><small>km</small></div>
+          <div class="stat tile"><b>${Math.round(r.gain || 0)}</b><small>m gain</small></div>
+          <div class="stat tile"><b>${Math.round(r.samples?.at(-1)?.estimatedPower || 0)}</b><small>est. W</small></div>
+        </div>
+        <div class="row" style="gap:10px;margin-top:12px">
+          <button class="btn light" id="stopRec" style="flex:1">Stop recording</button>
+          ${S2.navState ? '<button class="btn danger" id="endNav" style="flex:1">End navigation</button>' : ""}
+        </div>
+      </div>` : `<button class="btn cta block" id="startRec" style="min-height:56px">${icon("record", 22)}Start recording</button>`;
+  return `<div class="page">
+    ${rootHeader("Record", r ? "Ride in progress" : "Track a ride and review your activities")}
+    ${live}
+    <div class="card pad flat">
+      <div class="between" style="margin-bottom:8px"><span class="section-title">Sensors</span><span class="muted" style="font-size:11px;font-weight:700" id="sensorState"></span></div>
+      <div class="row" style="gap:8px">
+        <button class="btn light sm" id="connectHr" style="flex:1">${icon("heartRate", 16)}Heart rate</button>
+        <button class="btn light sm" id="connectCad" style="flex:1">${icon("cadence", 16)}Cadence</button>
+      </div>
+    </div>
+    <div class="between">
+      <span class="section-title">Activities</span>
+      <select id="activitySort" style="width:auto;min-height:38px;font-size:13px">${SORTS.map(([v, l]) => `<option value="${v}" ${S2.activitySort === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+    </div>
+    ${list.length ? `<div class="route-grid list" id="activityList">${list.map((x) => activityRowHtml(x.activity, x.index)).join("")}</div>` : '<div class="empty">Completed rides appear here once you record and save one.</div>'}
+  </div>`;
+}
+function wireHome() {
+  const S2 = APP.state;
+  const { $: $2 } = APP;
+  const start2 = $2("#startRec");
+  if (start2) start2.onclick = () => APP.startRecord(false);
+  const stop = $2("#stopRec");
+  if (stop) stop.onclick = () => APP.stopRecording();
+  const end = $2("#endNav");
+  if (end) end.onclick = () => APP.endNavigation();
+  const sensors = APP.sensors;
+  const sensorState = $2("#sensorState");
+  const paintSensors = () => {
+    if (!sensorState) return;
+    if (!sensors.isSupported()) {
+      sensorState.textContent = "Not supported on this browser";
+      return;
+    }
+    const bits = [];
+    if (sensors.hrConnected()) bits.push("HR connected");
+    if (sensors.cadenceConnected()) bits.push("Cadence connected");
+    sensorState.textContent = bits.length ? bits.join(" \xB7 ") : "Not connected";
+  };
+  paintSensors();
+  const connect = async (fn, btn) => {
+    if (!sensors.isSupported()) return APP.toast("Bluetooth sensors need Chrome on Android or desktop");
+    btn.disabled = true;
+    try {
+      const name = await fn();
+      APP.toast(`Connected ${name}`);
+    } catch (e) {
+      if (e?.name !== "NotFoundError") APP.toast(e.message || "Could not connect");
+    } finally {
+      btn.disabled = false;
+      paintSensors();
+    }
+  };
+  const hrBtn = $2("#connectHr");
+  if (hrBtn) hrBtn.onclick = () => connect(sensors.connectHeartRate, hrBtn);
+  const cadBtn = $2("#connectCad");
+  if (cadBtn) cadBtn.onclick = () => connect(sensors.connectCadence, cadBtn);
+  const sort = $2("#activitySort");
+  if (sort) sort.onchange = (e) => {
+    S2.activitySort = e.target.value;
+    render3();
+  };
+  const list = $2("#activityList");
+  if (list) list.onclick = (e) => {
+    const card = e.target.closest("[data-activity]");
+    if (!card) return;
+    S2.activityDetailIndex = +card.dataset.activity;
+    render3();
+  };
+}
+async function render3() {
+  const S2 = APP.state;
+  const activities = S2.accountActivities || [];
+  if (Number.isInteger(S2.activityDetailIndex) && activities[S2.activityDetailIndex]) {
+    const a = activities[S2.activityDetailIndex];
+    APP.panel.innerHTML = detailHtml(a, S2.activityDetailIndex);
+    wireDetail(a, S2.activityDetailIndex);
+    return;
+  }
+  if (S2.pendingActivity) {
+    APP.panel.innerHTML = pendingHtml(S2.pendingActivity);
+    wirePending();
+    return;
+  }
+  if (!S2.user && !S2.record) {
+    APP.panel.innerHTML = `<div class="page">${rootHeader("Record", "Ride recording and activities")}
+      <div class="card account-required"><h2>Sign in required</h2><p>Recorded rides are stored in your account so they sync across devices.</p><button class="btn primary" id="recSignIn">Sign in</button></div></div>`;
+    APP.$("#recSignIn").onclick = () => APP.open("profile");
+    return;
+  }
+  APP.panel.innerHTML = homeHtml();
+  wireHome();
+}
+
+// src/social/clubs.js
+async function listClubs(max = 20) {
+  try {
+    const db = await getCloud();
+    const snap = await db.getDocs(db.query(db.collection(db.firestore, "clubs"), db.limit(max)));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.warn("Clubs unavailable", error);
+    return [];
+  }
+}
+async function createClub(user, { name, blurb = "" }) {
+  const db = await getCloud();
+  const ref = await db.addDoc(db.collection(db.firestore, "clubs"), {
+    name: name.slice(0, 80),
+    blurb: blurb.slice(0, 200),
+    createdBy: user.uid,
+    createdAt: db.serverTimestamp(),
+    memberCount: 1
+  });
+  await joinClub(user, ref.id);
+  return ref.id;
+}
+async function joinClub(user, clubId) {
+  const db = await getCloud();
+  await db.setDoc(db.doc(db.firestore, "clubs", clubId, "members", user.uid), {
+    uid: user.uid,
+    displayName: user.displayName || user.email?.split("@")[0] || "Rider",
+    joinedAt: db.serverTimestamp()
+  });
+  await db.setDoc(db.doc(db.firestore, "clubs", clubId), { memberCount: db.increment(1) }, { merge: true });
+}
+async function leaveClub(user, clubId) {
+  const db = await getCloud();
+  await db.deleteDoc(db.doc(db.firestore, "clubs", clubId, "members", user.uid));
+  await db.setDoc(db.doc(db.firestore, "clubs", clubId), { memberCount: db.increment(-1) }, { merge: true });
+}
+async function isClubMember(uid2, clubId) {
+  try {
+    const db = await getCloud();
+    const snap = await db.getDoc(db.doc(db.firestore, "clubs", clubId, "members", uid2));
+    return snap.exists();
+  } catch {
+    return false;
+  }
+}
+async function listMembers(clubId, max = 60) {
+  try {
+    const db = await getCloud();
+    const snap = await db.getDocs(db.query(db.collection(db.firestore, "clubs", clubId, "members"), db.limit(max)));
+    return snap.docs.map((d) => d.data());
+  } catch {
+    return [];
+  }
+}
+async function listEvents(clubId, max = 10) {
+  try {
+    const db = await getCloud();
+    const snap = await db.getDocs(
+      db.query(db.collection(db.firestore, "clubs", clubId, "events"), db.orderBy("startsAt", "asc"), db.limit(max))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch {
+    return [];
+  }
+}
+async function createEvent(user, clubId, { title, startsAt, meetPoint, distanceKm }) {
+  const db = await getCloud();
+  const ref = await db.addDoc(db.collection(db.firestore, "clubs", clubId, "events"), {
+    title: title.slice(0, 100),
+    startsAt,
+    meetPoint: (meetPoint || "").slice(0, 120),
+    distanceKm: Number(distanceKm) || 0,
+    createdBy: user.uid,
+    goingCount: 0
+  });
+  return ref.id;
+}
+async function toggleAttendance(user, clubId, eventId, going) {
+  const db = await getCloud();
+  const ref = db.doc(db.firestore, "clubs", clubId, "events", eventId, "attendees", user.uid);
+  if (going) {
+    await db.deleteDoc(ref);
+  } else {
+    await db.setDoc(ref, { uid: user.uid, displayName: user.displayName || "Rider" });
+  }
+  await db.setDoc(
+    db.doc(db.firestore, "clubs", clubId, "events", eventId),
+    { goingCount: db.increment(going ? -1 : 1) },
+    { merge: true }
+  );
+}
+async function isAttending(uid2, clubId, eventId) {
+  try {
+    const db = await getCloud();
+    const snap = await db.getDoc(db.doc(db.firestore, "clubs", clubId, "events", eventId, "attendees", uid2));
+    return snap.exists();
+  } catch {
+    return false;
+  }
+}
+async function clubLeaderboard(clubId, sinceMs, metric = "distanceKm") {
+  const members = await listMembers(clubId);
+  if (!members.length) return [];
+  try {
+    const db = await getCloud();
+    const uids = members.map((m) => m.uid);
+    const chunks = [];
+    for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+    const snaps = await Promise.all(
+      chunks.map(
+        (chunk) => db.getDocs(
+          db.query(
+            db.collection(db.firestore, "activities"),
+            db.where("ownerId", "in", chunk),
+            db.where("startedAt", ">=", sinceMs)
+          )
+        )
+      )
+    );
+    const totals = /* @__PURE__ */ new Map();
+    snaps.forEach(
+      (snap) => snap.docs.forEach((d) => {
+        const a = d.data();
+        const key = a.ownerId;
+        const add = metric === "elevationGainM" ? a.elevationGainM || 0 : a.distanceKm || 0;
+        const row = totals.get(key) || { uid: key, name: a.ownerDisplayName || "Rider", total: 0, rides: 0 };
+        row.total += add;
+        row.rides += 1;
+        totals.set(key, row);
+      })
+    );
+    members.forEach((m) => {
+      if (!totals.has(m.uid)) totals.set(m.uid, { uid: m.uid, name: m.displayName || "Rider", total: 0, rides: 0 });
+    });
+    return [...totals.values()].sort((a, b) => b.total - a.total);
+  } catch (error) {
+    console.warn("Leaderboard unavailable", error);
+    return [];
+  }
+}
+async function listChallenges(nowMs, max = 10) {
+  try {
+    const db = await getCloud();
+    const snap = await db.getDocs(
+      db.query(db.collection(db.firestore, "challenges"), db.where("endsAt", ">=", nowMs), db.orderBy("endsAt", "asc"), db.limit(max))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.warn("Challenges unavailable", error);
+    return [];
+  }
+}
+async function createChallenge(user, { title, targetKm, startsAt, endsAt }) {
+  const db = await getCloud();
+  const ref = await db.addDoc(db.collection(db.firestore, "challenges"), {
+    title: title.slice(0, 100),
+    targetKm: Number(targetKm) || 0,
+    startsAt,
+    endsAt,
+    createdBy: user.uid
+  });
+  await joinChallenge(user, ref.id);
+  return ref.id;
+}
+async function joinChallenge(user, challengeId) {
+  const db = await getCloud();
+  await db.setDoc(db.doc(db.firestore, "challenges", challengeId, "participants", user.uid), {
+    uid: user.uid,
+    displayName: user.displayName || "Rider",
+    joinedAt: db.serverTimestamp()
+  });
+}
+async function leaveChallenge(user, challengeId) {
+  const db = await getCloud();
+  await db.deleteDoc(db.doc(db.firestore, "challenges", challengeId, "participants", user.uid));
+}
+async function isInChallenge(uid2, challengeId) {
+  try {
+    const db = await getCloud();
+    const snap = await db.getDoc(db.doc(db.firestore, "challenges", challengeId, "participants", uid2));
+    return snap.exists();
+  } catch {
+    return false;
+  }
+}
+function challengeProgressKm(activities, challenge) {
+  const from = challenge.startsAt || 0;
+  const to = challenge.endsAt || Infinity;
+  return (activities || []).reduce((sum, a) => {
+    const t = a.ended || a.started || 0;
+    return t >= from && t <= to ? sum + (a.distance || 0) : sum;
+  }, 0);
+}
+
+// src/ui/pages/segments.js
+var WEEK = 7 * 864e5;
+var initials = (n = "") => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "R";
+var avatarColor = (uid2 = "") => ["#8b5bd6", "#00a6a6", "#176bdb", "#f28b30", "#139b66"][[...uid2].reduce((a, c) => a + c.charCodeAt(0), 0) % 5];
+var startOfWeek = () => {
+  const d = /* @__PURE__ */ new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+  return d.getTime();
+};
+function view() {
+  const S2 = APP.state;
+  if (!S2.segmentsView) S2.segmentsView = "home";
+  return S2;
+}
+var goHome2 = () => {
+  APP.state.segmentsView = "home";
+  render4();
+};
+function eventRowHtml(clubId, e, going) {
+  const d = new Date(e.startsAt || Date.now());
+  return `<div class="between" style="padding:10px 0;border-top:1px solid var(--line)">
+    <div class="row" style="gap:10px">
+      <div class="event-date"><b>${d.getDate()}</b><small>${d.toLocaleDateString([], { month: "short" }).toUpperCase()}</small></div>
+      <div>
+        <b style="font-size:14px;display:block">${APP.escapeHtml(e.title || "Group ride")}${e.distanceKm ? ` \xB7 ${Math.round(e.distanceKm)} km` : ""}</b>
+        <span class="muted" style="font-size:12px;font-weight:600">${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}${e.meetPoint ? ` \xB7 ${APP.escapeHtml(e.meetPoint)}` : ""} \xB7 ${e.goingCount || 0} going</span>
+      </div>
+    </div>
+    <button class="btn ${going ? "light" : "primary"} sm" data-going="${APP.escapeHtml(e.id)}" data-club="${APP.escapeHtml(clubId)}" data-on="${going ? "1" : "0"}">${going ? "Going" : "Join"}</button>
+  </div>`;
+}
+function clubCardHtml(club, i, member) {
+  return `<article class="card" style="overflow:hidden">
+    <button style="display:block;width:100%;padding:0;background:transparent;text-align:left" data-club-open="${APP.escapeHtml(club.id)}">
+      <div style="position:relative">${terrainPlaceholder(390, 96, ["forest", "coast", "warm", "cool"][i % 4], 0)}
+        <div style="position:absolute;left:14px;bottom:10px;color:#fff;text-shadow:0 1px 6px #0006">
+          <b style="font-size:17px;font-weight:800;display:block">${APP.escapeHtml(club.name || "Club")}</b>
+          <span style="font-size:12px;font-weight:600;opacity:.92">${club.memberCount || 0} member${club.memberCount === 1 ? "" : "s"}</span>
+        </div>
+      </div>
+    </button>
+    <div style="padding:12px 14px">
+      ${club.blurb ? `<p class="muted" style="font-size:12px;font-weight:600;margin-bottom:10px">${APP.escapeHtml(club.blurb)}</p>` : ""}
+      <button class="btn ${member ? "light" : "primary"} sm block" data-join-club="${APP.escapeHtml(club.id)}" data-on="${member ? "1" : "0"}">${member ? "Joined" : "Join club"}</button>
+    </div>
+  </article>`;
+}
+function challengeCardHtml(c, joined, progressKm) {
+  const pct = Math.max(0, Math.min(100, progressKm / Math.max(1, c.targetKm) * 100));
+  const daysLeft = Math.max(0, Math.ceil(((c.endsAt || 0) - Date.now()) / 864e5));
+  return `<div class="card challenge-card">
+    <div class="between">
+      <div>
+        <span class="badge" style="background:#ffffff1f;color:#fff">Challenge</span>
+        <b style="font-size:18px;font-weight:800;display:block;margin-top:8px">${APP.escapeHtml(c.title || "Challenge")}</b>
+        <span class="muted" style="font-size:12px;font-weight:600">${fmtKm(progressKm)} of ${Math.round(c.targetKm)} km \xB7 ${daysLeft} day${daysLeft === 1 ? "" : "s"} left</span>
+      </div>
+      ${icon("mtn", 32)}
+    </div>
+    <div class="progress" style="margin:12px 0 10px"><i style="width:${pct}%"></i></div>
+    <button class="btn sm block" style="background:${joined ? "#ffffff24" : "#fff"};color:${joined ? "#fff" : "var(--navy)"}" data-challenge="${APP.escapeHtml(c.id)}" data-on="${joined ? "1" : "0"}">${joined ? "Leave challenge" : "Join challenge"}</button>
+  </div>`;
+}
+function personalRecordsHtml(list) {
+  if (!list.length) return '<div class="empty">Record and save a ride to start setting records.</div>';
+  const best = (label, pick, format) => {
+    let win = null;
+    list.forEach((a, i) => {
+      if (!win || pick(a) > pick(win.a)) win = { a, i };
+    });
+    return win && pick(win.a) > 0 ? { label, value: format(pick(win.a)), name: win.a.name || "Cycling activity", index: win.i } : null;
+  };
+  const rows = [
+    best("Longest ride", (a) => a.distance || 0, (v) => fmtKm(v)),
+    best("Biggest climb", (a) => a.gain || 0, (v) => fmtM(v)),
+    best("Fastest average", (a) => a.avgSpeed || 0, (v) => `${v.toFixed(1)} km/h`),
+    best("Highest effort", (a) => a.effortScore || 0, (v) => String(Math.round(v)))
+  ].filter(Boolean);
+  return `<div class="card flat" style="padding:4px 14px">${rows.map((r) => `<button class="item" data-pr="${r.index}" style="width:100%;background:transparent;border-left:0;border-right:0;border-top:0;text-align:left;min-height:52px">
+    <span><b style="font-size:14px;display:block">${r.label}</b><span class="muted" style="font-size:12px;font-weight:600">${APP.escapeHtml(r.name)}</span></span>
+    <b style="font-size:15px;color:var(--blue)">${r.value}</b>
+  </button>`).join("")}</div>`;
+}
+async function loadSegments() {
+  const S2 = view();
+  const host = APP.$("#segmentList");
+  if (!host) return;
+  const btn = APP.$("#newSegment");
+  if (btn) btn.onclick = () => createFromLastRide();
+  if (!S2.user) {
+    host.innerHTML = '<div class="empty" style="padding:14px">Sign in to see segments.</div>';
+    return;
+  }
+  const centre = S2.pos || S2.waypoints?.[0] || null;
+  const list = await APP.segments.listSegmentsNear(centre, 60, turfRef()).catch(() => []);
+  if (!APP.$("#segmentList")) return;
+  if (!list.length) {
+    host.innerHTML = '<div class="empty" style="padding:14px">No segments yet. Record a ride, then create one from it \u2014 every ride you save is matched automatically.</div>';
+    return;
+  }
+  const efforts = await Promise.all(list.map((s) => APP.segments.listEfforts(s.id).catch(() => [])));
+  host.innerHTML = `<div class="card flat" style="padding:4px 14px">${list.map((seg, i) => {
+    const all = efforts[i] || [];
+    const mine = all.filter((e) => e.uid === S2.user.uid);
+    const best = mine.length ? Math.min(...mine.map((e) => e.seconds)) : null;
+    const leader = all.length ? all[0] : null;
+    return `<div class="item" style="gap:10px">
+      <span><b style="font-size:14px;display:block">${APP.escapeHtml(seg.name || "Segment")}</b>
+        <span class="muted" style="font-size:12px;font-weight:600">${(seg.distanceKm || 0).toFixed(1)} km \xB7 ${all.length} effort${all.length === 1 ? "" : "s"}${leader ? ` \xB7 best ${APP.segments.fmtSeconds(leader.seconds)} by ${APP.escapeHtml(leader.displayName || "Rider")}` : ""}</span></span>
+      <b style="font-size:14px;color:${best !== null ? "var(--blue)" : "var(--muted)"}">${best !== null ? APP.segments.fmtSeconds(best) : "\u2014"}</b>
+    </div>`;
+  }).join("")}</div>`;
+}
+function turfRef() {
+  return window.turf;
+}
+async function createFromLastRide() {
+  const S2 = view();
+  const last = (S2.accountActivities || [])[0];
+  const coords = (last?.samples || []).map((x) => x.pos).filter(Boolean);
+  if (coords.length < 4) return APP.toast("Record and save a ride first");
+  const name = prompt("Segment name", `${last.name || "Ride"} segment`);
+  if (!name?.trim()) return;
+  const from = Math.floor(coords.length / 3);
+  const to = Math.floor(coords.length * 2 / 3);
+  try {
+    await APP.segments.createSegment(S2.user, { name: name.trim(), coords: coords.slice(from, to), turf: turfRef() });
+    APP.toast("Segment created \u2014 future rides will match against it");
+    render4();
+  } catch (error) {
+    console.warn("Segment creation failed", error);
+    APP.toast("Could not create the segment");
+  }
+}
+async function homeView2() {
+  const S2 = view();
+  const activities = S2.accountActivities || [];
+  APP.panel.innerHTML = `<div class="page">
+    ${rootHeader("Segments", "Clubs, challenges and your records", { actions: `<button class="chip on" id="newClub">${icon("plus", 14)}Create</button>` })}
+    <div id="segBody" class="page"><div class="empty">Loading clubs\u2026</div></div>
+    <section id="segmentsSection">
+      <div class="between" style="margin-bottom:8px"><span class="section-title">Segments</span>
+        <button class="btn light sm" id="newSegment">${icon("plus", 14)}From last ride</button></div>
+      <div id="segmentList"><div class="empty" style="padding:14px">Loading segments\u2026</div></div>
+    </section>
+    <section>
+      <p class="section-title" style="margin-bottom:8px">Personal records</p>
+      ${personalRecordsHtml(activities)}
+    </section>
+  </div>`;
+  APP.$("#newClub").onclick = () => {
+    S2.segmentsView = "newClub";
+    render4();
+  };
+  APP.panel.querySelectorAll("[data-pr]").forEach((b) => {
+    b.onclick = () => {
+      S2.activityDetailIndex = +b.dataset.pr;
+      APP.open("record");
+    };
+  });
+  loadSegments();
+  if (!S2.user) {
+    APP.$("#segBody").innerHTML = `<div class="card account-required"><h2>Sign in for clubs</h2><p>Join clubs and challenges, and see where you sit on the leaderboard.</p><button class="btn primary" id="segSignIn">Sign in</button></div>`;
+    APP.$("#segSignIn").onclick = () => APP.open("profile");
+    return;
+  }
+  const now = Date.now();
+  const [clubs, challenges] = await Promise.all([listClubs(), listChallenges(now)]);
+  const [memberFlags, joinFlags] = await Promise.all([
+    Promise.all(clubs.map((c) => isClubMember(S2.user.uid, c.id))),
+    Promise.all(challenges.map((c) => isInChallenge(S2.user.uid, c.id)))
+  ]);
+  const body = APP.$("#segBody");
+  if (!body) return;
+  body.innerHTML = `
+    <section>
+      <div class="between" style="margin-bottom:8px"><span class="section-title">Clubs</span></div>
+      ${clubs.length ? clubs.map((c, i) => clubCardHtml(c, i, memberFlags[i])).join("") : '<div class="empty">No clubs yet. Create the first one.</div>'}
+    </section>
+    <section>
+      <div class="between" style="margin-bottom:8px"><span class="section-title">Challenges</span>
+        <button class="btn light sm" id="newChallenge">${icon("plus", 14)}New</button></div>
+      ${challenges.length ? challenges.map((c, i) => challengeCardHtml(c, joinFlags[i], challengeProgressKm(activities, c))).join("") : '<div class="empty">No active challenges. Start one and invite your club.</div>'}
+    </section>`;
+  APP.$("#newChallenge").onclick = () => {
+    S2.segmentsView = "newChallenge";
+    render4();
+  };
+  body.querySelectorAll("[data-club-open]").forEach((b) => {
+    b.onclick = () => {
+      S2.segmentsClubId = b.dataset.clubOpen;
+      S2.segmentsView = "club";
+      render4();
+    };
+  });
+  body.querySelectorAll("[data-join-club]").forEach((b) => {
+    b.onclick = async () => {
+      const on = b.dataset.on === "1";
+      b.disabled = true;
+      try {
+        if (on) await leaveClub(S2.user, b.dataset.joinClub);
+        else await joinClub(S2.user, b.dataset.joinClub);
+        APP.toast(on ? "Left club" : "Joined club");
+        render4();
+      } catch (e) {
+        console.warn("Club join failed", e);
+        APP.toast("Could not update membership");
+        b.disabled = false;
+      }
+    };
+  });
+  body.querySelectorAll("[data-challenge]").forEach((b) => {
+    b.onclick = async () => {
+      const on = b.dataset.on === "1";
+      b.disabled = true;
+      try {
+        if (on) await leaveChallenge(S2.user, b.dataset.challenge);
+        else await joinChallenge(S2.user, b.dataset.challenge);
+        render4();
+      } catch (e) {
+        console.warn("Challenge join failed", e);
+        APP.toast("Could not update challenge");
+        b.disabled = false;
+      }
+    };
+  });
+}
+async function clubView() {
+  const S2 = view();
+  const clubId = S2.segmentsClubId;
+  APP.panel.innerHTML = `<div class="page">${viewHeader("Club", "Loading\u2026")}<div class="empty">Loading club\u2026</div></div>`;
+  wireHeader(goHome2);
+  const [clubs, events, members] = await Promise.all([listClubs(), listEvents(clubId), listMembers(clubId)]);
+  const club = clubs.find((c) => c.id === clubId) || { id: clubId, name: "Club" };
+  const [member, board, goingFlags] = await Promise.all([
+    isClubMember(S2.user.uid, clubId),
+    clubLeaderboard(clubId, startOfWeek()),
+    Promise.all(events.map((e) => isAttending(S2.user.uid, clubId, e.id)))
+  ]);
+  APP.panel.innerHTML = `<div class="page">
+    ${viewHeader(club.name || "Club", `${club.memberCount || members.length} member${(club.memberCount || members.length) === 1 ? "" : "s"}`)}
+    <div class="card" style="overflow:hidden">
+      ${terrainPlaceholder(390, 96, "forest", 0)}
+      <div style="padding:12px 14px">
+        ${club.blurb ? `<p class="muted" style="font-size:12px;font-weight:600;margin-bottom:10px">${APP.escapeHtml(club.blurb)}</p>` : ""}
+        <div class="row" style="gap:8px">
+          <button class="btn ${member ? "light" : "primary"} sm" id="toggleMember" style="flex:1">${member ? "Leave club" : "Join club"}</button>
+          <button class="btn light sm" id="newEvent" style="flex:1">${icon("plus", 14)}Add ride</button>
+        </div>
+      </div>
+    </div>
+
+    <section>
+      <p class="section-title" style="margin-bottom:4px">Upcoming rides</p>
+      <div class="card pad flat" style="padding-top:2px">
+        ${events.length ? events.map((e, i) => eventRowHtml(clubId, e, goingFlags[i])).join("") : '<div class="empty" style="padding:14px">No rides planned yet.</div>'}
+      </div>
+    </section>
+
+    <section>
+      <div class="between" style="margin-bottom:8px"><span class="section-title">${icon("trophy", 15)} This week</span><span class="muted" style="font-size:12px;font-weight:700">Distance</span></div>
+      <div class="card pad flat">
+        ${board.length ? board.slice(0, 10).map((r, i) => `<div class="leader-row">
+          <span class="rank">${i + 1}</span>
+          <span class="avatar sm" style="background:${avatarColor(r.uid)}">${initials(r.name)}</span>
+          <span style="flex:1;font-size:14px;font-weight:${r.uid === S2.user.uid ? 800 : 600}">${APP.escapeHtml(r.name)}${r.uid === S2.user.uid ? " (you)" : ""}</span>
+          <b style="font-size:14px">${r.total ? fmtKm(r.total) : "\u2014"}</b>
+        </div>`).join("") : '<div class="empty" style="padding:14px">No member rides shared this week.</div>'}
+        <p class="muted" style="font-size:11px;font-weight:600;margin-top:8px">Ranked on rides members shared to their feed since Monday.</p>
+      </div>
+    </section>
+  </div>`;
+  wireHeader(goHome2);
+  const { $: $2 } = APP;
+  $2("#toggleMember").onclick = async () => {
+    try {
+      if (member) await leaveClub(S2.user, clubId);
+      else await joinClub(S2.user, clubId);
+      render4();
+    } catch (e) {
+      console.warn("Membership failed", e);
+      APP.toast("Could not update membership");
+    }
+  };
+  $2("#newEvent").onclick = () => {
+    S2.segmentsView = "newEvent";
+    render4();
+  };
+  APP.panel.querySelectorAll("[data-going]").forEach((b) => {
+    b.onclick = async () => {
+      const on = b.dataset.on === "1";
+      b.disabled = true;
+      try {
+        await toggleAttendance(S2.user, b.dataset.club, b.dataset.going, on);
+        render4();
+      } catch (e) {
+        console.warn("Attendance failed", e);
+        APP.toast("Could not update");
+        b.disabled = false;
+      }
+    };
+  });
+}
+function formView(title, subtitle, fields, onSubmit, submitLabel) {
+  APP.panel.innerHTML = `<div class="page">
+    ${viewHeader(title, subtitle)}
+    ${fields.map((f) => `<div class="field"><label>${f.label}</label><input id="${f.id}" type="${f.type || "text"}" ${f.value !== void 0 ? `value="${APP.escapeHtml(String(f.value))}"` : ""} ${f.min !== void 0 ? `min="${f.min}"` : ""} placeholder="${APP.escapeHtml(f.placeholder || "")}"></div>`).join("")}
+    <div class="action-bar"><button class="btn cta" id="formSubmit">${submitLabel}</button></div>
+  </div>`;
+  wireHeader(() => {
+    APP.state.segmentsView = APP.state.segmentsClubId && title.includes("ride") ? "club" : "home";
+    render4();
+  });
+  APP.$("#formSubmit").onclick = async () => {
+    const values = {};
+    let missing = false;
+    fields.forEach((f) => {
+      const v = APP.$(`#${f.id}`).value.trim();
+      if (f.required && !v) missing = true;
+      values[f.id] = v;
+    });
+    if (missing) return APP.toast("Fill in the required fields");
+    APP.$("#formSubmit").disabled = true;
+    try {
+      await onSubmit(values);
+    } catch (e) {
+      console.warn("Form failed", e);
+      APP.toast("Could not save");
+      APP.$("#formSubmit").disabled = false;
+    }
+  };
+}
+async function render4() {
+  const S2 = view();
+  if (!S2.user && S2.segmentsView !== "home") S2.segmentsView = "home";
+  if (S2.segmentsView === "club") return clubView();
+  if (S2.segmentsView === "newClub") {
+    return formView("New club", "Riders can find and join it", [
+      { id: "name", label: "Club name", required: true, placeholder: "Bristol Gravel Collective" },
+      { id: "blurb", label: "About (optional)", placeholder: "Weekend gravel rides around the city" }
+    ], async (v) => {
+      await createClub(S2.user, { name: v.name, blurb: v.blurb });
+      APP.toast("Club created");
+      S2.segmentsView = "home";
+      render4();
+    }, "Create club");
+  }
+  if (S2.segmentsView === "newEvent" && !S2.segmentsClubId) {
+    const clubs = await listClubs();
+    APP.panel.innerHTML = `<div class="page">
+      ${viewHeader("Pick a club", "Which club is this ride for?")}
+      ${clubs.length ? clubs.map((c) => `<button class="card pad flat item" data-pick-club="${APP.escapeHtml(c.id)}" style="width:100%;text-align:left">
+        <span><b style="font-size:14px;display:block">${APP.escapeHtml(c.name)}</b><span class="muted" style="font-size:12px;font-weight:600">${c.memberCount || 0} members</span></span>
+        ${icon("chevR", 18)}
+      </button>`).join("") : '<div class="empty">Create a club first.</div>'}
+    </div>`;
+    wireHeader(goHome2);
+    APP.panel.querySelectorAll("[data-pick-club]").forEach((b) => {
+      b.onclick = () => {
+        S2.segmentsClubId = b.dataset.pickClub;
+        render4();
+      };
+    });
+    return;
+  }
+  if (S2.segmentsView === "newEvent") {
+    const when = new Date(Date.now() + 864e5);
+    when.setHours(8, 30, 0, 0);
+    const iso = new Date(when.getTime() - when.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
+    const fromRoute = S2.clubRideFromRoute;
+    return formView("New club ride", fromRoute ? "Prefilled from your route" : "Add a group ride to the calendar", [
+      { id: "title", label: "Title", required: true, value: fromRoute?.name || "", placeholder: "Saturday social" },
+      { id: "when", label: "Date and time", type: "datetime-local", value: iso, required: true },
+      { id: "meetPoint", label: "Meeting point", placeholder: "Ashton Court gate" },
+      { id: "distanceKm", label: "Distance (km)", type: "number", min: 0, value: fromRoute ? Math.round(fromRoute.distanceKm) : "", placeholder: "60" }
+    ], async (v) => {
+      await createEvent(S2.user, S2.segmentsClubId, {
+        title: v.title,
+        startsAt: new Date(v.when).getTime(),
+        meetPoint: v.meetPoint,
+        distanceKm: v.distanceKm
+      });
+      APP.toast("Club ride added");
+      S2.clubRideFromRoute = null;
+      S2.segmentsView = "club";
+      render4();
+    }, "Add ride");
+  }
+  if (S2.segmentsView === "newChallenge") {
+    const end = new Date(Date.now() + 30 * 864e5);
+    return formView("New challenge", "Progress counts your saved rides", [
+      { id: "title", label: "Title", required: true, placeholder: "September 500 km" },
+      { id: "targetKm", label: "Target distance (km)", type: "number", min: 1, value: 500, required: true },
+      { id: "endsAt", label: "Ends", type: "date", value: end.toISOString().slice(0, 10), required: true }
+    ], async (v) => {
+      await createChallenge(S2.user, {
+        title: v.title,
+        targetKm: +v.targetKm,
+        startsAt: Date.now(),
+        endsAt: new Date(v.endsAt).getTime()
+      });
+      APP.toast("Challenge created");
+      S2.segmentsView = "home";
+      render4();
+    }, "Create challenge");
+  }
+  return homeView2();
+}
+
+// src/ui/pages/profile.js
+var initials2 = (name = "") => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "R";
+var avatarColor2 = (uid2 = "") => ["#8b5bd6", "#00a6a6", "#176bdb", "#f28b30", "#139b66"][[...uid2].reduce((a, c) => a + c.charCodeAt(0), 0) % 5];
+function relTime(ms) {
+  const diff = Date.now() - (ms || 0);
+  const mins = Math.round(diff / 6e4);
+  if (mins < 60) return `${Math.max(1, mins)} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} h ago`;
+  return new Date(ms).toLocaleDateString([], { day: "numeric", month: "short" });
+}
+function coordsOf(a) {
+  try {
+    const g = typeof a.routeSummaryGeoJson === "string" ? JSON.parse(a.routeSummaryGeoJson) : a.routeSummaryGeoJson;
+    return g?.coordinates?.length >= 2 ? g.coordinates : null;
+  } catch {
+    return null;
+  }
+}
+function view2() {
+  const S2 = APP.state;
+  if (!S2.profileView) S2.profileView = "feed";
+  return S2;
+}
+function shellHtml(inner, activeView) {
+  return `<div class="page">
+    ${rootHeader(activeView === "feed" ? "Feed" : "Profile", activeView === "feed" ? "Rides from riders you follow" : "Your account, stats and settings")}
+    <div class="segmented" id="profileTabs">
+      <button data-view="feed" class="${activeView === "feed" ? "on" : ""}">Feed</button>
+      <button data-view="you" class="${activeView === "you" ? "on" : ""}">You</button>
+    </div>
+    <div id="profileBody" class="page">${inner}</div>
+  </div>`;
+}
+function feedCardHtml(a, given) {
+  const coords = coordsOf(a);
+  const img = coords ? staticRouteImage(coords, APP.MAPBOX_TOKEN, { w: 640, h: 280 }) : null;
+  return `<article class="card feed-card" data-feed="${APP.escapeHtml(a.id)}">
+    <div class="feed-head row">
+      <span class="avatar" style="background:${avatarColor2(a.ownerId)}">${a.ownerPhotoURL ? `<img src="${APP.escapeHtml(a.ownerPhotoURL)}" alt="">` : initials2(a.ownerDisplayName)}</span>
+      <div style="flex:1"><b style="font-size:14px;display:block">${APP.escapeHtml(a.ownerDisplayName || "Rider")}</b><span class="muted" style="font-size:12px;font-weight:600">${relTime(a.startedAt)}</span></div>
+    </div>
+    <div class="feed-title">${APP.escapeHtml(a.title || "Cycling activity")}</div>
+    <div class="feed-media">${img ? `<img src="${img}" alt="" loading="lazy">` : routeThumb(coords, 358, 140, { radius: 0 })}</div>
+    <div class="feed-stats stats three">
+      <div class="stat"><b>${fmtKm(a.distanceKm)}</b><small>distance</small></div>
+      <div class="stat"><b>${fmtM(a.elevationGainM)}</b><small>elevation</small></div>
+      <div class="stat"><b>${(a.avgSpeedKmh || 0).toFixed(1)}</b><small>avg km/h</small></div>
+    </div>
+    <div class="feed-actions">
+      <button data-kudos="${APP.escapeHtml(a.id)}" class="${given ? "on" : ""}" aria-pressed="${given}">${icon("heart", 18)}<span>${a.kudosCount || 0}</span></button>
+      <button data-comments="${APP.escapeHtml(a.id)}">${icon("bubble", 18)}<span>${a.commentCount || 0}</span></button>
+      <span style="margin-left:auto" class="muted">${icon("share", 18)}</span>
+    </div>
+    <div class="comment-thread" id="thread-${APP.escapeHtml(a.id)}" hidden style="padding:0 14px 12px"></div>
+  </article>`;
+}
+async function feedHtml() {
+  const S2 = view2();
+  if (!S2.user) {
+    return `<div class="card account-required"><h2>Sign in to see your feed</h2><p>Follow other riders to see their routes and rides, give kudos and leave comments.</p><button class="btn primary" id="feedSignIn">Sign in</button></div>`;
+  }
+  const uids = await listFollowingUids(S2.user.uid).catch(() => []);
+  const activities = uids.length ? await fetchFeed(uids).catch(() => []) : [];
+  const given = await Promise.all(activities.map((a) => hasGivenKudos(a.id, S2.user.uid).catch(() => false)));
+  const ridingNow = await ridingNowCount(uids).catch(() => 0);
+  return `
+    ${ridingNow ? `<div class="row" style="justify-content:flex-end"><span class="badge green" style="min-height:30px">${icon("record", 12)}${ridingNow} riding now</span></div>` : ""}
+    <div class="card pad flat">
+      <div class="between" style="margin-bottom:8px"><span class="section-title">Find riders</span></div>
+      <div class="location-row"><input id="findPeople" type="search" placeholder="Search by name" autocomplete="off"><button class="iconbtn" id="findPeopleGo">${icon("search", 20)}</button></div>
+      <div id="peopleResults"></div>
+    </div>
+    ${activities.length ? activities.map((a, i) => feedCardHtml(a, given[i])).join("") : `<div class="empty">${uids.length ? "No rides yet from the riders you follow." : "Follow some riders above and their rides appear here."}</div>`}`;
+}
+function wireFeed() {
+  const S2 = view2();
+  const { $: $2, panel: panel2 } = APP;
+  const signIn = $2("#feedSignIn");
+  if (signIn) {
+    signIn.onclick = () => {
+      S2.profileView = "you";
+      render5();
+    };
+    return;
+  }
+  const runSearch = async () => {
+    const q = $2("#findPeople").value.trim();
+    const box2 = $2("#peopleResults");
+    if (!q) {
+      box2.innerHTML = "";
+      return;
+    }
+    box2.innerHTML = '<p class="muted" style="font-size:12px;font-weight:600;padding:8px 0">Searching\u2026</p>';
+    const people = (await searchProfilesByName(q).catch(() => [])).filter((p) => p.uid !== S2.user.uid);
+    if (!people.length) {
+      box2.innerHTML = '<p class="muted" style="font-size:12px;font-weight:600;padding:8px 0">No riders found.</p>';
+      return;
+    }
+    const flags = await Promise.all(people.map((p) => isFollowing(S2.user.uid, p.uid).catch(() => false)));
+    box2.innerHTML = people.map((p, i) => `<div class="item">
+      <span class="row"><span class="avatar sm" style="background:${avatarColor2(p.uid)}">${initials2(p.displayName)}</span>${APP.escapeHtml(p.displayName || "Rider")}</span>
+      <button class="btn ${flags[i] ? "light" : "primary"} sm" data-follow="${APP.escapeHtml(p.uid)}" data-on="${flags[i] ? "1" : "0"}">${flags[i] ? "Following" : "Follow"}</button>
+    </div>`).join("");
+    box2.querySelectorAll("[data-follow]").forEach((b) => {
+      b.onclick = async () => {
+        const uid2 = b.dataset.follow;
+        const on = b.dataset.on === "1";
+        b.disabled = true;
+        try {
+          if (on) await unfollowUser(S2.user.uid, uid2);
+          else await followUser(S2.user.uid, uid2);
+          b.dataset.on = on ? "0" : "1";
+          b.textContent = on ? "Follow" : "Following";
+          b.className = `btn ${on ? "primary" : "light"} sm`;
+          APP.toast(on ? "Unfollowed" : "Now following");
+        } catch (e) {
+          console.warn("Follow failed", e);
+          APP.toast("Could not update follow");
+        } finally {
+          b.disabled = false;
+        }
+      };
+    });
+  };
+  const go = $2("#findPeopleGo");
+  if (go) go.onclick = runSearch;
+  const box = $2("#findPeople");
+  if (box) box.onkeydown = (e) => {
+    if (e.key === "Enter") runSearch();
+  };
+  panel2.querySelectorAll("[data-kudos]").forEach((b) => {
+    b.onclick = async () => {
+      const id = b.dataset.kudos;
+      const on = b.getAttribute("aria-pressed") === "true";
+      const count = b.querySelector("span");
+      b.disabled = true;
+      try {
+        await toggleKudos(id, S2.user.uid, on);
+        b.setAttribute("aria-pressed", String(!on));
+        b.classList.toggle("on", !on);
+        count.textContent = String(Math.max(0, (+count.textContent || 0) + (on ? -1 : 1)));
+      } catch (e) {
+        console.warn("Kudos failed", e);
+        APP.toast("Could not update kudos");
+      } finally {
+        b.disabled = false;
+      }
+    };
+  });
+  panel2.querySelectorAll("[data-comments]").forEach((b) => {
+    b.onclick = async () => {
+      const id = b.dataset.comments;
+      const box2 = APP.$(`#thread-${CSS.escape(id)}`) || document.getElementById(`thread-${id}`);
+      if (!box2) return;
+      if (!box2.hidden) {
+        box2.hidden = true;
+        return;
+      }
+      box2.hidden = false;
+      await loadThread(box2, id);
+    };
+  });
+}
+async function loadThread(box, id) {
+  const S2 = APP.state;
+  box.innerHTML = '<p class="muted" style="font-size:12px;font-weight:600">Loading comments\u2026</p>';
+  const comments = await listComments(id).catch(() => []);
+  box.innerHTML = `
+    ${comments.length ? comments.map((c) => `<div class="comment-row" style="margin-bottom:10px">
+      <span class="avatar sm" style="background:${avatarColor2(c.authorUid)}">${initials2(c.authorDisplayName)}</span>
+      <div style="flex:1"><div class="row" style="gap:6px"><b style="font-size:13px">${APP.escapeHtml(c.authorDisplayName || "Rider")}</b></div>
+      <div class="comment-bubble">${APP.escapeHtml(c.text || "")}</div></div>
+    </div>`).join("") : '<p class="muted" style="font-size:12px;font-weight:600">No comments yet.</p>'}
+    <div class="comment-compose">
+      <span class="avatar sm" style="background:${avatarColor2(S2.user?.uid || "")}">${initials2(S2.user?.displayName || S2.user?.email || "You")}</span>
+      <input type="text" placeholder="Add a comment" autocomplete="off">
+      <button class="iconbtn round" style="background:var(--blue);color:#fff;border:0">${icon("send", 18)}</button>
+    </div>`;
+  const input = box.querySelector(".comment-compose input");
+  const send = box.querySelector(".comment-compose button");
+  send.onclick = async () => {
+    const text = input.value.trim();
+    if (!text) return;
+    send.disabled = true;
+    try {
+      await addComment(id, S2.user, text);
+      await loadThread(box, id);
+    } catch (e) {
+      console.warn("Comment failed", e);
+      APP.toast("Could not post comment");
+      send.disabled = false;
+    }
+  };
+  input.onkeydown = (e) => {
+    if (e.key === "Enter") send.onclick();
+  };
+}
+function lifetimeTotals(activities) {
+  return activities.reduce((t, a) => ({
+    km: t.km + (a.distance || 0),
+    m: t.m + (a.gain || 0),
+    rides: t.rides + 1
+  }), { km: 0, m: 0, rides: 0 });
+}
+function badgesFor(activities) {
+  const t = lifetimeTotals(activities);
+  const longest = Math.max(0, ...activities.map((a) => a.distance || 0));
+  const climb = Math.max(0, ...activities.map((a) => a.gain || 0));
+  return [
+    { icon: "flag", label: "First ride", got: t.rides >= 1, tone: "var(--green)" },
+    { icon: "route", label: "10 rides", got: t.rides >= 10, tone: "var(--blue)" },
+    { icon: "bolt", label: "50 km ride", got: longest >= 50, tone: "var(--gold)" },
+    { icon: "trophy", label: "100 km ride", got: longest >= 100, tone: "var(--accent)" },
+    { icon: "mtn", label: "1,000 m climb", got: climb >= 1e3, tone: "#8b5bd6" },
+    { icon: "crown", label: "1,000 km total", got: t.km >= 1e3, tone: "var(--red)" }
+  ];
+}
+function themeChips() {
+  const cur = localStorage.getItem("theme") || "system";
+  return ["system", "light", "dark"].map((t) => `<button class="chip ${cur === t ? "on" : ""}" data-theme="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("");
+}
+function signedOutHtml() {
+  const standalone = APP.isStandalone();
+  return `<div class="card pad flat">
+      <h2>Sign in</h2>
+      ${standalone ? '<p class="muted" style="font-size:12px;font-weight:600;margin-top:6px">Home Screen app detected. Email sign-in is the most reliable here.</p>' : ""}
+      <div class="field"><label>Email</label><input id="authEmail" type="email" autocomplete="email" placeholder="name@example.com"></div>
+      <div class="field"><label>Password</label><input id="authPassword" type="password" autocomplete="current-password" minlength="6" placeholder="At least 6 characters"></div>
+      <div class="actions"><button class="btn primary" id="emailLogin">Sign in</button><button class="btn light" id="emailCreate">Create account</button><button class="btn light" id="emailReset">Reset password</button></div>
+    </div>
+    <div class="card pad flat"><h3>Google account</h3><p class="muted" style="font-size:12px;font-weight:600;margin:6px 0 10px">Opens a popup; no redirect sign-in is used.</p><button class="btn light block" id="googleLogin">Continue with Google</button></div>`;
+}
+async function youHtml() {
+  const S2 = view2();
+  if (!S2.user) return signedOutHtml();
+  const activities = S2.accountActivities || [];
+  const t = lifetimeTotals(activities);
+  const p = APP.profileData();
+  const [followers, following] = await Promise.all([
+    listFollowerUids(S2.user.uid).catch(() => []),
+    listFollowingUids(S2.user.uid).catch(() => [])
+  ]);
+  const name = S2.user.displayName || S2.user.email?.split("@")[0] || "Rider";
+  return `
+    <div style="text-align:center">
+      <span class="avatar lg" style="background:linear-gradient(135deg,var(--accent),var(--blue))">${initials2(name)}</span>
+      <h2 style="margin-top:10px">${APP.escapeHtml(name)}</h2>
+      <p class="muted" style="font-size:13px;font-weight:600">${APP.escapeHtml(S2.user.email || "")}</p>
+    </div>
+    <div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div class="stat tile"><b>${followers.length}</b><small>followers</small></div>
+      <div class="stat tile"><b>${following.length}</b><small>following</small></div>
+    </div>
+    <div class="card pad flat stats three">
+      <div class="stat"><b style="color:var(--blue)">${fmtKm(t.km)}</b><small>total distance</small></div>
+      <div class="stat"><b style="color:var(--blue)">${fmtM(t.m)}</b><small>total climbed</small></div>
+      <div class="stat"><b style="color:var(--blue)">${t.rides}</b><small>rides</small></div>
+    </div>
+    <section>
+      <div class="between" style="margin-bottom:10px"><span class="section-title">Badges</span><span class="muted" style="font-size:12px;font-weight:700">${badgesFor(activities).filter((b) => b.got).length} earned</span></div>
+      <div class="badge-grid">${badgesFor(activities).map((b) => `<div class="badge-tile ${b.got ? "" : "locked"}"><span class="ico" style="background:color-mix(in srgb, ${b.tone} 16%, transparent);color:${b.tone}">${icon(b.icon, 22)}</span><b>${b.label}</b></div>`).join("")}</div>
+    </section>
+    <div class="card pad flat between"><div><b style="font-size:14px;display:block">Weather</b><span class="muted" style="font-size:12px;font-weight:600">Conditions, wind and forecast</span></div><button class="btn light sm" id="openWeather">Open</button></div>
+    <section class="card pad flat">
+      <h3>Rider profile</h3>
+      <p class="muted" style="font-size:12px;font-weight:600;margin-top:4px">Used for estimated power and effort.</p>
+      <div class="field"><label>Weight (kg)</label><input id="profileWeight" type="number" min="30" max="250" value="${p.weight}"></div>
+      <div class="field"><label>Height (cm)</label><input id="profileHeight" type="number" min="120" max="230" value="${p.height}"></div>
+      <div class="field"><label>Bike + kit (kg)</label><input id="bikeWeight" type="number" min="5" max="40" value="${p.bikeWeight}"></div>
+      <button class="btn primary block" id="saveProfile">Save rider profile</button>
+    </section>
+    <section class="card pad flat">
+      <h3>Appearance</h3>
+      <div class="row" id="themeChips" style="gap:8px;margin-top:10px">${themeChips()}</div>
+    </section>
+    <button class="btn light block" id="logout">Log out</button>`;
+}
+function wireYou() {
+  const S2 = view2();
+  const { $: $2 } = APP;
+  const on = (sel, handler) => {
+    const el = $2(sel);
+    if (el) el.onclick = handler;
+  };
+  if ($2("#emailLogin")) {
+    on("#emailLogin", () => APP.emailAction("login"));
+    on("#emailCreate", () => APP.emailAction("create"));
+    on("#emailReset", () => APP.emailAction("reset"));
+    on("#googleLogin", () => S2.loginGoogle?.().catch(APP.showAuthError));
+    return;
+  }
+  on("#openWeather", () => APP.open("weather"));
+  on("#logout", () => S2.logout?.());
+  on("#saveProfile", () => {
+    const weight = $2("#profileWeight").value, height = $2("#profileHeight").value, bike = $2("#bikeWeight").value;
+    localStorage.setItem("profileWeight", weight);
+    localStorage.setItem("profileHeight", height);
+    localStorage.setItem("bikeWeight", bike);
+    updateRiderMeasurements(S2.user.uid, { weightKg: +weight, heightCm: +height, bikeWeightKg: +bike }).catch((e) => console.warn("Measurement sync failed", e));
+    APP.toast("Rider profile saved");
+  });
+  on("#themeChips", (e) => {
+    const b = e.target.closest("[data-theme]");
+    if (!b) return;
+    const t = b.dataset.theme;
+    localStorage.setItem("theme", t);
+    if (t === "system") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = t;
+    $2("#themeChips").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+  });
+}
+async function render5() {
+  const S2 = view2();
+  APP.panel.innerHTML = shellHtml('<div class="empty">Loading\u2026</div>', S2.profileView);
+  APP.$("#profileTabs").onclick = (e) => {
+    const b = e.target.closest("[data-view]");
+    if (!b) return;
+    S2.profileView = b.dataset.view;
+    render5();
+  };
+  const body = APP.$("#profileBody");
+  const inner = S2.profileView === "feed" ? await feedHtml() : await youHtml();
+  if (!APP.$("#profileBody")) return;
+  body.innerHTML = inner;
+  try {
+    if (S2.profileView === "feed") wireFeed();
+    else wireYou();
+  } catch (error) {
+    console.warn("Profile wiring skipped", error);
+  }
+}
+
+// src/ui/pages/routeDetail.js
+var PLACE_ICON = (category = "") => {
+  const c = String(category).toLowerCase();
+  if (c.includes("view") || c.includes("peak")) return "eye";
+  if (c.includes("cafe") || c.includes("food")) return "cup";
+  if (c.includes("water")) return "drop";
+  if (c.includes("park") || c.includes("nature") || c.includes("forest")) return "leaf";
+  if (c.includes("castle") || c.includes("historic") || c.includes("attraction")) return "landmark";
+  return "pin";
+};
+function surfaceBadge(route) {
+  if (!Number.isFinite(route.surfaceUnpavedShare)) return "";
+  const pct = Math.round(route.surfaceUnpavedShare * 100);
+  const tone = pct >= 55 ? "orange" : pct >= 12 ? "blue" : "green";
+  const label = pct >= 55 ? `${pct}% unpaved` : pct >= 12 ? `Mixed \xB7 ${pct}% unpaved` : "Mostly paved";
+  return `<span class="badge ${tone}">${label}</span>`;
+}
+async function render6() {
+  const S2 = APP.state;
+  const back = () => {
+    S2.routeDetailOpen = false;
+    S2.adventureView = "home";
+    APP.open("explore");
+  };
+  const index = Number.isInteger(S2.selected) ? S2.selected : 0;
+  const route = S2.routes?.[index] || S2.route;
+  if (!route?.geometry?.coordinates?.length) {
+    APP.panel.innerHTML = `<div class="page">${viewHeader("Route", "No route selected")}
+      <div class="empty">Pick a route from Adventure or the planner to see its detail here.</div>
+      <button class="btn cta block" id="toAdventure">${icon("compass", 18)}Find adventures</button></div>`;
+    wireHeader(back);
+    APP.$("#toAdventure").onclick = back;
+    return;
+  }
+  const coords = route.geometry.coordinates;
+  const km = (route.distance || 0) / 1e3;
+  const diff = difficultyFor(km, route.ascent || 0);
+  const infra = Number.isFinite(route.osmCycleScore) ? route.osmCycleScore : route.cycleScore;
+  const img = staticRouteImage(coords, APP.MAPBOX_TOKEN, { w: 640, h: 300 });
+  const places = Array.isArray(route.adventurePlaces) ? route.adventurePlaces.filter((p) => p?.coord) : [];
+  const hasWind = Array.isArray(route.wind) && route.wind.length;
+  const actions = `<button class="iconbtn" id="detailSave" title="Save route">${icon("heart", 18)}</button>
+    <button class="iconbtn" id="detailShare" title="Share route">${icon("share", 18)}</button>`;
+  APP.panel.innerHTML = `<div class="page">
+    ${viewHeader(route.savedName || route.name || "Route", `${fmtKm(km)} \xB7 ${diff.label}`, { actions })}
+    <div class="card hero-card">
+      <div class="hero-media" style="height:172px">
+        ${img ? `<img src="${img}" alt="" loading="lazy">` : routeThumb(coords, 358, 172, { radius: 0 })}
+      </div>
+    </div>
+
+    <div class="row" style="gap:6px;flex-wrap:wrap">
+      <span class="badge ${diff.tone}">${diff.label}</span>
+      ${surfaceBadge(route)}
+      ${route.qualityLabel ? `<span class="badge blue">${APP.escapeHtml(String(route.qualityLabel))}</span>` : ""}
+      ${route.rangeStatus ? `<span class="badge orange">${APP.escapeHtml(String(route.rangeStatus))}</span>` : ""}
+    </div>
+
+    ${route.whyThisRoute ? `<div class="card pad flat" style="border-left:3px solid var(--blue)"><p style="font-size:13px;font-weight:600;line-height:1.45">${APP.escapeHtml(route.whyThisRoute)}</p></div>` : ""}
+    <div class="stats">
+      <div class="stat tile"><b>${fmtKm(km)}</b><small>distance</small></div>
+      <div class="stat tile"><b>${Number.isFinite(route.ascent) ? fmtM(route.ascent) : "\u2014"}</b><small>elevation</small></div>
+      <div class="stat tile"><b>${fmtDuration(route.duration)}</b><small>est. time</small></div>
+      <div class="stat tile"><b>${Number.isFinite(infra) ? `${infra}%` : "\u2014"}</b><small>${Number.isFinite(route.osmCycleScore) ? "OSM cycle infra" : "cycle estimate"}</small></div>
+    </div>
+
+    <section>
+      <div class="between" style="margin-bottom:6px"><span class="section-title">Elevation</span>${gradientLegend()}</div>
+      ${elevationChart(route.elev, 340, 92, { distanceKm: km })}
+    </section>
+
+    ${hasWind ? `<section><div class="between" style="margin-bottom:6px"><span class="section-title">Wind along the route</span><span class="muted" style="font-size:11px;font-weight:700">tailwind + / headwind \u2212</span></div><canvas id="routeWindChart" class="chart"></canvas></section>` : ""}
+
+    ${places.length ? `<section>
+      <p class="section-title" style="margin-bottom:6px">Highlights along the way</p>
+      ${places.slice(0, 6).map((p) => `<div class="highlight-row">
+        <span class="ico" style="background:color-mix(in srgb, var(--blue) 14%, transparent);color:var(--blue)">${icon(PLACE_ICON(p.category), 18)}</span>
+        <div><b>${APP.escapeHtml(p.name || "Point of interest")}</b><span>${APP.escapeHtml(String(p.category || "").replace(/_/g, " "))}${Number.isFinite(p.distance) ? ` \xB7 ${p.distance.toFixed(1)} km from start` : ""}</span></div>
+      </div>`).join("")}
+    </section>` : ""}
+
+    <div id="routeSocial"></div>
+    <div id="cueHost"></div>
+    <button class="btn light block" id="routeToClub">${icon("flag", 16)}Plan this as a club ride</button>
+
+    <div class="action-bar">
+      <button class="iconbtn" id="detailOffline" title="Save for offline" style="width:52px;height:52px">${icon("cloudDown", 22)}</button>
+      <button class="iconbtn" id="detailGpx" title="Export GPX" style="width:52px;height:52px">${icon("download", 22)}</button>
+      <button class="btn cta" id="detailStart" style="flex:1;min-height:52px">${icon("compass", 20)}Start navigation</button>
+    </div>
+  </div>`;
+  const { $: $2 } = APP;
+  const routeId = route.savedId || route.id || `route-${Math.round(route.distance || 0)}-${coords.length}`;
+  const rateableId = route.savedId || S2.editingSavedId || null;
+  const social = $2("#routeSocial");
+  if (social) {
+    if (!rateableId) {
+      social.innerHTML = '<p class="muted" style="font-size:12px;font-weight:600">Save this route to rate it and collect ride photos from it.</p>';
+    } else {
+      Promise.all([
+        APP.ratings.getRouteStats(rateableId),
+        S2.user ? APP.ratings.getMyRating(rateableId, S2.user.uid) : 0,
+        APP.ratings.routePhotos(rateableId)
+      ]).then(([stats, mine, photos]) => {
+        if (!APP.$("#routeSocial")) return;
+        social.innerHTML = `<section>
+          <div class="between" style="margin-bottom:6px">
+            <span class="section-title">Rider feedback</span>
+            <span class="muted" style="font-size:12px;font-weight:700">${stats?.rideCount ? `ridden ${stats.rideCount} time${stats.rideCount === 1 ? "" : "s"}` : "not ridden yet"}</span>
+          </div>
+          <div class="card pad flat">
+            <div class="row" style="gap:10px">
+              ${APP.ratings.starsHtml(stats?.avg || 0, 16)}
+              <span class="muted" style="font-size:12px;font-weight:700">${stats?.count ? `${(stats.avg || 0).toFixed(1)} from ${stats.count} rating${stats.count === 1 ? "" : "s"}` : "No ratings yet"}</span>
+            </div>
+            ${S2.user ? `<div class="row" style="gap:6px;margin-top:10px" id="rateRow">
+              ${[1, 2, 3, 4, 5].map((n) => `<button class="btn ${mine >= n ? "primary" : "light"} sm" data-star="${n}" style="flex:1">${n}</button>`).join("")}
+            </div>` : ""}
+          </div>
+          ${photos.length ? `<div class="carousel-host" style="margin-top:10px"><div class="hscroll">${photos.map((p) => `<img src="${APP.escapeHtml(p.url)}" alt="Ride photo by ${APP.escapeHtml(p.by)}" style="height:150px;border-radius:14px;object-fit:cover;flex:0 0 auto">`).join("")}</div></div>` : ""}
+        </section>`;
+        const row = APP.$("#rateRow");
+        if (row) row.onclick = async (e) => {
+          const b = e.target.closest("[data-star]");
+          if (!b) return;
+          try {
+            await APP.ratings.rateRoute(rateableId, S2.user.uid, +b.dataset.star);
+            APP.toast("Rating saved");
+            render6();
+          } catch (err) {
+            console.warn("Rating failed", err);
+            APP.toast("Could not save rating");
+          }
+        };
+      }).catch((e) => console.warn("Route social unavailable", e));
+    }
+  }
+  const clubBtn = $2("#routeToClub");
+  if (clubBtn) clubBtn.onclick = async () => {
+    if (!S2.user) return APP.toast("Sign in to plan a club ride");
+    S2.clubRideFromRoute = { name: route.savedName || route.name || "Club ride", distanceKm: km };
+    S2.segmentsView = "newEvent";
+    APP.open("segments");
+  };
+  const cueList = APP.cues.buildCues(route);
+  const cueHost = $2("#cueHost");
+  if (cueHost && cueList.length) {
+    cueHost.innerHTML = `<section>
+      <div class="between" style="margin-bottom:6px"><span class="section-title">Cue sheet</span><span class="muted" style="font-size:12px;font-weight:700">${cueList.length} cues</span></div>
+      <div class="card flat" style="padding:4px 12px;max-height:260px;overflow:auto">
+        ${cueList.map((c, i) => `<div class="item" style="gap:10px;padding:8px 0">
+          <span class="muted" style="width:22px;font-size:11px;font-weight:700">${i + 1}</span>
+          <span style="width:56px;font-size:12px;font-weight:700">${APP.escapeHtml(c.atLabel)}</span>
+          <span style="width:22px;font-size:16px">${c.arrow}</span>
+          <span style="flex:1;font-size:13px;font-weight:600">${APP.escapeHtml(c.instruction)}</span>
+        </div>`).join("")}
+      </div>
+      <div class="row" style="gap:8px;margin-top:8px">
+        <button class="btn light sm" id="printCues" style="flex:1">Print cue sheet</button>
+        <button class="btn light sm" id="shareCues" style="flex:1">Share as text</button>
+      </div>
+    </section>`;
+    $2("#printCues").onclick = () => {
+      if (!APP.cues.printCues(route, cueList)) APP.toast("Allow pop-ups to print the cue sheet");
+    };
+    $2("#shareCues").onclick = async () => {
+      const text = APP.cues.cuesToText(route, cueList);
+      try {
+        if (navigator.share) await navigator.share({ title: route.savedName || route.name || "Cue sheet", text });
+        else {
+          await navigator.clipboard.writeText(text);
+          APP.toast("Cue sheet copied");
+        }
+      } catch (e) {
+        if (e?.name !== "AbortError") {
+          try {
+            await navigator.clipboard.writeText(text);
+            APP.toast("Cue sheet copied");
+          } catch {
+            APP.toast("Could not share the cue sheet");
+          }
+        }
+      }
+    };
+  }
+  const offlineBtn = $2("#detailOffline");
+  if (offlineBtn) {
+    const paint2 = (saved) => {
+      offlineBtn.classList.toggle("active", !!saved);
+      offlineBtn.title = saved ? "Saved for offline \u2014 tap to remove" : "Save for offline";
+    };
+    APP.offline.getOffline(routeId).then((r) => paint2(!!r));
+    offlineBtn.onclick = async () => {
+      if (!APP.offline.isSupported()) return APP.toast("This browser cannot store routes offline");
+      offlineBtn.disabled = true;
+      try {
+        const existing = await APP.offline.getOffline(routeId);
+        if (existing) {
+          await APP.offline.removeOffline(routeId);
+          paint2(false);
+          APP.toast("Removed from offline");
+        } else {
+          await APP.offline.saveOffline(routeId, route, { cues: cueList, imageUrl: img, name: route.savedName || route.name });
+          paint2(true);
+          APP.toast("Saved offline \u2014 route, cues and map image");
+        }
+      } catch (e) {
+        console.warn("Offline save failed", e);
+        APP.toast("Could not save offline");
+      } finally {
+        offlineBtn.disabled = false;
+      }
+    };
+  }
+  if (hasWind) requestAnimationFrame(() => APP.plot($2("#routeWindChart"), route.wind, "#176bdb", "km/h"));
+  wireHeader(back);
+  $2("#detailSave").onclick = () => APP.saveRouteByIndex(index);
+  $2("#detailShare").onclick = () => APP.shareRouteByIndex(index);
+  $2("#detailGpx").onclick = () => {
+    APP.select(index);
+    APP.exportSelectedRouteGpx();
+  };
+  $2("#detailStart").onclick = () => {
+    APP.select(index);
+    APP.startNavigation();
+  };
+}
+
 // src/routing/overpassCache.js
 var DB_NAME = "ridewise-overpass-cache";
 var STORE = "responses";
@@ -520,13 +3294,13 @@ async function getCached(key) {
   if (!db) return null;
   return new Promise((resolve) => {
     try {
-      const tx = db.transaction(STORE, "readonly").objectStore(STORE).get(key);
-      tx.onsuccess = () => {
-        const entry = tx.result;
+      const tx2 = db.transaction(STORE, "readonly").objectStore(STORE).get(key);
+      tx2.onsuccess = () => {
+        const entry = tx2.result;
         if (!entry || Date.now() - entry.savedAt > TTL_MS) return resolve(null);
         resolve(entry.data);
       };
-      tx.onerror = () => resolve(null);
+      tx2.onerror = () => resolve(null);
     } catch {
       resolve(null);
     }
@@ -536,8 +3310,8 @@ async function setCached(key, data) {
   const db = await openDb();
   if (!db) return;
   try {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put({ data, savedAt: Date.now() }, key);
+    const tx2 = db.transaction(STORE, "readwrite");
+    tx2.objectStore(STORE).put({ data, savedAt: Date.now() }, key);
   } catch {
   }
 }
@@ -563,7 +3337,7 @@ var INFRA_WEIGHTS = {
 async function runQuery(query) {
   for (const endpoint of ENDPOINTS) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timer2 = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -576,7 +3350,7 @@ async function runQuery(query) {
     } catch (error) {
       console.warn(`Overpass request failed at ${endpoint}`, error);
     } finally {
-      clearTimeout(timer);
+      clearTimeout(timer2);
     }
   }
   return null;
@@ -663,21 +3437,717 @@ function scoreRouteAgainstOverpass(routeCoords, overpassData, turf2, sampleEvery
   const unpavedShare = unpavedKm / Math.max(0.05, sampledKm);
   return { score, unpavedShare };
 }
-function poisFromOverpass(overpassData, start, turf2, maxDistanceKm = 30) {
+function poisFromOverpass(overpassData, start2, turf2, maxDistanceKm = 30) {
   if (!overpassData?.pois?.length) return [];
   const CATEGORY_SCORE = { viewpoint: 22, peak: 20, attraction: 16, nature_reserve: 15, park: 12, water: 14, cafe: 8, drinking_water: 5 };
   return overpassData.pois.map((poi) => {
-    const distance = turf2.distance(start, poi.coord, { units: "kilometers" });
+    const distance = turf2.distance(start2, poi.coord, { units: "kilometers" });
     return {
       coord: poi.coord,
       name: poi.name,
       category: poi.category,
       distance,
-      bearing: (turf2.bearing(start, poi.coord) + 360) % 360,
+      bearing: (turf2.bearing(start2, poi.coord) + 360) % 360,
       score: (CATEGORY_SCORE[poi.category] || 6) - distance * 0.4
     };
   }).filter((p) => p.distance > 0.3 && p.distance <= maxDistanceKm).sort((a, b) => b.score - a.score);
 }
+
+// src/routing/quality.js
+var quality_exports = {};
+__export(quality_exports, {
+  applyPreferences: () => applyPreferences,
+  climbRate: () => climbRate,
+  compareRoutes: () => compareRoutes,
+  cyclewayAnchors: () => cyclewayAnchors,
+  daylightLimitKm: () => daylightLimitKm,
+  defaultPrefs: () => defaultPrefs,
+  fetchSunset: () => fetchSunset,
+  whyThisRoute: () => whyThisRoute
+});
+var QUIET = { cycleway: 1, path: 0.9, track: 0.75, living_street: 0.7, residential: 0.5, unclassified: 0.45, tertiary: 0.25, secondary: 0.1, primary: 0 };
+function defaultPrefs() {
+  return { avoidHills: false, quietRoads: true, pavedOnly: false, tailwindHome: false, beforeSunset: false };
+}
+function cyclewayAnchors(overpassData, start2, radiusKm, turf2, max = 12) {
+  const ways = overpassData?.ways || [];
+  if (!ways.length) return [];
+  const cell = 0.01;
+  const cells = /* @__PURE__ */ new Map();
+  for (const way of ways) {
+    const weight = QUIET[way.highway] ?? 0.2;
+    if (weight < 0.7) continue;
+    for (const [lng, lat] of way.coords) {
+      const key = `${Math.round(lng / cell)}:${Math.round(lat / cell)}`;
+      const c = cells.get(key) || { lng: 0, lat: 0, n: 0, weight: 0 };
+      c.lng += lng;
+      c.lat += lat;
+      c.n += 1;
+      c.weight += weight;
+      cells.set(key, c);
+    }
+  }
+  const out = [];
+  for (const c of cells.values()) {
+    if (c.n < 8) continue;
+    const coord = [c.lng / c.n, c.lat / c.n];
+    let distance;
+    try {
+      distance = turf2.distance(start2, coord, { units: "kilometers" });
+    } catch {
+      continue;
+    }
+    if (distance < 1.2 || distance > radiusKm) continue;
+    out.push({
+      coord,
+      name: "Cycle network",
+      category: "cycleway osm",
+      distance,
+      bearing: (turf2.bearing(start2, coord) + 360) % 360,
+      score: 24 + Math.min(20, c.weight / 4),
+      fromOsm: true
+    });
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, max);
+}
+function climbRate(route) {
+  const km = (route?.distance || 0) / 1e3;
+  return km > 0.5 && Number.isFinite(route?.ascent) ? route.ascent / km : null;
+}
+function applyPreferences(route, prefs, ctx = {}) {
+  if (!route || !prefs) return route;
+  const notes = [];
+  let delta = 0;
+  if (prefs.avoidHills) {
+    const rate = climbRate(route);
+    if (Number.isFinite(rate)) {
+      delta -= Math.max(0, rate - 8) * 2.2;
+      if (rate < 8) notes.push("gentle gradients");
+    }
+  }
+  if (prefs.quietRoads) {
+    const infra = Number.isFinite(route.osmCycleScore) ? route.osmCycleScore : route.cycleScore;
+    if (Number.isFinite(infra)) {
+      delta += (infra - 40) * 0.35;
+      if (infra >= 55) notes.push("mostly quiet roads and cycleway");
+    }
+  }
+  if (prefs.pavedOnly && Number.isFinite(route.surfaceUnpavedShare)) {
+    delta -= route.surfaceUnpavedShare * 90;
+    if (route.surfaceUnpavedShare < 0.08) notes.push("paved throughout");
+  }
+  if (prefs.tailwindHome && Number.isFinite(ctx.windBearing)) {
+    const bonus = tailwindHomeScore(route, ctx.windBearing, ctx.turf);
+    if (Number.isFinite(bonus)) {
+      delta += bonus;
+      if (bonus > 6) notes.push("tailwind on the way home");
+    }
+  }
+  if (prefs.beforeSunset && Number.isFinite(ctx.maxKmForDaylight)) {
+    const km = (route.distance || 0) / 1e3;
+    if (km > ctx.maxKmForDaylight) delta -= (km - ctx.maxKmForDaylight) * 6;
+    else notes.push("finishes before dark");
+  }
+  route.prefAdjust = Math.round(delta);
+  route.prefNotes = notes;
+  route.loopQuality = (route.loopQuality || 0) + delta;
+  return route;
+}
+function tailwindHomeScore(route, windBearing, turf2) {
+  const coords = route?.geometry?.coordinates;
+  if (!coords || coords.length < 8 || !turf2) return null;
+  try {
+    const half = Math.floor(coords.length / 2);
+    const legs = [];
+    for (let i = half; i < coords.length - 1; i += Math.max(1, Math.floor((coords.length - half) / 12))) {
+      legs.push(turf2.bearing(coords[i], coords[i + 1]));
+    }
+    if (!legs.length) return null;
+    const tailwindDir = (windBearing + 180) % 360;
+    const alignment = legs.reduce((sum, b) => {
+      const diff = Math.abs((b - tailwindDir + 540) % 360 - 180);
+      return sum + Math.cos(diff * Math.PI / 180);
+    }, 0) / legs.length;
+    return alignment * 14;
+  } catch {
+    return null;
+  }
+}
+function daylightLimitKm(sunsetMs, nowMs, avgSpeedKmh = 18) {
+  if (!Number.isFinite(sunsetMs)) return null;
+  const hours = (sunsetMs - nowMs) / 36e5;
+  return hours > 0 ? Math.max(3, hours * avgSpeedKmh * 0.9) : 0;
+}
+function whyThisRoute(route, others) {
+  const rest = (others || []).filter((r) => r !== route);
+  const bits = [];
+  const infra = Number.isFinite(route.osmCycleScore) ? route.osmCycleScore : route.cycleScore;
+  const km = (route.distance || 0) / 1e3;
+  if (Number.isFinite(infra) && rest.length) {
+    const best = Math.max(...rest.map((r) => (Number.isFinite(r.osmCycleScore) ? r.osmCycleScore : r.cycleScore) ?? 0));
+    if (infra >= best) bits.push(`most cycle infrastructure (${infra}%)`);
+  }
+  if (Number.isFinite(route.ascent) && rest.length) {
+    const climbs = rest.map((r) => r.ascent).filter(Number.isFinite);
+    if (climbs.length) {
+      const min = Math.min(...climbs);
+      const diff = Math.round(min - route.ascent);
+      if (diff > 40) bits.push(`${diff} m less climbing`);
+      else if (route.ascent - min > 60) bits.push(`${Math.round(route.ascent - min)} m more climbing`);
+    }
+  }
+  if (rest.length) {
+    const lengths = rest.map((r) => (r.distance || 0) / 1e3).filter((n) => n > 0);
+    if (lengths.length) {
+      const shortest = Math.min(...lengths);
+      const diff = km - shortest;
+      if (diff > 3) bits.push(`${diff.toFixed(1)} km longer`);
+      else if (shortest - km > 3) bits.push(`${(shortest - km).toFixed(1)} km shorter`);
+    }
+  }
+  if (Number.isFinite(route.retrace) && route.retrace < 0.08) bits.push("almost no repeated road");
+  if (route.prefNotes?.length) bits.push(...route.prefNotes);
+  if (!bits.length) return null;
+  const s = bits.slice(0, 3).join(", ");
+  return s.charAt(0).toUpperCase() + s.slice(1) + ".";
+}
+function compareRoutes(a, b) {
+  const val = (r, f) => f(r);
+  const rows = [
+    { label: "Distance", get: (r) => (r.distance || 0) / 1e3, fmt: (v) => `${v.toFixed(1)} km`, lowerIsBetter: false },
+    { label: "Climbing", get: (r) => r.ascent, fmt: (v) => Number.isFinite(v) ? `${Math.round(v)} m` : "\u2014", lowerIsBetter: true },
+    { label: "Climb rate", get: (r) => climbRate(r), fmt: (v) => Number.isFinite(v) ? `${v.toFixed(1)} m/km` : "\u2014", lowerIsBetter: true },
+    { label: "Est. time", get: (r) => r.duration, fmt: (v) => v ? `${Math.floor(v / 3600)}h ${Math.round(v % 3600 / 60)}m` : "\u2014", lowerIsBetter: true },
+    { label: "Cycle infra", get: (r) => Number.isFinite(r.osmCycleScore) ? r.osmCycleScore : r.cycleScore, fmt: (v) => Number.isFinite(v) ? `${v}%` : "\u2014", lowerIsBetter: false },
+    { label: "Unpaved", get: (r) => Number.isFinite(r.surfaceUnpavedShare) ? r.surfaceUnpavedShare * 100 : null, fmt: (v) => Number.isFinite(v) ? `${Math.round(v)}%` : "\u2014", lowerIsBetter: true },
+    { label: "New road", get: (r) => Number.isFinite(r.retrace) ? (1 - r.retrace) * 100 : null, fmt: (v) => Number.isFinite(v) ? `${Math.round(v)}%` : "\u2014", lowerIsBetter: false }
+  ];
+  return rows.map((row) => {
+    const av = val(a, row.get);
+    const bv = val(b, row.get);
+    let winner = null;
+    if (Number.isFinite(av) && Number.isFinite(bv) && Math.abs(av - bv) > 1e-6) {
+      const aWins = row.lowerIsBetter ? av < bv : av > bv;
+      winner = aWins ? "a" : "b";
+    }
+    return { label: row.label, a: row.fmt(av), b: row.fmt(bv), winner };
+  });
+}
+async function fetchSunset(lat, lon) {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=sunset&timezone=auto&forecast_days=1`;
+    const data = await fetch(url).then((r) => r.json());
+    const iso = data?.daily?.sunset?.[0];
+    return iso ? new Date(iso).getTime() : null;
+  } catch (error) {
+    console.warn("Sunset lookup failed", error);
+    return null;
+  }
+}
+
+// src/routing/cues.js
+var cues_exports = {};
+__export(cues_exports, {
+  buildCues: () => buildCues,
+  cuesToText: () => cuesToText,
+  printCues: () => printCues
+});
+var ARROW = (m = {}) => {
+  const mod = (m.modifier || "").toLowerCase();
+  const type = (m.type || "").toLowerCase();
+  if (type === "roundabout" || type === "rotary") return "\u21BB";
+  if (type === "arrive") return "\u25C9";
+  if (type === "depart") return "\u25B2";
+  if (mod.includes("uturn")) return "\u21A9";
+  if (mod.includes("sharp left")) return "\u21B0";
+  if (mod.includes("sharp right")) return "\u21B1";
+  if (mod.includes("slight left")) return "\u2196";
+  if (mod.includes("slight right")) return "\u2197";
+  if (mod.includes("left")) return "\u2190";
+  if (mod.includes("right")) return "\u2192";
+  return "\u2191";
+};
+var fmtDist = (m) => m >= 1e3 ? `${(m / 1e3).toFixed(m >= 1e4 ? 0 : 1)} km` : `${Math.max(10, Math.round(m / 10) * 10)} m`;
+function buildCues(route) {
+  const steps = (route?.legs || []).flatMap((l) => l.steps || []);
+  if (!steps.length) return [];
+  const cues = [];
+  let cumulative = 0;
+  for (const step2 of steps) {
+    const m = step2.maneuver || {};
+    const type = (m.type || "").toLowerCase();
+    const road = step2.name || step2.ref || "";
+    const isContinue = type === "continue" || !m.modifier && type !== "arrive" && type !== "depart";
+    const prev = cues[cues.length - 1];
+    if (isContinue && prev && prev.road === road && prev.type !== "arrive") {
+      prev.distance += step2.distance || 0;
+      cumulative += step2.distance || 0;
+      continue;
+    }
+    cues.push({
+      at: cumulative,
+      distance: step2.distance || 0,
+      road,
+      type,
+      arrow: ARROW(m),
+      instruction: m.instruction || (road ? `Continue on ${road}` : "Continue")
+    });
+    cumulative += step2.distance || 0;
+  }
+  return cues.map((c) => ({ ...c, atLabel: fmtDist(c.at), forLabel: fmtDist(c.distance) }));
+}
+function cuesToText(route, cues) {
+  const km = ((route?.distance || 0) / 1e3).toFixed(1);
+  const title = route?.savedName || route?.name || "Ridewise route";
+  const lines = [`${title} \u2014 ${km} km`, ""];
+  cues.forEach((c, i) => {
+    lines.push(`${String(i + 1).padStart(3, " ")}. ${c.atLabel.padStart(8, " ")}  ${c.arrow}  ${c.instruction}${c.road && !c.instruction.includes(c.road) ? ` (${c.road})` : ""}`);
+  });
+  lines.push("", "Planned with Ridewise");
+  return lines.join("\n");
+}
+function printCues(route, cues) {
+  const km = ((route?.distance || 0) / 1e3).toFixed(1);
+  const climb = Number.isFinite(route?.ascent) ? `${Math.round(route.ascent)} m climbing` : "";
+  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const rows = cues.map((c, i) => `<tr>
+      <td class="n">${i + 1}</td>
+      <td class="at">${esc(c.atLabel)}</td>
+      <td class="ar">${esc(c.arrow)}</td>
+      <td>${esc(c.instruction)}</td>
+      <td class="for">${esc(c.forLabel)}</td>
+    </tr>`).join("");
+  const html2 = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(route?.savedName || route?.name || "Cue sheet")}</title>
+    <style>
+      body { font: 12pt/1.4 -apple-system, system-ui, sans-serif; margin: 18mm 14mm; color: #111; }
+      h1 { font-size: 18pt; margin: 0 0 2mm; }
+      .meta { color: #555; font-size: 11pt; margin-bottom: 6mm; }
+      table { width: 100%; border-collapse: collapse; }
+      td { padding: 2.2mm 2mm; border-bottom: 0.3pt solid #bbb; vertical-align: top; }
+      .n { width: 9mm; color: #777; }
+      .at { width: 20mm; font-variant-numeric: tabular-nums; }
+      .ar { width: 9mm; font-size: 14pt; }
+      .for { width: 20mm; text-align: right; color: #555; font-variant-numeric: tabular-nums; }
+      tr { break-inside: avoid; }
+      @page { margin: 14mm; }
+    </style></head><body>
+    <h1>${esc(route?.savedName || route?.name || "Ridewise route")}</h1>
+    <div class="meta">${km} km${climb ? ` \xB7 ${climb}` : ""} \xB7 ${cues.length} cues \xB7 planned with Ridewise</div>
+    <table><tbody>${rows}</tbody></table>
+    <script>window.onload = () => setTimeout(() => window.print(), 250);<\/script>
+    </body></html>`;
+  const w = window.open("", "_blank", "noopener,noreferrer");
+  if (!w) return false;
+  w.document.write(html2);
+  w.document.close();
+  return true;
+}
+
+// src/routing/offline.js
+var offline_exports = {};
+__export(offline_exports, {
+  getOffline: () => getOffline,
+  isSupported: () => isSupported2,
+  listOffline: () => listOffline,
+  offlineIds: () => offlineIds,
+  offlineSizeBytes: () => offlineSizeBytes,
+  removeOffline: () => removeOffline,
+  saveOffline: () => saveOffline
+});
+var DB_NAME2 = "ridewise-offline";
+var STORE2 = "routes";
+var dbPromise2 = null;
+function openDb2() {
+  if (dbPromise2) return dbPromise2;
+  dbPromise2 = new Promise((resolve) => {
+    if (typeof indexedDB === "undefined") return resolve(null);
+    const req = indexedDB.open(DB_NAME2, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE2)) db.createObjectStore(STORE2, { keyPath: "id" });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(null);
+  });
+  return dbPromise2;
+}
+function tx(mode, fn) {
+  return openDb2().then((db) => {
+    if (!db) return null;
+    return new Promise((resolve) => {
+      let out = null;
+      const t = db.transaction(STORE2, mode);
+      const store = t.objectStore(STORE2);
+      const req = fn(store);
+      if (req) req.onsuccess = () => {
+        out = req.result;
+      };
+      t.oncomplete = () => resolve(out);
+      t.onerror = () => resolve(null);
+      t.onabort = () => resolve(null);
+    });
+  });
+}
+function isSupported2() {
+  return typeof indexedDB !== "undefined";
+}
+async function saveOffline(id, route, { cues = [], imageUrl = null, name = "" } = {}) {
+  let image = null;
+  if (imageUrl) {
+    try {
+      const res = await fetch(imageUrl);
+      if (res.ok) image = await res.blob();
+    } catch (error) {
+      console.warn("Offline map image unavailable", error);
+    }
+  }
+  const record2 = {
+    id,
+    name: name || route?.savedName || route?.name || "Saved route",
+    savedAt: Date.now(),
+    distance: route?.distance || 0,
+    ascent: route?.ascent ?? null,
+    geometry: route?.geometry || null,
+    legs: route?.legs || [],
+    elev: route?.elev || [],
+    wind: route?.wind || [],
+    cues,
+    image
+  };
+  await tx("readwrite", (store) => store.put(record2));
+  return record2;
+}
+function getOffline(id) {
+  return tx("readonly", (store) => store.get(id));
+}
+function removeOffline(id) {
+  return tx("readwrite", (store) => store.delete(id));
+}
+async function listOffline() {
+  const all = await tx("readonly", (store) => store.getAll());
+  return Array.isArray(all) ? all.sort((a, b) => b.savedAt - a.savedAt) : [];
+}
+async function offlineIds() {
+  const all = await listOffline();
+  return new Set(all.map((r) => r.id));
+}
+async function offlineSizeBytes() {
+  const all = await listOffline();
+  return all.reduce((n, r) => {
+    const geo2 = JSON.stringify(r.geometry || {}).length;
+    const legs = JSON.stringify(r.legs || []).length;
+    return n + geo2 + legs + (r.image?.size || 0);
+  }, 0);
+}
+
+// src/social/liveFriends.js
+var markers = /* @__PURE__ */ new Map();
+var timer = 0;
+var running = false;
+var initials3 = (n = "") => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "R";
+var colorFor = (uid2 = "") => ["#8b5bd6", "#00a6a6", "#176bdb", "#f28b30", "#139b66"][[...uid2].reduce((a, c) => a + c.charCodeAt(0), 0) % 5];
+async function fetchActiveFriends(uid2) {
+  const uids = await listFollowingUids(uid2).catch(() => []);
+  if (!uids.length) return [];
+  const db = await getCloud();
+  const chunks = [];
+  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+  const snaps = await Promise.all(
+    chunks.map(
+      (chunk) => db.getDocs(db.query(db.collection(db.firestore, "journeys_v4"), db.where("ownerId", "in", chunk), db.where("active", "==", true)))
+    )
+  );
+  const out = [];
+  snaps.forEach((snap) => snap.docs.forEach((d) => {
+    const data = d.data();
+    if (data?.paused) return;
+    const loc = data.location;
+    if (!loc || !Number.isFinite(loc.lng) || !Number.isFinite(loc.lat)) return;
+    out.push({ id: d.id, ownerId: data.ownerId, name: data.riderName || data.routeName || "Rider", pos: [loc.lng, loc.lat] });
+  }));
+  return out;
+}
+function markerElement(friend) {
+  const el = document.createElement("div");
+  el.className = "friend-marker";
+  el.style.background = colorFor(friend.ownerId);
+  el.textContent = initials3(friend.name);
+  el.title = `${friend.name} is riding now`;
+  return el;
+}
+async function refresh(ctx) {
+  const { state: state4, map: map2, mapboxgl: mapboxgl2 } = ctx;
+  if (!state4.user) return;
+  let friends = [];
+  try {
+    friends = await fetchActiveFriends(state4.user.uid);
+  } catch (error) {
+    console.warn("Live friends unavailable", error);
+    return;
+  }
+  const seen = /* @__PURE__ */ new Set();
+  friends.forEach((f) => {
+    seen.add(f.id);
+    const existing = markers.get(f.id);
+    if (existing) existing.setLngLat(f.pos);
+    else markers.set(f.id, new mapboxgl2.Marker({ element: markerElement(f) }).setLngLat(f.pos).addTo(map2));
+  });
+  [...markers.keys()].forEach((id) => {
+    if (seen.has(id)) return;
+    markers.get(id)?.remove();
+    markers.delete(id);
+  });
+  ctx.onCount?.(friends.length);
+}
+function startLiveFriends(ctx, intervalMs = 25e3) {
+  if (running) return;
+  running = true;
+  refresh(ctx);
+  timer = setInterval(() => refresh(ctx), intervalMs);
+}
+function stopLiveFriends() {
+  running = false;
+  clearInterval(timer);
+  markers.forEach((m) => m.remove());
+  markers.clear();
+}
+
+// src/social/ratings.js
+var ratings_exports = {};
+__export(ratings_exports, {
+  getMyRating: () => getMyRating,
+  getRouteStats: () => getRouteStats,
+  rateRoute: () => rateRoute,
+  recordRouteRidden: () => recordRouteRidden,
+  routeIdOf: () => routeIdOf,
+  routePhotos: () => routePhotos,
+  starsHtml: () => starsHtml
+});
+function routeIdOf(item) {
+  return item?.savedId || item?.id || null;
+}
+async function getRouteStats(routeId) {
+  if (!routeId) return null;
+  try {
+    const db = await getCloud();
+    const snap = await db.getDoc(db.doc(db.firestore, "routeStats", routeId));
+    return snap.exists() ? snap.data() : { avg: 0, count: 0, rideCount: 0 };
+  } catch (error) {
+    console.warn("Route stats unavailable", error);
+    return null;
+  }
+}
+async function getMyRating(routeId, uid2) {
+  if (!routeId || !uid2) return 0;
+  try {
+    const db = await getCloud();
+    const snap = await db.getDoc(db.doc(db.firestore, "routeStats", routeId, "ratings", uid2));
+    return snap.exists() ? snap.data().stars || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+async function rateRoute(routeId, uid2, stars2) {
+  const db = await getCloud();
+  await db.setDoc(db.doc(db.firestore, "routeStats", routeId, "ratings", uid2), {
+    uid: uid2,
+    stars: Math.max(1, Math.min(5, Math.round(stars2))),
+    createdAt: db.serverTimestamp()
+  });
+  const all = await db.getDocs(db.collection(db.firestore, "routeStats", routeId, "ratings"));
+  let sum = 0, n = 0;
+  all.docs.forEach((d) => {
+    const s = d.data().stars;
+    if (Number.isFinite(s)) {
+      sum += s;
+      n += 1;
+    }
+  });
+  const avg = n ? sum / n : 0;
+  await db.setDoc(db.doc(db.firestore, "routeStats", routeId), { avg, count: n }, { merge: true });
+  return { avg, count: n };
+}
+async function recordRouteRidden(routeId) {
+  if (!routeId) return;
+  try {
+    const db = await getCloud();
+    await db.setDoc(db.doc(db.firestore, "routeStats", routeId), { rideCount: db.increment(1) }, { merge: true });
+  } catch (error) {
+    console.warn("Ride count not recorded", error);
+  }
+}
+async function routePhotos(routeId, max = 12) {
+  if (!routeId) return [];
+  try {
+    const db = await getCloud();
+    const snap = await db.getDocs(
+      db.query(db.collection(db.firestore, "activities"), db.where("routeId", "==", routeId), db.limit(max))
+    );
+    return snap.docs.flatMap((d) => {
+      const a = d.data();
+      return (a.photoUrls || []).map((url) => ({ url, by: a.ownerDisplayName || "Rider", activityId: d.id }));
+    }).slice(0, max);
+  } catch (error) {
+    console.warn("Route photos unavailable", error);
+    return [];
+  }
+}
+function starsHtml(avg, size = 14) {
+  const full = Math.round(avg || 0);
+  const star = '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>';
+  return `<span class="stars">${Array.from({ length: 5 }, (_, i) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" style="opacity:${i < full ? 1 : 0.25}">${star}</svg>`).join("")}</span>`;
+}
+
+// src/social/segments.js
+var segments_exports = {};
+__export(segments_exports, {
+  createSegment: () => createSegment,
+  fmtSeconds: () => fmtSeconds,
+  listEfforts: () => listEfforts,
+  listSegmentsNear: () => listSegmentsNear,
+  liveSegmentState: () => liveSegmentState,
+  matchActivity: () => matchActivity,
+  matchEffort: () => matchEffort,
+  saveEffort: () => saveEffort
+});
+var MATCH_TOLERANCE_M = 35;
+async function listSegmentsNear(center, radiusKm, turf2, max = 40) {
+  try {
+    const db = await getCloud();
+    const snap = await db.getDocs(db.query(db.collection(db.firestore, "segments"), db.limit(max)));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((s) => {
+      if (!center || !Array.isArray(s.start)) return true;
+      try {
+        return turf2.distance(center, s.start, { units: "kilometers" }) <= radiusKm;
+      } catch {
+        return false;
+      }
+    });
+  } catch (error) {
+    console.warn("Segments unavailable", error);
+    return [];
+  }
+}
+async function createSegment(user, { name, coords, turf: turf2 }) {
+  if (!Array.isArray(coords) || coords.length < 2) throw new Error("Segment needs a path");
+  const db = await getCloud();
+  const line2 = turf2.lineString(coords);
+  const distanceKm = turf2.length(line2, { units: "kilometers" });
+  const bbox = turf2.bbox(line2);
+  const ref = await db.addDoc(db.collection(db.firestore, "segments"), {
+    name: (name || "Segment").slice(0, 80),
+    createdBy: user.uid,
+    createdAt: db.serverTimestamp(),
+    distanceKm,
+    start: coords[0],
+    end: coords[coords.length - 1],
+    polyline: JSON.stringify(coords),
+    bbox,
+    effortCount: 0
+  });
+  return ref.id;
+}
+async function listEfforts(segmentId, max = 50) {
+  try {
+    const db = await getCloud();
+    const snap = await db.getDocs(
+      db.query(db.collection(db.firestore, "segments", segmentId, "efforts"), db.orderBy("seconds", "asc"), db.limit(max))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch {
+    return [];
+  }
+}
+function matchEffort(samples, segment, turf2) {
+  const pts = (samples || []).filter((s) => Array.isArray(s.pos) && Number.isFinite(s.time));
+  if (pts.length < 4 || !Array.isArray(segment.start) || !Array.isArray(segment.end)) return null;
+  const near = (a, b) => {
+    try {
+      return turf2.distance(a, b, { units: "meters" }) <= MATCH_TOLERANCE_M;
+    } catch {
+      return false;
+    }
+  };
+  let startIdx = -1;
+  for (let i = 0; i < pts.length; i++) {
+    if (near(pts[i].pos, segment.start)) {
+      startIdx = i;
+      break;
+    }
+  }
+  if (startIdx < 0) return null;
+  for (let j = startIdx + 1; j < pts.length; j++) {
+    if (near(pts[j].pos, segment.end)) {
+      const seconds = Math.round((pts[j].time - pts[startIdx].time) / 1e3);
+      return seconds > 5 ? { seconds, startIdx, endIdx: j } : null;
+    }
+  }
+  return null;
+}
+async function saveEffort(user, segmentId, { seconds, activityId, riddenAt }) {
+  const db = await getCloud();
+  const id = `${user.uid}_${riddenAt || Date.now()}`;
+  await db.setDoc(db.doc(db.firestore, "segments", segmentId, "efforts", id), {
+    uid: user.uid,
+    displayName: user.displayName || user.email?.split("@")[0] || "Rider",
+    seconds,
+    activityId: activityId || null,
+    riddenAt: riddenAt || Date.now()
+  });
+  await db.setDoc(db.doc(db.firestore, "segments", segmentId), { effortCount: db.increment(1) }, { merge: true });
+}
+async function matchActivity(user, activity, turf2) {
+  const samples = activity?.samples || [];
+  if (samples.length < 4) return [];
+  const start2 = samples[0].pos;
+  const segments = await listSegmentsNear(start2, 60, turf2);
+  const found = [];
+  for (const segment of segments) {
+    const effort = matchEffort(samples, segment, turf2);
+    if (!effort) continue;
+    const previous = (await listEfforts(segment.id)).filter((e) => e.uid === user.uid);
+    const best = previous.length ? Math.min(...previous.map((e) => e.seconds)) : null;
+    await saveEffort(user, segment.id, { seconds: effort.seconds, activityId: activity.id, riddenAt: activity.ended || Date.now() });
+    found.push({
+      segmentId: segment.id,
+      name: segment.name,
+      seconds: effort.seconds,
+      isPR: best === null || effort.seconds < best,
+      previousBest: best
+    });
+  }
+  return found;
+}
+function liveSegmentState(record2, segment, turf2) {
+  const samples = record2?.samples || [];
+  if (!samples.length || !Array.isArray(segment?.start)) return null;
+  const near = (a, b, m) => {
+    try {
+      return turf2.distance(a, b, { units: "meters" }) <= m;
+    } catch {
+      return false;
+    }
+  };
+  const last = samples[samples.length - 1];
+  if (!Array.isArray(last?.pos)) return null;
+  let startIdx = -1;
+  for (let i = samples.length - 1; i >= 0; i--) {
+    if (near(samples[i].pos, segment.start, MATCH_TOLERANCE_M)) {
+      startIdx = i;
+      break;
+    }
+  }
+  if (startIdx < 0) return null;
+  if (near(last.pos, segment.end, MATCH_TOLERANCE_M)) {
+    return { state: "finished", seconds: Math.round((last.time - samples[startIdx].time) / 1e3) };
+  }
+  return { state: "running", seconds: Math.round((last.time - samples[startIdx].time) / 1e3) };
+}
+var fmtSeconds = (s) => {
+  const v = Math.max(0, Math.round(s || 0));
+  const m = Math.floor(v / 60);
+  return `${m}:${String(v % 60).padStart(2, "0")}`;
+};
 
 // src/legacy.js
 var $ = (s, r = document) => r.querySelector(s);
@@ -695,12 +4165,13 @@ var fmt = (n) => Number(n || 0).toFixed(1);
 mapboxgl.accessToken = MAPBOX_TOKEN;
 var map = new mapboxgl.Map({ container: "map", style: "mapbox://styles/mapbox/outdoors-v12", center: [-2.5879, 51.4545], zoom: 11, preserveDrawingBuffer: true });
 map.addControl(new mapboxgl.NavigationControl(), "top-right");
-var MAP_PAGES = ["explore", "journey", "adventure"];
-var NAV = [["explore", "\u2302", "Map"], ["routes", "\u25A4", "Routes"], ["record", "\u25CF", "Record"], ["feed", "\u25D4", "Feed"], ["profile", "\u25CD", "Profile"]];
-$("#nav").insertAdjacentHTML("beforeend", NAV.map(([p, i, label]) => `<button class="nav${p === "record" ? " nav-record" : ""}" data-p="${p}"><i>${i}</i><small>${label}</small></button>`).join(""));
+var MAP_PAGES = ["explore"];
+var PAGE_ALIAS = { journey: "plan", adventure: "explore", routes: "plan", feed: "profile" };
+var NAV = [["explore", "compass", "Adventure"], ["plan", "route", "Plan"], ["record", "record", "Record"], ["segments", "flag", "Segments"], ["profile", "user", "Profile"]];
+$("#nav").insertAdjacentHTML("beforeend", NAV.map(([p, i, label]) => `<button class="tab${p === "record" ? " tab-record" : ""}" data-p="${p}">${icon(i, 22)}<span>${label}</span></button>`).join(""));
 $("#nav").onclick = (e) => {
   const b = e.target.closest("[data-p]");
-  if (b) open(b.dataset.p === "explore" ? S.lastMapPage || "explore" : b.dataset.p);
+  if (b) open(b.dataset.p);
 };
 var sheet = createBottomSheet(panel, { mobile });
 function stop3DPreview() {
@@ -710,23 +4181,28 @@ function stop3DPreview() {
 }
 function open(p) {
   stop3DPreview();
-  if (p !== "adventure") hideRouteLoading();
+  if (p === "routes") S.planView = "library";
+  if (p === "journey") S.planView = "planner";
+  if (p === "feed") S.profileView = "feed";
+  p = PAGE_ALIAS[p] || p;
+  if (p !== "explore") hideRouteLoading();
+  if (p !== S.page) S.routeDetailOpen = false;
   S.page = p;
   if (MAP_PAGES.includes(p)) S.lastMapPage = p;
   const isMapPage = MAP_PAGES.includes(p);
-  document.querySelectorAll(".nav").forEach((b) => b.classList.toggle("active", b.dataset.p === p || b.dataset.p === "explore" && isMapPage || b.dataset.p === "profile" && p === "weather"));
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.p === p || b.dataset.p === "profile" && p === "weather"));
   document.body.classList.toggle("panel-open", !isMapPage || !mobile());
   document.body.classList.toggle("map-view", isMapPage);
+  document.body.classList.toggle("route-detail", !!S.routeDetailOpen && isMapPage);
   document.body.classList.toggle("navigating", !!S.navState && isMapPage);
   const guidance = $("#nav-guidance");
   if (guidance) guidance.hidden = !(S.navState && isMapPage);
-  render();
+  render7();
   panel.scrollTop = 0;
   requestAnimationFrame(() => panel.scrollTop = 0);
   if (mobile()) {
-    if (S.navState && isMapPage) sheet.setState("peek");
-    else if (p === "explore") sheet.setState("peek");
-    else if (isMapPage) sheet.setState("half");
+    if (S.navState && isMapPage) sheet.setState("closed");
+    else if (isMapPage) sheet.setState(S.routeDetailOpen ? "full" : "half");
     else sheet.setState("full");
   }
   setTimeout(() => map.resize(), 30);
@@ -738,156 +4214,26 @@ function bind() {
   const b = $(".close");
   if (b) b.onclick = () => open(S.page === "weather" ? "profile" : "explore");
 }
-async function feedPage() {
-  if (!S.user) {
-    panel.innerHTML = feedSignInPromptHtml(head);
-    $("#feedSignIn").onclick = () => open("profile");
-    return;
-  }
-  panel.innerHTML = head("Feed", "Rides from people you follow") + findPeopleHtml() + '<div id="feedList" class="empty">Loading feed\u2026</div>';
-  wireFindPeople();
+var PAGES = { explore: () => render(), plan: () => render2(), record: () => render3(), segments: () => render4(), profile: () => render5(), weather: () => weather() };
+function render7() {
+  const fn = S.routeDetailOpen && MAP_PAGES.includes(S.page) ? () => render6() : PAGES[S.page] || PAGES.explore;
   try {
-    const followedUids = await listFollowingUids(S.user.uid), activities = followedUids.length ? await fetchFeed(followedUids) : [], list = $("#feedList");
-    if (!activities.length) {
-      list.outerHTML = feedEmptyHtml(followedUids.length > 0);
-      return;
-    }
-    const givenChecks = await Promise.all(activities.map((a) => hasGivenKudos(a.id, S.user.uid).catch(() => false)));
-    list.outerHTML = `<div id="feedList">${activities.map((a, i) => activityCardHtml(a, givenChecks[i])).join("")}</div>`;
-    wireFeedCards();
-  } catch (error) {
-    console.warn("Feed load failed", error);
-    const list = $("#feedList");
-    if (list) list.outerHTML = '<div class="empty">Feed unavailable right now.</div>';
+    const out = fn();
+    if (out && typeof out.catch === "function") out.catch((err) => console.error("Page render failed", err));
+  } catch (err) {
+    console.error("Page render failed", err);
   }
-}
-function wireFindPeople() {
-  const run = async () => {
-    const q = $("#findPeopleInput").value.trim();
-    const results = $("#findPeopleResults");
-    if (!q) {
-      results.innerHTML = "";
-      return;
-    }
-    results.innerHTML = '<p class="muted">Searching\u2026</p>';
-    try {
-      const people = (await searchProfilesByName(q)).filter((p) => p.uid !== S.user?.uid);
-      if (!people.length) {
-        results.innerHTML = '<p class="muted">No riders found.</p>';
-        return;
-      }
-      const flags = await Promise.all(people.map((p) => isFollowing(S.user.uid, p.uid).catch(() => false)));
-      results.innerHTML = people.map((p, i) => personResultHtml(p, flags[i], p.uid === S.user?.uid)).join("");
-      results.querySelectorAll("[data-follow-toggle]").forEach((b) => b.onclick = async () => {
-        const uid = b.dataset.followToggle, following = b.dataset.following === "1";
-        try {
-          if (following) await unfollowUser(S.user.uid, uid);
-          else await followUser(S.user.uid, uid);
-          b.dataset.following = following ? "0" : "1";
-          b.textContent = following ? "Follow" : "Following";
-          b.className = `btn ${following ? "primary" : "light"}`;
-          toast(following ? "Unfollowed" : "Now following");
-        } catch (error) {
-          console.warn("Follow toggle failed", error);
-          toast("Could not update follow status");
-        }
-      });
-    } catch (error) {
-      console.warn("People search failed", error);
-      results.innerHTML = '<p class="muted">Search unavailable right now.</p>';
-    }
-  };
-  $("#findPeopleBtn").onclick = run;
-  $("#findPeopleInput").onkeydown = (e) => {
-    if (e.key === "Enter") run();
-  };
-}
-function wireFeedCards() {
-  panel.querySelectorAll("[data-kudos]").forEach((b) => b.onclick = async () => {
-    const id = b.dataset.kudos, given = b.dataset.given === "1";
-    b.disabled = true;
-    try {
-      await toggleKudos(id, S.user.uid, given);
-      b.dataset.given = given ? "0" : "1";
-      b.className = `btn ${given ? "light" : "primary"}`;
-      const count = (b.textContent.match(/\((\d+)\)/)?.[1] | 0) + (given ? -1 : 1);
-      b.textContent = `\u{1F44D} Kudos${count > 0 ? ` (${count})` : ""}`;
-    } catch (error) {
-      console.warn("Kudos failed", error);
-      toast("Could not update kudos");
-    } finally {
-      b.disabled = false;
-    }
-  });
-  panel.querySelectorAll("[data-comments]").forEach((b) => b.onclick = async () => {
-    const id = b.dataset.comments, box = $(`#comments-${id}`);
-    if (!box) return;
-    if (!box.hidden) {
-      box.hidden = true;
-      return;
-    }
-    box.hidden = false;
-    await reloadComments(box, id);
-  });
-}
-async function reloadComments(box, id) {
-  box.innerHTML = '<p class="muted">Loading comments\u2026</p>';
-  try {
-    const comments = await listComments(id);
-    box.innerHTML = commentsPanelHtml(comments, id);
-    const sendBtn = box.querySelector("[data-send-comment]"), input = box.querySelector(`#commentInput-${id}`);
-    sendBtn.onclick = async () => {
-      const text = input.value.trim();
-      if (!text) return;
-      sendBtn.disabled = true;
-      try {
-        await addComment(id, S.user, text);
-        await reloadComments(box, id);
-      } catch (error) {
-        console.warn("Comment failed", error);
-        toast("Could not post comment");
-        sendBtn.disabled = false;
-      }
-    };
-  } catch (error) {
-    console.warn("Comments load failed", error);
-    box.innerHTML = '<p class="muted">Comments unavailable right now.</p>';
-  }
-}
-function render() {
-  ({ explore, journey, adventure, routes, record, weather, profile, feed: feedPage }[S.page] || explore)();
   bind();
   updateQuickNav();
 }
-function explore() {
-  panel.innerHTML = head("Explore", "Choose transport, adventure, or navigate the displayed route") + `<div class="card hero"><h2>Ride somewhere great</h2><p>Point-to-point cycling, scenic loops, known cycle-route preference and live ride recording. Tap any coloured route on the map to select it and navigate.</p><div class="actions"><button class="btn green" id="p">Point-to-point</button><button class="btn light" id="a">Adventure</button></div></div>`;
-  $("#p").onclick = () => open("journey");
-  $("#a").onclick = () => open("adventure");
-}
-function journey() {
-  S.mode = "point";
-  if (S.waypoints.length < 2) {
-    S.waypoints = [S.waypoints[0] || null, S.waypoints[1] || null];
-    S.names = [S.names[0] || "", S.names[1] || ""];
-  }
-  panel.innerHTML = head("Point-to-point", "Routes calculate when Start and Finish are set") + `<div class="card"><div class="field"><label>Start</label><div class="location-row"><div id="g0"></div><button class="loc" id="l0">\u25CE</button></div></div><div id="waypointFields"></div><button class="btn light" id="addWaypoint">\uFF0B Add waypoint</button><div class="field"><label>Finish</label><div class="location-row"><div id="gFinish"></div><button class="loc" id="lFinish">\u25CE</button></div></div><div class="actions"><button class="btn light" id="more" style="display:${S.routes.length ? "block" : "none"}">Show more options</button><button class="btn light" id="showAllMap" style="display:${S.routes.length > 1 ? "block" : "none"}">Show all routes on map</button></div></div><div id="cards"></div>`;
-  geo("#g0", 0);
-  const finish = S.waypoints.length - 1;
-  geo("#gFinish", finish);
-  if (S.names[0]) S.geocoders["#g0"]?.setInput(S.names[0]);
-  if (S.names[finish]) S.geocoders["#gFinish"]?.setInput(S.names[finish]);
-  $("#l0").onclick = () => setHere(0);
-  $("#lFinish").onclick = () => setHere(S.waypoints.length - 1);
-  $("#addWaypoint").onclick = addPointToPointWaypoint;
-  $("#more").onclick = () => pointRoutes(true);
-  $("#showAllMap").onclick = showAllRoutesOnMap;
-  renderWaypointFields();
-  cards();
+function refreshPage(full) {
+  if (!full && S.page === "plan" && document.querySelector("#planResults") && refreshResults && refreshResults()) return;
+  render7();
 }
 function addPointToPointWaypoint() {
   S.waypoints.splice(S.waypoints.length - 1, 0, null);
   S.names.splice(S.names.length - 1, 0, "");
-  journey();
+  refreshPage(true);
 }
 function renderWaypointFields() {
   const host = $("#waypointFields");
@@ -905,8 +4251,8 @@ function renderWaypointFields() {
     const i = +b.dataset.removeWaypoint;
     S.waypoints.splice(i, 1);
     S.names.splice(i, 1);
-    journey();
-    if (S.waypoints.every(Boolean)) pointRoutes(false);
+    refreshPage(true);
+    if (S.mode !== "loop" && S.waypoints.length > 1 && S.waypoints.every(Boolean)) pointRoutes(false);
   });
 }
 function adventure() {
@@ -950,13 +4296,13 @@ function renderAdventureWaypointFields() {
     field.className = "field adventure-waypoint";
     field.innerHTML = `<label>Optional waypoint ${i + 1}</label><div class="location-row"><div id="gaw${i}"></div><button class="loc" data-remove-aw="${i}">\xD7</button></div>`;
     host.appendChild(field);
-    const g = new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, placeholder: "Search waypoint" });
+    const g = new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, proximity: geocoderProximity(), placeholder: "Search waypoint" });
     g.addTo(`#gaw${i}`);
     if (w.name) g.setInput(w.name);
     g.on("result", (e) => {
       w.coord = e.result.center;
       w.name = e.result.place_name;
-      markers();
+      markers2();
       scheduleAdventureRebuild();
     });
   });
@@ -966,8 +4312,12 @@ function renderAdventureWaypointFields() {
     scheduleAdventureRebuild();
   });
 }
+function geocoderProximity() {
+  const p = S.pos || map?.getCenter?.() && [map.getCenter().lng, map.getCenter().lat];
+  return Array.isArray(p) ? { longitude: p[0], latitude: p[1] } : void 0;
+}
 function geo(id, i, loop = false) {
-  const host = $(id), g = new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, placeholder: loop ? "Adventure start location" : i ? "Finish location" : "Start location" });
+  const host = $(id), g = new MapboxGeocoder({ accessToken: MAPBOX_TOKEN, mapboxgl, marker: false, proximity: geocoderProximity(), placeholder: loop ? "Adventure start location" : i ? "Finish location" : "Start location" });
   g.addTo(id);
   S.geocoders[id] = g;
   host.closest(".field")?.classList.add("geocoder-field");
@@ -984,7 +4334,7 @@ function geo(id, i, loop = false) {
       S.waypoints = [e.result.center, e.result.center];
       S.names = [e.result.place_name, e.result.place_name];
     }
-    markers();
+    markers2();
     if (!loop && S.waypoints[0] && S.waypoints[1]) pointRoutes(false);
   });
 }
@@ -999,7 +4349,7 @@ async function setHere(i, loop = false) {
     S.names = [name, name];
   }
   S.geocoders[loop ? "#ga" : i ? "#g1" : "#g0"]?.setInput(name);
-  markers();
+  markers2();
   map.flyTo({ center: p, zoom: 14 });
   toast(loop ? `Adventure starts and finishes at ${name}` : `${i ? "Finish" : "Start"} set to ${name}`);
   if (!loop && S.waypoints[0] && S.waypoints[1]) pointRoutes(false);
@@ -1022,7 +4372,7 @@ async function getRecognisableLocationName(p) {
 }
 async function pointRoutes(append) {
   if (!append) S.editingSavedId = null;
-  toast("Finding cycle-friendly routes\u2026");
+  showRouteLoading("Finding cycle-friendly routes\u2026");
   const points = structuredClone(S.waypoints), names = structuredClone(S.names);
   if (points.length < 2 || points.some((point) => !Array.isArray(point))) return toast("Choose every waypoint, Start and Finish");
   const base = await directions(points, true), extra = [];
@@ -1041,36 +4391,15 @@ async function pointRoutes(append) {
   });
   await accept(routes2, append);
 }
-function ensureRouteLoading() {
-  let box = document.querySelector("#route-loading");
-  if (!box) {
-    box = document.createElement("div");
-    box.id = "route-loading";
-    box.className = "route-loading";
-    box.setAttribute("role", "status");
-    box.setAttribute("aria-live", "polite");
-    box.innerHTML = '<span class="route-spinner" aria-hidden="true"></span><div><b>Calculating route</b><small id="route-loading-message"></small></div>';
-    document.querySelector("#map-wrap")?.appendChild(box);
-  }
-  return box;
+function showRouteLoading(message = "Calculating route\u2026") {
+  if (!isActive()) start(message);
+  else detail(message);
 }
-function showRouteLoading(message = "Calculating route\u2026", compact = false) {
-  const box = ensureRouteLoading();
-  if (!box) return;
-  box.classList.toggle("compact", compact);
-  const label = box.querySelector("#route-loading-message");
-  if (label) label.textContent = message;
-  box.hidden = false;
-  box.style.display = "flex";
-  const host = document.querySelector("#cards");
-  if (host && !S.routes.length) host.innerHTML = `<div class="card route-loading-card"><span class="route-spinner" aria-hidden="true"></span><div><b>Calculating route</b><small>${escapeHtml(message)}</small></div></div>`;
+function routeStep(id, detail2) {
+  step(id, detail2);
 }
 function hideRouteLoading() {
-  const box = document.querySelector("#route-loading");
-  if (box) {
-    box.hidden = true;
-    box.style.display = "none";
-  }
+  finish();
 }
 var adventureBuildTimer = 0;
 var adventureBuildToken = 0;
@@ -1082,8 +4411,8 @@ function scheduleAdventureRebuild() {
   }, 500);
 }
 var adventureRouteCache = /* @__PURE__ */ new Map();
-function adventureCacheKey(start, required, minKm, maxKm) {
-  return JSON.stringify([start, ...required, minKm, maxKm].map((x) => Array.isArray(x) ? x.map((v) => +v.toFixed(4)) : x));
+function adventureCacheKey(start2, required, minKm, maxKm) {
+  return JSON.stringify([start2, ...required, minKm, maxKm].map((x) => Array.isArray(x) ? x.map((v) => +v.toFixed(4)) : x));
 }
 function getCachedAdventureRoutes(key) {
   const item = adventureRouteCache.get(key);
@@ -1092,17 +4421,17 @@ function getCachedAdventureRoutes(key) {
 function setCachedAdventureRoutes(key, routes2) {
   adventureRouteCache.set(key, { time: Date.now(), routes: structuredClone(routes2) });
 }
-function validateAdventureLoop(route, start) {
+function validateAdventureLoop(route, start2) {
   const coords = route?.geometry?.coordinates;
   if (!Array.isArray(coords) || coords.length < 3) return { valid: false, gapKm: Infinity };
-  const startGap = turf.distance(coords[0], start), endGap = turf.distance(coords.at(-1), start), closureGap = turf.distance(coords[0], coords.at(-1)), valid = startGap <= 0.18 && endGap <= 0.18 && closureGap <= 0.18;
+  const startGap = turf.distance(coords[0], start2), endGap = turf.distance(coords.at(-1), start2), closureGap = turf.distance(coords[0], coords.at(-1)), valid = startGap <= 0.18 && endGap <= 0.18 && closureGap <= 0.18;
   return { valid, startGap, endGap, closureGap, gapKm: Math.max(startGap, endGap, closureGap) };
 }
-function closeAdventureGeometry(route, start) {
+function closeAdventureGeometry(route, start2) {
   const coords = route?.geometry?.coordinates;
-  if (Array.isArray(coords) && coords.length > 1 && turf.distance(coords[0], start) <= 0.18 && turf.distance(coords.at(-1), start) <= 0.18) {
-    coords[0] = start;
-    coords[coords.length - 1] = start;
+  if (Array.isArray(coords) && coords.length > 1 && turf.distance(coords[0], start2) <= 0.18 && turf.distance(coords.at(-1), start2) <= 0.18) {
+    coords[0] = start2;
+    coords[coords.length - 1] = start2;
   }
   return route;
 }
@@ -1138,25 +4467,25 @@ function corridorLoopQuality(route) {
   const bbox = turf.bbox(line2), w = turf.distance([bbox[0], bbox[1]], [bbox[2], bbox[1]]), h = turf.distance([bbox[0], bbox[1]], [bbox[0], bbox[3]]), narrow = Math.min(w, h) < Math.max(1.2, length * 0.08), retrace = Math.min(1, same / length);
   return { valid: retrace <= 0.21 && longest <= 0.8, retrace, parallelKm: parallel, narrow, longestSameKm: longest };
 }
-function quickAdventureAcceptance(route, start, requiredCount = 0) {
-  if (!validateAdventureLoop(route, start).valid || hasMotorway(route)) return { valid: false };
+function quickAdventureAcceptance(route, start2, requiredCount = 0) {
+  if (!validateAdventureLoop(route, start2).valid || hasMotorway(route)) return { valid: false };
   const q = quickAdventureQuality(route.geometry.coordinates, Math.max(0.1, (route.distance || 0) / 1e3)), corridor = corridorLoopQuality(route), maxRetrace = requiredCount ? 0.34 : 0.21, maxDeadEnd = requiredCount ? 1.2 : 0.8;
   return { ...q, retrace: Math.min(q.retrace, corridor.retrace), parallelDistinctKm: corridor.parallelKm, narrowLoop: corridor.narrow, valid: requiredCount > 0 || corridor.valid && q.deadEndKm <= maxDeadEnd };
 }
 var ADVENTURE_CORRIDOR_QUERIES = { balanced: ["park", "nature reserve", "historic place", "cycle path"], scenic: ["river", "lake", "seaside", "viewpoint", "castle", "garden"], established: ["greenway", "cycle trail", "canal", "railway path", "national cycle route"] };
-async function forceOneMoreAdventureRoute(start, required, minKm, maxKm, effectiveMax, minimumReturn, token) {
+async function forceOneMoreAdventureRoute(start2, required, minKm, maxKm, effectiveMax, minimumReturn, token) {
   const attempts = [];
   for (let i = 0; i < 8; i++) {
     const seed = S.routes.length * 11 + i, target = minKm + (maxKm - minKm) * (0.22 + i % 6 * 0.13), bearing = (23 + seed * 137.508) % 360, count = 3 + i % 3, radius = Math.max(1.1, target / (2 * Math.PI) * (0.56 + i % 4 * 0.08)), ring = [...required];
-    for (let n = 0; n < count; n++) ring.push(turf.destination(start, radius, bearing + n * 360 / count).geometry.coordinates);
-    attempts.push({ profile: i % 3 === 0 ? "balanced" : i % 3 === 1 ? "scenic" : "established", target, points: [start, ...ring, start], places: [], forceFallback: true });
+    for (let n = 0; n < count; n++) ring.push(turf.destination(start2, radius, bearing + n * 360 / count).geometry.coordinates);
+    attempts.push({ profile: i % 3 === 0 ? "balanced" : i % 3 === 1 ? "scenic" : "established", target, points: [start2, ...ring, start2], places: [], forceFallback: true });
   }
   for (const plan of attempts) {
     if (token !== adventureBuildToken) return null;
     const routes2 = await fastDirections(plan.points, 5600, false).catch(() => []);
     for (const raw of routes2) {
-      if (!validateAdventureLoop(raw, start).valid || hasMotorway(raw)) continue;
-      const route = closeAdventureGeometry(raw, start), quick = quickAdventureQuality(route.geometry.coordinates, Math.max(0.1, (route.distance || 0) / 1e3)), candidate = scoreAdventureCandidateFast(route, plan.target, minKm, Math.max(effectiveMax, maxKm * 1.35), minimumReturn, { waypointEfficient: required.length > 0 }, quick);
+      if (!validateAdventureLoop(raw, start2).valid || hasMotorway(raw)) continue;
+      const route = closeAdventureGeometry(raw, start2), quick = quickAdventureQuality(route.geometry.coordinates, Math.max(0.1, (route.distance || 0) / 1e3)), candidate = scoreAdventureCandidateFast(route, plan.target, minKm, Math.max(effectiveMax, maxKm * 1.35), minimumReturn, { waypointEfficient: required.length > 0 }, quick);
       if (!candidate?.route) continue;
       route._requestPoints = plan.points;
       route.adventureProfile = plan.profile;
@@ -1169,11 +4498,11 @@ async function forceOneMoreAdventureRoute(start, required, minKm, maxKm, effecti
   }
   return null;
 }
-async function adventureWaypointRoutes({ token, start, required, minKm, maxKm, effectiveMax, minimumReturn, cacheKey: cacheKey2, append }) {
+async function adventureWaypointRoutes({ token, start: start2, required, minKm, maxKm, effectiveMax, minimumReturn, cacheKey: cacheKey2, append }) {
   showRouteLoading("Calculating the shortest waypoint return\u2026", false);
-  const directPoints = [start, ...required, start], directRoutes = await fastDirections(directPoints, 6500, true).catch(() => []);
+  const directPoints = [start2, ...required, start2], directRoutes = await fastDirections(directPoints, 6500, true).catch(() => []);
   if (token !== adventureBuildToken) return;
-  let candidates = collectWaypointCandidates(directRoutes, directPoints, start, required, minKm, maxKm, effectiveMax, minimumReturn, "Efficient waypoint return");
+  let candidates = collectWaypointCandidates(directRoutes, directPoints, start2, required, minKm, maxKm, effectiveMax, minimumReturn, "Efficient waypoint return");
   if (!candidates.length) {
     hideRouteLoading();
     toast("No safe route through the required waypoint was found.");
@@ -1186,10 +4515,10 @@ async function adventureWaypointRoutes({ token, start, required, minKm, maxKm, e
   });
   if (!append && candidates.length < 3) {
     showRouteLoading("Shortest route ready \xB7 finding distinct returns\u2026", true);
-    const variations = buildWaypointVariationPlans(start, required, baselineKm), results = await Promise.all(variations.map((plan) => fastDirections(plan.points, 6500, false).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
+    const variations = buildWaypointVariationPlans(start2, required, baselineKm), results = await Promise.all(variations.map((plan) => fastDirections(plan.points, 6500, false).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
     if (token !== adventureBuildToken) return;
     for (const { plan, routes: routes3 } of results) {
-      for (const route of collectWaypointCandidates(routes3, plan.points, start, required, minKm, maxKm, effectiveMax, minimumReturn, plan.label)) {
+      for (const route of collectWaypointCandidates(routes3, plan.points, start2, required, minKm, maxKm, effectiveMax, minimumReturn, plan.label)) {
         const km = (route.distance || 0) / 1e3;
         route.waypointBaselineKm = baselineKm;
         route.waypointExcessKm = Math.max(0, km - baselineKm);
@@ -1198,8 +4527,8 @@ async function adventureWaypointRoutes({ token, start, required, minKm, maxKm, e
     }
   }
   if (append) {
-    const variations = buildWaypointVariationPlans(start, required, baselineKm, S.routes.length), results = await Promise.all(variations.map((plan) => fastDirections(plan.points, 6200, false).catch(() => [])));
-    for (let i = 0; i < results.length; i++) for (const route of collectWaypointCandidates(results[i], variations[i].points, start, required, minKm, maxKm, effectiveMax, minimumReturn, variations[i].label)) {
+    const variations = buildWaypointVariationPlans(start2, required, baselineKm, S.routes.length), results = await Promise.all(variations.map((plan) => fastDirections(plan.points, 6200, false).catch(() => [])));
+    for (let i = 0; i < results.length; i++) for (const route of collectWaypointCandidates(results[i], variations[i].points, start2, required, minKm, maxKm, effectiveMax, minimumReturn, variations[i].label)) {
       route.waypointBaselineKm = baselineKm;
       route.waypointExcessKm = Math.max(0, (route.distance || 0) / 1e3 - baselineKm);
       candidates.push(route);
@@ -1220,14 +4549,14 @@ async function adventureWaypointRoutes({ token, start, required, minKm, maxKm, e
   toast(append ? "One more waypoint route added" : routes2.length >= 3 ? "3 waypoint routes ready" : `${routes2.length} practical waypoint route${routes2.length === 1 ? "" : "s"} ready`);
   routes2.slice(append ? -1 : 0).forEach((route) => enrichAdventureCards([route], token));
 }
-function collectWaypointCandidates(routes2, points, start, required, minKm, maxKm, effectiveMax, minimumReturn, label) {
+function collectWaypointCandidates(routes2, points, start2, required, minKm, maxKm, effectiveMax, minimumReturn, label) {
   const out = [];
   for (const raw of routes2.slice(0, 3)) {
-    if (!validateAdventureLoop(raw, start).valid || hasMotorway(raw)) continue;
-    const route = closeAdventureGeometry(raw, start), quick = quickAdventureQuality(route.geometry.coordinates, Math.max(0.1, (route.distance || 0) / 1e3)), candidate = scoreAdventureCandidateFast(route, Math.max(minKm, minimumReturn), minKm, effectiveMax, minimumReturn, { waypointEfficient: true }, quick);
+    if (!validateAdventureLoop(raw, start2).valid || hasMotorway(raw)) continue;
+    const route = closeAdventureGeometry(raw, start2), quick = quickAdventureQuality(route.geometry.coordinates, Math.max(0.1, (route.distance || 0) / 1e3)), candidate = scoreAdventureCandidateFast(route, Math.max(minKm, minimumReturn), minKm, effectiveMax, minimumReturn, { waypointEfficient: true }, quick);
     if (!candidate?.route) continue;
     route._requestPoints = structuredClone(points);
-    route.requiredNavigationWaypoints = structuredClone([...required, start]);
+    route.requiredNavigationWaypoints = structuredClone([...required, start2]);
     route.requiredWaypointNames = structuredClone([...required.map((_, index) => S.adventureWaypoints[index]?.name || `Waypoint ${index + 1}`), S.names[0] || "Start"]);
     route.waypointEfficient = true;
     route.qualityLabel = label;
@@ -1236,9 +4565,9 @@ function collectWaypointCandidates(routes2, points, start, required, minKm, maxK
   }
   return out;
 }
-function buildWaypointVariationPlans(start, required, baselineKm, seed = 0) {
-  const far = required.at(-1), bearing = turf.bearing(start, far), mid = turf.midpoint(start, far).geometry.coordinates, offset = Math.max(0.35, Math.min(2.2, baselineKm * (0.012 + seed * 1e-3))), left = turf.destination(mid, offset, bearing - 90 - seed * 7).geometry.coordinates, right = turf.destination(mid, offset, bearing + 90 + seed * 7).geometry.coordinates;
-  return [{ label: "Distinct return west side", points: [start, left, ...required, right, start] }, { label: "Distinct return east side", points: [start, right, ...required, left, start] }, { label: "Direct reverse variation", points: [start, ...required.slice().reverse(), start] }];
+function buildWaypointVariationPlans(start2, required, baselineKm, seed = 0) {
+  const far = required.at(-1), bearing = turf.bearing(start2, far), mid = turf.midpoint(start2, far).geometry.coordinates, offset = Math.max(0.35, Math.min(2.2, baselineKm * (0.012 + seed * 1e-3))), left = turf.destination(mid, offset, bearing - 90 - seed * 7).geometry.coordinates, right = turf.destination(mid, offset, bearing + 90 + seed * 7).geometry.coordinates;
+  return [{ label: "Distinct return west side", points: [start2, left, ...required, right, start2] }, { label: "Distinct return east side", points: [start2, right, ...required, left, start2] }, { label: "Direct reverse variation", points: [start2, ...required.slice().reverse(), start2] }];
 }
 function waypointRouteRank(a, b, baselineKm, minKm, maxKm) {
   const ak = (a.distance || 0) / 1e3, bk = (b.distance || 0) / 1e3, aEx = Math.max(0, ak - baselineKm), bEx = Math.max(0, bk - baselineKm);
@@ -1251,15 +4580,16 @@ async function adventureRoutes(append = false) {
   if (!append) S.editingSavedId = null;
   const token = ++adventureBuildToken;
   showRouteLoading(append ? "Finding another distinct route\u2026" : "Finding rivers, greenways and known places\u2026", false);
-  const start = S.waypoints[0] || await current();
-  if (!start) {
+  const start2 = S.waypoints[0] || await current();
+  if (!start2) {
     hideRouteLoading();
     return;
   }
-  const minKm = +$("#distanceMin").value, maxKm = +$("#distanceMax").value, required = S.adventureWaypoints.map((x) => x.coord).filter(Boolean), minimumReturn = required.length ? required.reduce((sum, p, i) => sum + turf.distance(i ? required[i - 1] : start, p), 0) + turf.distance(required.at(-1), start) : 0, effectiveMax = Math.max(maxKm, minimumReturn * 1.04), cacheKey2 = adventureCacheKey(start, required, minKm, maxKm) + (append ? `:more:${S.routes.length}` : "");
+  if (ridePrefs().beforeSunset) await refreshDaylightLimit();
+  const { minKm, maxKm } = adventureRangeKm(), required = S.adventureWaypoints.map((x) => x.coord).filter(Boolean), minimumReturn = required.length ? required.reduce((sum, p, i) => sum + turf.distance(i ? required[i - 1] : start2, p), 0) + turf.distance(required.at(-1), start2) : 0, effectiveMax = Math.max(maxKm, minimumReturn * 1.04), cacheKey2 = adventureCacheKey(start2, required, minKm, maxKm) + (append ? `:more:${S.routes.length}` : "");
   if (!append) {
     const cached = getCachedAdventureRoutes(cacheKey2);
-    if (cached?.length >= 3 && cached.every((r) => quickAdventureAcceptance(r, start, required.length).valid) && routesAreDistinctStrict(cached.slice(0, 3))) {
+    if (cached?.length >= 3 && cached.every((r) => quickAdventureAcceptance(r, start2, required.length).valid) && routesAreDistinctStrict(cached.slice(0, 3))) {
       publishAdventureRoutes(cached.slice(0, 3), false);
       hideRouteLoading();
       toast("3 distinct routes ready");
@@ -1268,26 +4598,27 @@ async function adventureRoutes(append = false) {
     }
   }
   if (required.length) {
-    await adventureWaypointRoutes({ token, start, required, minKm, maxKm, effectiveMax, minimumReturn, cacheKey: cacheKey2, append });
+    await adventureWaypointRoutes({ token, start: start2, required, minKm, maxKm, effectiveMax, minimumReturn, cacheKey: cacheKey2, append });
     return;
   }
-  const profiles = append ? [["balanced", "scenic", "established"][(S.routes.length + 1) % 3]] : ["balanced", "scenic", "established"], destinations = await discoverCorridorDestinations(start, maxKm, profiles, 1900).catch(() => []);
+  const profiles = append ? [["balanced", "scenic", "established"][(S.routes.length + 1) % 3]] : ["balanced", "scenic", "established"], destinations = await discoverCorridorDestinations(start2, maxKm, profiles, 1900).catch(() => []);
   if (token !== adventureBuildToken) {
     hideRouteLoading();
     return;
   }
-  const plans = profiles.map((profile2, i) => buildCorridorLoopPlan(start, required, destinations, minKm, maxKm, profile2, i + S.routes.length));
+  routeStep("connect");
+  const plans = profiles.map((profile, i) => buildCorridorLoopPlan(start2, required, destinations, minKm, maxKm, profile, i + S.routes.length));
   showRouteLoading(append ? "Connecting one full route\u2026" : "Connecting 3 destination-led loops\u2026", false);
   const results = await Promise.all(plans.map((plan) => fastDirections(plan.points, 6500, false).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
   if (token !== adventureBuildToken) {
     hideRouteLoading();
     return;
   }
-  let candidates = rankDistinctAdventureCandidates(results, start, required, minKm, maxKm, effectiveMax, minimumReturn);
+  let candidates = rankDistinctAdventureCandidates(results, start2, required, minKm, maxKm, effectiveMax, minimumReturn);
   if (!append && candidates.length < 3) {
     showRouteLoading(`${candidates.length || "No"} distinct routes ready \xB7 searching different directions\u2026`, true);
-    const retryPlans = [...profiles.map((profile2, i) => buildCorridorLoopPlan(start, required, destinations, minKm, maxKm, profile2, i + profiles.length + S.routes.length, true)), ...buildNarrowCorridorPlans(start, required, minKm, maxKm, S.routes.length)], retryResults = await Promise.all(retryPlans.map((plan) => fastDirections(plan.points, 6500, false).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
-    candidates = mergeDistinctAdventureCandidates(candidates, rankDistinctAdventureCandidates(retryResults, start, required, minKm, maxKm, effectiveMax, minimumReturn));
+    const retryPlans = [...profiles.map((profile, i) => buildCorridorLoopPlan(start2, required, destinations, minKm, maxKm, profile, i + profiles.length + S.routes.length, true)), ...buildNarrowCorridorPlans(start2, required, minKm, maxKm, S.routes.length)], retryResults = await Promise.all(retryPlans.map((plan) => fastDirections(plan.points, 6500, false).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
+    candidates = mergeDistinctAdventureCandidates(candidates, rankDistinctAdventureCandidates(retryResults, start2, required, minKm, maxKm, effectiveMax, minimumReturn));
   }
   if (token !== adventureBuildToken) {
     hideRouteLoading();
@@ -1295,7 +4626,7 @@ async function adventureRoutes(append = false) {
   }
   if (!append && candidates.length < 3) {
     showRouteLoading(`${candidates.length} route${candidates.length === 1 ? "" : "s"} \xB7 filling remaining options\u2026`, true);
-    const availability = await collectAvailabilityFallbacks(buildAvailabilityFallbackPlans(start, required, minKm, maxKm, S.routes.length), start, required, minKm, maxKm, effectiveMax, minimumReturn, candidates, token);
+    const availability = await collectAvailabilityFallbacks(buildAvailabilityFallbackPlans(start2, required, minKm, maxKm, S.routes.length), start2, required, minKm, maxKm, effectiveMax, minimumReturn, candidates, token);
     candidates = [...candidates, ...availability];
   }
   if (token !== adventureBuildToken) {
@@ -1304,7 +4635,7 @@ async function adventureRoutes(append = false) {
   }
   if (append && !candidates.length) {
     showRouteLoading("Quality filters found nothing \xB7 forcing one more route\u2026", false);
-    const forced = await forceOneMoreAdventureRoute(start, required, minKm, maxKm, effectiveMax, minimumReturn, token);
+    const forced = await forceOneMoreAdventureRoute(start2, required, minKm, maxKm, effectiveMax, minimumReturn, token);
     if (forced) candidates = [forced];
   }
   if (token !== adventureBuildToken) {
@@ -1323,34 +4654,42 @@ async function adventureRoutes(append = false) {
   toast(routes2.length >= 3 ? "3 distinct destination-led routes ready" : `${routes2.length} genuinely distinct route${routes2.length === 1 ? "" : "s"} found`);
   routes2.forEach((route) => enrichAdventureCards([route], token));
 }
-async function discoverCorridorDestinations(start, maxKm, profiles, budgetMs = 1900) {
-  const queries = [...new Set(profiles.flatMap((profile2) => ADVENTURE_CORRIDOR_QUERIES[profile2] || []))], radiusKm = Math.max(3, Math.min(28, maxKm / 4)), controller = new AbortController(), timer = setTimeout(() => controller.abort(), budgetMs), jobs = queries.map((query) => fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?proximity=${start.join(",")}&types=poi,place&limit=6&access_token=${MAPBOX_TOKEN}`, { signal: controller.signal }).then((r) => r.ok ? r.json() : { features: [] }).catch(() => ({ features: [] })));
+async function discoverCorridorDestinations(start2, maxKm, profiles, budgetMs = 1900) {
+  const queries = [...new Set(profiles.flatMap((profile) => ADVENTURE_CORRIDOR_QUERIES[profile] || []))], radiusKm = Math.max(3, Math.min(28, maxKm / 4)), controller = new AbortController(), timer2 = setTimeout(() => controller.abort(), budgetMs), jobs = queries.map((query) => fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?proximity=${start2.join(",")}&types=poi,place&limit=6&access_token=${MAPBOX_TOKEN}`, { signal: controller.signal }).then((r) => r.ok ? r.json() : { features: [] }).catch(() => ({ features: [] })));
   try {
     const results = await Promise.all(jobs), seen = /* @__PURE__ */ new Set(), items = [];
     for (let q = 0; q < results.length; q++) for (const feature of results[q].features || []) {
       const coord = feature.center;
       if (!coord?.every(Number.isFinite)) continue;
-      const distance = turf.distance(start, coord);
+      const distance = turf.distance(start2, coord);
       if (distance < 1.5 || distance > radiusKm) continue;
       const key = coord.map((v) => v.toFixed(4)).join(",");
       if (seen.has(key)) continue;
       seen.add(key);
-      items.push({ coord, name: feature.text || feature.place_name?.split(",")[0] || queries[q], category: `${queries[q]} ${feature.properties?.category || ""}`.toLowerCase(), distance, bearing: (turf.bearing(start, coord) + 360) % 360, score: corridorDestinationScore(feature, queries[q]) });
+      items.push({ coord, name: feature.text || feature.place_name?.split(",")[0] || queries[q], category: `${queries[q]} ${feature.properties?.category || ""}`.toLowerCase(), distance, bearing: (turf.bearing(start2, coord) + 360) % 360, score: corridorDestinationScore(feature, queries[q]) });
     }
     try {
-      const bboxDeg = radiusKm / 111, overpassData = await fetchOverpassArea([start[0] - bboxDeg, start[1] - bboxDeg, start[0] + bboxDeg, start[1] + bboxDeg], 0);
-      if (overpassData) for (const poi of poisFromOverpass(overpassData, start, turf, radiusKm)) {
-        const key = poi.coord.map((v) => v.toFixed(4)).join(",");
-        if (seen.has(key)) continue;
-        seen.add(key);
-        items.push(poi);
+      const bboxDeg = radiusKm / 111, overpassData = await fetchOverpassArea([start2[0] - bboxDeg, start2[1] - bboxDeg, start2[0] + bboxDeg, start2[1] + bboxDeg], 0);
+      if (overpassData) {
+        for (const poi of poisFromOverpass(overpassData, start2, turf, radiusKm)) {
+          const key = poi.coord.map((v) => v.toFixed(4)).join(",");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          items.push(poi);
+        }
+        for (const anchor of cyclewayAnchors(overpassData, start2, radiusKm, turf)) {
+          const key = anchor.coord.map((v) => v.toFixed(4)).join(",");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          items.push(anchor);
+        }
       }
     } catch (error) {
       console.warn("Overpass corridor POIs unavailable; using Mapbox search only", error);
     }
     return items.sort((a, b) => b.score - a.score);
   } finally {
-    clearTimeout(timer);
+    clearTimeout(timer2);
   }
 }
 function corridorDestinationScore(feature, query) {
@@ -1361,8 +4700,8 @@ function corridorDestinationScore(feature, query) {
   if (/viewpoint|nature reserve|castle|historic|park|garden/.test(text)) score += 15;
   return score + (feature.relevance || 0) * 7;
 }
-function buildCorridorLoopPlan(start, required, destinations, minKm, maxKm, profile2, index, retry = false) {
-  const target = minKm + (maxKm - minKm) * ({ balanced: 0.42, scenic: 0.52, established: 0.46 }[profile2] || 0.42), base = (22 + index * 119 + (retry ? 61 : 0)) % 360, count = Math.max(2, 4 - required.length), queries = ADVENTURE_CORRIDOR_QUERIES[profile2] || [], chosen = [];
+function buildCorridorLoopPlan(start2, required, destinations, minKm, maxKm, profile, index, retry = false) {
+  const target = minKm + (maxKm - minKm) * ({ balanced: 0.42, scenic: 0.52, established: 0.46 }[profile] || 0.42), base = (22 + index * 119 + (retry ? 61 : 0)) % 360, count = Math.max(2, 4 - required.length), queries = ADVENTURE_CORRIDOR_QUERIES[profile] || [], chosen = [];
   for (let slot = 0; slot < count; slot++) {
     const ideal = (base + slot * 360 / count) % 360, candidate = destinations.filter((p) => !chosen.includes(p) && !required.some((r) => turf.distance(r, p.coord) < 0.4)).map((p) => {
       const angular = Math.abs((p.bearing - ideal + 540) % 360 - 180), match = queries.some((q) => p.category.includes(q)) ? 18 : 0, spacing = chosen.reduce((penalty, x) => penalty + Math.max(0, 55 - Math.abs((p.bearing - x.bearing + 540) % 360 - 180)), 0), idealRadius = target / (2 * Math.PI);
@@ -1370,41 +4709,41 @@ function buildCorridorLoopPlan(start, required, destinations, minKm, maxKm, prof
     }).sort((a, b) => b.value - a.value)[0];
     if (candidate) chosen.push(candidate.p);
   }
-  let ring = [...required, ...chosen.map((p) => p.coord)].sort((a, b) => (turf.bearing(start, a) + 360) % 360 - (turf.bearing(start, b) + 360) % 360);
+  let ring = [...required, ...chosen.map((p) => p.coord)].sort((a, b) => (turf.bearing(start2, a) + 360) % 360 - (turf.bearing(start2, b) + 360) % 360);
   while (ring.length < 4) {
     const radius = Math.max(1.5, target / (2 * Math.PI) * 0.78), angle = base + ring.length * 90;
-    ring.push(turf.destination(start, radius, angle).geometry.coordinates);
+    ring.push(turf.destination(start2, radius, angle).geometry.coordinates);
   }
-  return { profile: profile2, target, points: [start, ...ring, start], places: chosen };
+  return { profile, target, points: [start2, ...ring, start2], places: chosen };
 }
-function buildNarrowCorridorPlans(start, required, minKm, maxKm, seed = 0) {
+function buildNarrowCorridorPlans(start2, required, minKm, maxKm, seed = 0) {
   return [0, 90, 180, 270].map((bearing, i) => {
-    const target = minKm + (maxKm - minKm) * (0.34 + i * 0.14), outward = Math.max(2, target * 0.2), side = Math.max(0.7, Math.min(2.8, target * 0.038)), far = turf.destination(start, outward, bearing + seed * 31).geometry.coordinates, left = turf.destination(far, side, bearing - 90).geometry.coordinates, right = turf.destination(far, side, bearing + 90).geometry.coordinates, nearLeft = turf.destination(start, side, bearing - 90).geometry.coordinates, nearRight = turf.destination(start, side, bearing + 90).geometry.coordinates;
-    return { profile: i % 2 ? "scenic" : "established", target, points: [start, ...required, nearLeft, left, far, right, nearRight, start], places: [], corridorPlan: true };
+    const target = minKm + (maxKm - minKm) * (0.34 + i * 0.14), outward = Math.max(2, target * 0.2), side = Math.max(0.7, Math.min(2.8, target * 0.038)), far = turf.destination(start2, outward, bearing + seed * 31).geometry.coordinates, left = turf.destination(far, side, bearing - 90).geometry.coordinates, right = turf.destination(far, side, bearing + 90).geometry.coordinates, nearLeft = turf.destination(start2, side, bearing - 90).geometry.coordinates, nearRight = turf.destination(start2, side, bearing + 90).geometry.coordinates;
+    return { profile: i % 2 ? "scenic" : "established", target, points: [start2, ...required, nearLeft, left, far, right, nearRight, start2], places: [], corridorPlan: true };
   });
 }
-function buildAvailabilityFallbackPlans(start, required, minKm, maxKm, seed = 0) {
+function buildAvailabilityFallbackPlans(start2, required, minKm, maxKm, seed = 0) {
   const plans = [], fractions = [0.28, 0.38, 0.48, 0.58, 0.68, 0.78], counts = [3, 4, 5, 3, 4, 5];
   for (let i = 0; i < fractions.length; i++) {
     const target = minKm + (maxKm - minKm) * fractions[i], bearing = (15 + seed * 71 + i * 57) % 360, radius = Math.max(1.2, target / (2 * Math.PI) * (0.6 + i % 3 * 0.08)), ring = [...required];
-    for (let n = 0; n < counts[i]; n++) ring.push(turf.destination(start, radius, bearing + n * 360 / counts[i]).geometry.coordinates);
-    plans.push({ profile: i % 3 === 0 ? "balanced" : i % 3 === 1 ? "scenic" : "established", target, points: [start, ...ring, start], places: [], availabilityFallback: true });
+    for (let n = 0; n < counts[i]; n++) ring.push(turf.destination(start2, radius, bearing + n * 360 / counts[i]).geometry.coordinates);
+    plans.push({ profile: i % 3 === 0 ? "balanced" : i % 3 === 1 ? "scenic" : "established", target, points: [start2, ...ring, start2], places: [], availabilityFallback: true });
   }
   return plans;
 }
-function relaxedAvailabilityAcceptance(route, start, requiredCount = 0) {
-  if (!validateAdventureLoop(route, start).valid || hasMotorway(route)) return { valid: false };
+function relaxedAvailabilityAcceptance(route, start2, requiredCount = 0) {
+  if (!validateAdventureLoop(route, start2).valid || hasMotorway(route)) return { valid: false };
   const q = quickAdventureQuality(route.geometry.coordinates, Math.max(0.1, (route.distance || 0) / 1e3)), corridor = corridorLoopQuality(route), valid = requiredCount > 0 || corridor.retrace <= 0.27 && corridor.longestSameKm <= 1.05 && q.deadEndKm <= 1;
   return { ...q, retrace: Math.min(q.retrace, corridor.retrace), parallelDistinctKm: corridor.parallelKm, narrowLoop: corridor.narrow, valid };
 }
-async function collectAvailabilityFallbacks(plans, start, required, minKm, maxKm, effectiveMax, minimumReturn, existing, token) {
+async function collectAvailabilityFallbacks(plans, start2, required, minKm, maxKm, effectiveMax, minimumReturn, existing, token) {
   const results = await Promise.all(plans.map((plan) => fastDirections(plan.points, 6200, false).then((routes2) => ({ plan, routes: routes2 })).catch(() => ({ plan, routes: [] })))), out = [];
   if (token !== adventureBuildToken) return out;
   for (const { plan, routes: routes2 } of results) {
     for (const raw of routes2.slice(0, 2)) {
-      const quick = relaxedAvailabilityAcceptance(raw, start, required.length);
+      const quick = relaxedAvailabilityAcceptance(raw, start2, required.length);
       if (!quick.valid) continue;
-      const route = closeAdventureGeometry(raw, start), candidate = scoreAdventureCandidateFast(route, plan.target, minKm, effectiveMax, minimumReturn, { waypointEfficient: required.length > 0 }, quick);
+      const route = closeAdventureGeometry(raw, start2), candidate = scoreAdventureCandidateFast(route, plan.target, minKm, effectiveMax, minimumReturn, { waypointEfficient: required.length > 0 }, quick);
       if (!candidate?.route) continue;
       route._requestPoints = plan.points;
       route.adventureProfile = plan.profile;
@@ -1416,10 +4755,10 @@ async function collectAvailabilityFallbacks(plans, start, required, minKm, maxKm
   }
   return out;
 }
-function rankDistinctAdventureCandidates(results, start, required, minKm, maxKm, effectiveMax, minimumReturn) {
+function rankDistinctAdventureCandidates(results, start2, required, minKm, maxKm, effectiveMax, minimumReturn) {
   let out = [];
   for (const { plan, routes: routes2 } of results) {
-    for (const route of collectAdventureCandidatesQuick(plan, routes2, start, required, minKm, maxKm, effectiveMax, minimumReturn)) {
+    for (const route of collectAdventureCandidatesQuick(plan, routes2, start2, required, minKm, maxKm, effectiveMax, minimumReturn)) {
       route.adventurePlaces = plan.places;
       route.adventureProfile = plan.profile;
       route.qualityLabel = `${route.narrowLoop ? "Corridor loop \xB7 " : ""}${adventureProfileTitle(plan.profile)} route${plan.places.length ? ` \xB7 ${plan.places.slice(0, 2).map((p) => p.name).join(" + ")}` : ""}`;
@@ -1457,15 +4796,15 @@ function hasAnonymousSpur(route, places, required) {
   const coords = route.geometry.coordinates, line2 = turf.lineString(coords), length = turf.length(line2), placesNear = places.some((place) => (turf.nearestPointOnLine(line2, turf.point(place.coord)).properties.dist || Infinity) < 0.3);
   return (route.deadEndKm || 0) > 0.45 && !placesNear;
 }
-function adventureProfileTitle(profile2) {
-  return profile2 === "established" ? "Established path" : profile2[0].toUpperCase() + profile2.slice(1);
+function adventureProfileTitle(profile) {
+  return profile === "established" ? "Established path" : profile[0].toUpperCase() + profile.slice(1);
 }
-function collectAdventureCandidatesQuick(plan, routes2, start, required, minKm, maxKm, effectiveMax, minimumReturn) {
+function collectAdventureCandidatesQuick(plan, routes2, start2, required, minKm, maxKm, effectiveMax, minimumReturn) {
   const out = [];
   for (const raw of routes2.slice(0, 3)) {
-    const quick = quickAdventureAcceptance(raw, start, required.length);
+    const quick = quickAdventureAcceptance(raw, start2, required.length);
     if (!quick.valid) continue;
-    const route = closeAdventureGeometry(raw, start), candidate = scoreAdventureCandidateFast(route, plan.target, minKm, effectiveMax, minimumReturn, { waypointEfficient: required.length > 0 }, quick);
+    const route = closeAdventureGeometry(raw, start2), candidate = scoreAdventureCandidateFast(route, plan.target, minKm, effectiveMax, minimumReturn, { waypointEfficient: required.length > 0 }, quick);
     if (!candidate?.route) continue;
     route._requestPoints = plan.points;
     route.adventureProfile = plan.profile;
@@ -1497,14 +4836,14 @@ function scoreAdventureCandidateFast(route, target, minKm, effectiveMax, minimum
   return { route, recommended: true };
 }
 async function fastDirections(points, timeoutMs = 5200, alternatives = false) {
-  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeoutMs);
+  const controller = new AbortController(), timer2 = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const coordinates = points.map((point) => point.join(",")).join(";"), url = `https://api.mapbox.com/directions/v5/mapbox/cycling/${coordinates}?alternatives=${alternatives}&geometries=geojson&overview=full&steps=true&access_token=${MAPBOX_TOKEN}`, response = await fetch(url, { signal: controller.signal, cache: "no-store" });
     if (!response.ok) throw new Error(`Directions ${response.status}`);
     const data = await response.json();
     return data.routes || [];
   } finally {
-    clearTimeout(timer);
+    clearTimeout(timer2);
   }
 }
 async function hydrateRouteInstructions(route, points) {
@@ -1525,13 +4864,13 @@ async function hydrateRouteInstructions(route, points) {
 function routeSafetyAndDirectness(route) {
   const steps = route?.legs?.flatMap((leg) => leg.steps || []) || [];
   let motorwayDistance = 0, cycleDistance = 0, directionChanges = 0, crossings = 0, lastTurn = "";
-  for (const step of steps) {
-    const name = `${step.name || ""}`.trim().toLowerCase(), ref = `${step.ref || ""}`.trim().toLowerCase(), roadClass = `${step.metadata?.class || step.class || ""}`.toLowerCase(), distance = Number(step.distance) || 0, isMotorway = roadClass === "motorway" || roadClass === "motorway_link" || /\bmotorway(?:[_ -]?link)?\b/.test(name) || /^m\d{1,3}(?:\s|$)/.test(ref);
+  for (const step2 of steps) {
+    const name = `${step2.name || ""}`.trim().toLowerCase(), ref = `${step2.ref || ""}`.trim().toLowerCase(), roadClass = `${step2.metadata?.class || step2.class || ""}`.toLowerCase(), distance = Number(step2.distance) || 0, isMotorway = roadClass === "motorway" || roadClass === "motorway_link" || /\bmotorway(?:[_ -]?link)?\b/.test(name) || /^m\d{1,3}(?:\s|$)/.test(ref);
     if (isMotorway) motorwayDistance += distance;
-    const description = `${name} ${ref} ${step.maneuver?.instruction || ""}`.toLowerCase();
+    const description = `${name} ${ref} ${step2.maneuver?.instruction || ""}`.toLowerCase();
     if (/cycleway|cycle lane|ncn|greenway|shared path|towpath/.test(description)) cycleDistance += distance;
     if (/cross|roundabout|traffic signal/.test(description)) crossings++;
-    const turn = step.maneuver?.modifier || "";
+    const turn = step2.maneuver?.modifier || "";
     if (lastTurn && turn && lastTurn !== turn && /left|right/.test(`${lastTurn} ${turn}`)) directionChanges++;
     if (turn) lastTurn = turn;
   }
@@ -1567,6 +4906,7 @@ function prepareImmediateRouteMetrics(route) {
 function publishAdventureRoutes(routes2, append = false) {
   if (S.mode === "loop" && S.waypoints[0]) routes2 = routes2.filter((r) => validateAdventureLoop(r, S.waypoints[0]).valid).map((r) => closeAdventureGeometry(r, S.waypoints[0]));
   routes2.forEach(prepareImmediateRouteMetrics);
+  applyRidePreferences(routes2);
   routes2.forEach((r) => {
     r.cycleScorePending = true;
     refineCycleScoreWithOverpass(r);
@@ -1593,13 +4933,13 @@ async function enrichAdventureCards(routes2, token) {
 }
 function quickAdventureQuality(coords, targetKm) {
   if (!coords?.length) return { closed: false, retrace: 1, overlapKm: Infinity, compactness: 0, deadEndKm: Infinity, score: -999 };
-  const line2 = turf.lineString(coords), length = turf.length(line2), closed = turf.distance(coords[0], coords.at(-1)) < 0.15, bbox = turf.bbox(line2), diag = turf.distance([bbox[0], bbox[1]], [bbox[2], bbox[3]]), compactness = Math.min(1, diag / Math.max(1, length) * 2.2), step = Math.max(0.18, length / 180), seen = /* @__PURE__ */ new Map();
+  const line2 = turf.lineString(coords), length = turf.length(line2), closed = turf.distance(coords[0], coords.at(-1)) < 0.15, bbox = turf.bbox(line2), diag = turf.distance([bbox[0], bbox[1]], [bbox[2], bbox[3]]), compactness = Math.min(1, diag / Math.max(1, length) * 2.2), step2 = Math.max(0.18, length / 180), seen = /* @__PURE__ */ new Map();
   let repeated = 0, maxRun = 0, run = 0, index = 0;
-  for (let d = 0; d <= length; d += step, index++) {
+  for (let d = 0; d <= length; d += step2, index++) {
     const p = turf.along(line2, d).geometry.coordinates, key = `${Math.round(p[0] * 900)},${Math.round(p[1] * 900)}`, previous = seen.get(key);
     if (previous !== void 0 && index - previous > 3) {
-      repeated += step;
-      run += step;
+      repeated += step2;
+      run += step2;
       maxRun = Math.max(maxRun, run);
     } else run = 0;
     seen.set(key, index);
@@ -1622,10 +4962,24 @@ function dedupeAdventureCandidates(routes2) {
   return out;
 }
 async function directions(p, alternatives) {
+  const c = p.map((x) => x.join(",")).join(";"), base = `https://api.mapbox.com/directions/v5/mapbox/cycling/${c}?alternatives=${alternatives}&geometries=geojson&overview=full&steps=true&access_token=${MAPBOX_TOKEN}`;
   try {
-    const c = p.map((x) => x.join(",")).join(";"), d = await fetch(`https://api.mapbox.com/directions/v5/mapbox/cycling/${c}?alternatives=${alternatives}&geometries=geojson&overview=full&steps=true&access_token=${MAPBOX_TOKEN}`).then((r) => r.json());
-    return d.routes || [];
+    const withAnn = await fetch(`${base}&annotations=maxspeed`);
+    if (withAnn.ok) {
+      const d2 = await withAnn.json();
+      if (d2.routes?.length) return d2.routes;
+    }
+    const res = await fetch(base), d = await res.json();
+    if (!res.ok || !d.routes?.length) {
+      const why = d?.message || "";
+      if (/maximum distance/i.test(why)) toast("Those points are too far apart for cycling directions");
+      else if (/no route|NoRoute/i.test(`${d?.code} ${why}`)) toast("No cycling route exists between those points");
+      else if (why) toast(`Routing failed: ${why}`);
+      return [];
+    }
+    return d.routes;
   } catch {
+    toast("Could not reach the routing service");
     return [];
   }
 }
@@ -1634,6 +4988,7 @@ async function accept(rs, append) {
   await Promise.all(rs.map(enrich));
   rs.forEach((r) => r.cycleScore = cycleScore(r));
   rs.sort((a, b) => b.cycleScore - a.cycleScore);
+  applyRidePreferences(rs);
   S.routes = append ? [...S.routes, ...rs] : rs;
   S.selected = null;
   S.route = null;
@@ -1641,8 +4996,10 @@ async function accept(rs, append) {
   cards();
   stars();
   updateQuickNav();
+  if (!S.routeDetailOpen) refreshPage();
 }
 async function enrich(r) {
+  routeStep("enrich");
   prepareImmediateRouteMetrics(r);
   const points = sample(r.geometry.coordinates, 24);
   try {
@@ -1673,6 +5030,7 @@ async function enrich(r) {
   refineCycleScoreWithOverpass(r);
 }
 async function refineCycleScoreWithOverpass(route) {
+  routeStep("score");
   try {
     const coords = route?.geometry?.coordinates;
     if (!coords?.length) return;
@@ -1687,7 +5045,11 @@ async function refineCycleScoreWithOverpass(route) {
     console.warn("Overpass cycle-infra scoring unavailable; keeping estimate", error);
   } finally {
     route.cycleScorePending = false;
-    if (S.routes.includes(route)) cards();
+    if (S.routes.includes(route)) {
+      applyRidePreferences(S.routes);
+      cards();
+      if (S.page === "explore" && !S.routeDetailOpen) refreshPage();
+    }
   }
 }
 function cycleScore(r) {
@@ -1841,7 +5203,7 @@ function requireAccount(action = "use this feature") {
   toast(`Sign in to ${action}`);
   S.page = "profile";
   document.body.classList.add("panel-open");
-  render();
+  render7();
   return false;
 }
 function accountCacheKey(kind) {
@@ -1876,8 +5238,7 @@ async function syncAccountLibrary() {
       return items;
     };
     await Promise.all([load("routes"), load("activities")]);
-    if (S.page === "routes") routes();
-    if (S.page === "record") record();
+    refreshPage();
   } catch (error) {
     console.warn("Account library sync unavailable; using account cache", error);
   } finally {
@@ -1890,7 +5251,7 @@ function encodeAccountDocument(kind, item) {
 function decodeAccountDocument(id, data) {
   try {
     const item = data?.payloadJson ? JSON.parse(data.payloadJson) : data;
-    return { id, ...item, id };
+    return { ...item, id };
   } catch (error) {
     console.warn("Invalid account document", id, error);
     return null;
@@ -1930,7 +5291,7 @@ async function previewRoute3D() {
     let i = 0;
     document.body.classList.add("route-previewing");
     toast("3D route preview started");
-    const step = () => {
+    const step2 = () => {
       if (run !== S.previewRun || i >= coords.length - 1) {
         document.body.classList.remove("route-previewing");
         if (i >= coords.length - 1) toast("3D preview complete");
@@ -1938,9 +5299,9 @@ async function previewRoute3D() {
       }
       map.easeTo({ center: coords[i], bearing: turf.bearing(coords[i], coords[i + 1]), pitch: 68, zoom: 16.8, duration: 520, essential: true });
       i++;
-      setTimeout(step, 550);
+      setTimeout(step2, 550);
     };
-    step();
+    step2();
   }, 80);
 }
 async function saveRouteByIndex(i) {
@@ -2128,8 +5489,8 @@ function renderSharedJourneySnapshot(data) {
     const heading = data.location.heading;
     if (Number.isFinite(heading)) S.sharedRiderMarker.getElement().style.setProperty("--rider-heading", `${heading}deg`);
   }
-  const status = ensureSharedJourneyStatus(), state = $("#shared-journey-state"), updated = $("#shared-journey-updated");
-  state.textContent = !data.active ? "Journey ended" : data.paused ? "Live sharing paused" : rider ? "Rider position is live" : "Waiting for rider GPS";
+  const status = ensureSharedJourneyStatus(), state4 = $("#shared-journey-state"), updated = $("#shared-journey-updated");
+  state4.textContent = !data.active ? "Journey ended" : data.paused ? "Live sharing paused" : rider ? "Rider position is live" : "Waiting for rider GPS";
   const date = data.updatedAt?.toDate?.() || new Date(data.updatedAt || Date.now());
   updated.textContent = `Last update ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
   const viewer = S.viewerMarker?.getLngLat?.();
@@ -2225,7 +5586,7 @@ function clearNavigationAlternativeLayers() {
 function toggleAudioNavigation() {
   S.audioNavigation = !S.audioNavigation;
   localStorage.setItem("audioNavigation", S.audioNavigation ? "on" : "off");
-  $("#audio-nav").textContent = S.audioNavigation ? "\u{1F50A}" : "\u{1F507}";
+  $("#audio-nav").setAttribute("aria-pressed", String(S.audioNavigation));
   if (S.audioNavigation) unlockAudioNavigation();
   else speechSynthesis.cancel();
 }
@@ -2405,14 +5766,14 @@ function nodes() {
   S.nodes.forEach((m) => m.remove());
   S.nodes = [];
   const steps = S.route?.legs?.flatMap((l) => l.steps) || [];
-  steps.slice(1, -1).forEach((step, stepIndex) => {
+  steps.slice(1, -1).forEach((step2, stepIndex) => {
     const el = document.createElement("div");
     el.className = "turn";
     el.title = "Drag to reshape this route";
-    const marker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat(step.maneuver.location).addTo(map);
+    const marker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat(step2.maneuver.location).addTo(map);
     marker.on("dragend", async () => {
       const dragged = marker.getLngLat().toArray();
-      await reshapeSelectedRoute(dragged, step.maneuver.location);
+      await reshapeSelectedRoute(dragged, step2.maneuver.location);
     });
     S.nodes.push(marker);
   });
@@ -2436,7 +5797,7 @@ function buildLoopViaPoints(coords, dragged, original) {
   }
   anchors.push({ f: fraction, coord: [...dragged] });
   anchors.sort((a, b) => a.f - b.f);
-  const start = [...coords[0]], ordered = [start, ...anchors.filter((anchor) => anchor.f > 0.02 && anchor.f < 0.98).map((anchor) => anchor.coord), start];
+  const start2 = [...coords[0]], ordered = [start2, ...anchors.filter((anchor) => anchor.f > 0.02 && anchor.f < 0.98).map((anchor) => anchor.coord), start2];
   return dedupeViaPoints(ordered);
 }
 function routeRequiredWaypoints(route) {
@@ -2444,8 +5805,8 @@ function routeRequiredWaypoints(route) {
   const request = route?._requestPoints;
   if (Array.isArray(request) && request.length > 2) return request.slice(1).filter((point) => Array.isArray(point)).map((point) => [...point]);
   if (S.mode === "loop") {
-    const start = route?.geometry?.coordinates?.[0], required = S.adventureWaypoints.map((item) => item?.coord).filter((point) => Array.isArray(point));
-    return [...required, ...start ? [start] : []].map((point) => [...point]);
+    const start2 = route?.geometry?.coordinates?.[0], required = S.adventureWaypoints.map((item) => item?.coord).filter((point) => Array.isArray(point));
+    return [...required, ...start2 ? [start2] : []].map((point) => [...point]);
   }
   return (S.waypoints || []).slice(1).filter((point) => Array.isArray(point)).map((point) => [...point]);
 }
@@ -2467,13 +5828,13 @@ function insertDraggedPointByRouteProgress(route, required, dragged, original) {
   return ordered;
 }
 function buildWaypointPreservingEditPoints(route, dragged, original) {
-  const start = route.geometry.coordinates[0], required = routeRequiredWaypoints(route), isLoop = isClosedLoop(route.geometry.coordinates);
-  if (!required.length) return isLoop ? buildLoopViaPoints(route.geometry.coordinates, dragged, original) : [start, dragged, route.geometry.coordinates.at(-1)];
-  const ordered = insertDraggedPointByRouteProgress(route, required, dragged, original), points = [start, ...ordered];
+  const start2 = route.geometry.coordinates[0], required = routeRequiredWaypoints(route), isLoop = isClosedLoop(route.geometry.coordinates);
+  if (!required.length) return isLoop ? buildLoopViaPoints(route.geometry.coordinates, dragged, original) : [start2, dragged, route.geometry.coordinates.at(-1)];
+  const ordered = insertDraggedPointByRouteProgress(route, required, dragged, original), points = [start2, ...ordered];
   if (!isLoop) {
-    const finish = route.geometry.coordinates.at(-1);
-    if (turf.distance(points.at(-1), finish) > 5e-3) points.push(finish);
-  } else if (turf.distance(points.at(-1), start) > 5e-3) points.push(start);
+    const finish2 = route.geometry.coordinates.at(-1);
+    if (turf.distance(points.at(-1), finish2) > 5e-3) points.push(finish2);
+  } else if (turf.distance(points.at(-1), start2) > 5e-3) points.push(start2);
   return dedupeNavigationPoints(points).slice(0, 24);
 }
 function routeContainsRequiredWaypoints(route, required, toleranceM = 90) {
@@ -2554,7 +5915,7 @@ function stars() {
     S.poiMarkers.push(new mapboxgl.Marker({ element: e }).setLngLat(r.poi.center).setPopup(new mapboxgl.Popup().setHTML(`<b>\u2605 ${r.poi.name}</b><br>Considered for option ${i + 1}`)).addTo(map));
   });
 }
-function markers() {
+function markers2() {
   S.markers.forEach((m) => m.remove());
   S.markers = [];
   S.waypoints.filter(Boolean).forEach((p) => S.markers.push(new mapboxgl.Marker().setLngLat(p).addTo(map)));
@@ -2581,19 +5942,19 @@ function updateQuickNav() {
   }
 }
 function forceNavigationControlsVisible() {
-  const box = $("#quick-nav"), live = $("#ride-live"), start = $("#quick-start");
-  if (!box || !live || !start) return;
+  const box = $("#quick-nav"), live = $("#ride-live"), start2 = $("#quick-start");
+  if (!box || !live || !start2) return;
   box.hidden = false;
   live.hidden = false;
-  start.hidden = true;
+  start2.hidden = true;
   box.classList.add("recording-active");
   requestAnimationFrame(() => {
     box.hidden = false;
     live.hidden = false;
-    start.hidden = true;
+    start2.hidden = true;
     box.style.display = "block";
     live.style.display = "block";
-    start.style.display = "none";
+    start2.style.display = "none";
     syncPauseControls();
   });
 }
@@ -2699,10 +6060,10 @@ function navigationWaypointSequence() {
   if (Array.isArray(attached) && attached.length) return attached.filter((point) => Array.isArray(point)).map((point) => [...point]);
   const request = S.route?._requestPoints;
   if (Array.isArray(request) && request.length > 1) return request.slice(1).filter((point) => Array.isArray(point)).map((point) => [...point]);
-  const start = S.route?.geometry?.coordinates?.[0];
+  const start2 = S.route?.geometry?.coordinates?.[0];
   if (S.mode === "loop") {
     const required = S.adventureWaypoints.map((item) => item?.coord).filter((point) => Array.isArray(point));
-    return [...required, ...start ? [start] : []].map((point) => [...point]);
+    return [...required, ...start2 ? [start2] : []].map((point) => [...point]);
   }
   return (S.waypoints || []).slice(1).filter((point) => Array.isArray(point)).map((point) => [...point]);
 }
@@ -2757,6 +6118,7 @@ async function startNavigation() {
   }
   unlockAudioNavigation();
   enableCompass();
+  applyNightMode();
   await requestScreenWakeLock();
   S.nodes.forEach((m) => m.remove());
   S.nodes = [];
@@ -2903,7 +6265,7 @@ async function attachActivityPhotos(files) {
   S.pendingActivity.photos = S.pendingActivity.photos || [];
   const remaining = Math.max(0, 6 - S.pendingActivity.photos.length);
   for (const file of files.slice(0, remaining)) S.pendingActivity.photos.push(await compressPhoto(file));
-  record();
+  refreshPage();
 }
 async function addPhotosToSavedActivity(index, files) {
   if (!requireAccount("edit activities")) return;
@@ -2913,7 +6275,7 @@ async function addPhotosToSavedActivity(index, files) {
   for (const file of files.slice(0, Math.max(0, 6 - activity.photos.length))) activity.photos.push(await compressPhoto(file));
   delete activity.photo;
   await putAccountItem("activities", activity);
-  renderActivityDetail(index);
+  refreshPage();
 }
 async function deleteSavedPhoto(index, photoIndex) {
   if (!requireAccount("edit activities")) return;
@@ -2921,7 +6283,7 @@ async function deleteSavedPhoto(index, photoIndex) {
   if (!activity) return;
   activity.photos = (activity.photos || []).filter((_, i) => i !== photoIndex);
   await putAccountItem("activities", activity);
-  renderActivityDetail(index);
+  refreshPage();
 }
 async function renameSavedActivity(index) {
   if (!requireAccount("rename activities")) return;
@@ -2931,7 +6293,7 @@ async function renameSavedActivity(index) {
   if (name?.trim()) {
     activity.name = name.trim();
     await putAccountItem("activities", activity);
-    renderActivityDetail(index);
+    refreshPage();
   }
 }
 function compressPhoto(file) {
@@ -2955,6 +6317,15 @@ async function savePendingActivity() {
   S.pendingActivity.name = $("#activityName").value.trim() || S.pendingActivity.name;
   const shareToFeed = $("#shareToFeed")?.checked !== false;
   const saved = await putAccountItem("activities", S.pendingActivity);
+  if (saved.routeId) recordRouteRidden(saved.routeId).catch(() => {
+  });
+  matchActivity(S.user, saved, turf).then((found) => {
+    if (found.length) {
+      S.lastSegmentResults = found;
+      const pr = found.filter((f) => f.isPR).length;
+      toast(pr ? `${pr} personal record on this ride` : `${found.length} segment${found.length === 1 ? "" : "s"} matched`);
+    }
+  }).catch((error) => console.warn("Segment matching skipped", error));
   if (shareToFeed) {
     try {
       await publishActivityToFeed(S.user, saved, turf);
@@ -2964,7 +6335,7 @@ async function savePendingActivity() {
   }
   S.pendingActivity = null;
   toast(shareToFeed ? "Activity saved and shared to your feed" : "Activity saved to your account");
-  record();
+  refreshPage();
 }
 function escapeHtml(v = "") {
   return String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -3028,7 +6399,7 @@ function position(c) {
     r.avgSpeed = r.movingMs > 0 ? r.distance / (r.movingMs / 36e5) : 0;
     r.last = { pos: p, elevation: c.altitude, time: now };
     const prevElevation = r.last?.elevation, segmentM = Math.max(1, moved * 1e3), grade = Number.isFinite(c.altitude) && Number.isFinite(prevElevation) ? Math.max(-0.25, Math.min(0.25, (c.altitude - prevElevation) / segmentM)) : 0, windSpeedKmh = S.windAtPoint?.speed ?? S.wind.speed, estimatedPower = estimatePower(rawSpeed, grade, Math.max(0, windSpeedKmh / 3.6 * 0.25));
-    r.samples.push({ pos: p, speed: rawSpeed, elevation: c.altitude, time: now, windSpeed: windSpeedKmh, windDir: S.windAtPoint?.dir ?? S.wind.dir, grade, estimatedPower });
+    r.samples.push({ pos: p, speed: rawSpeed, elevation: c.altitude, time: now, windSpeed: windSpeedKmh, windDir: S.windAtPoint?.dir ?? S.wind.dir, grade, estimatedPower, heartRate: getHeartRate(), cadence: getCadence() });
     r.stationarySince = null;
   } else {
     if (!r.stationarySince) r.stationarySince = now;
@@ -3044,9 +6415,39 @@ function position(c) {
     checkWrongDirection(p, rawSpeed, heading);
   }
   updateLiveDashboard();
+  updateSegmentBanner();
   persistActiveSession();
   updateOfflineNavigationStatus();
-  if (S.page === "record") record();
+  if (S.page === "record") refreshPage();
+}
+var segmentWatchLoaded = false;
+async function loadNearbySegments() {
+  if (segmentWatchLoaded || !S.pos) return;
+  segmentWatchLoaded = true;
+  try {
+    S.nearbySegments = await listSegmentsNear(S.pos, 25, turf);
+  } catch {
+    S.nearbySegments = [];
+  }
+}
+function updateSegmentBanner() {
+  const el = $("#segment-banner");
+  if (!el) return;
+  if (!S.record) {
+    el.hidden = true;
+    return;
+  }
+  loadNearbySegments();
+  const list = S.nearbySegments || [];
+  for (const seg of list) {
+    const live = liveSegmentState(S.record, seg, turf);
+    if (live && live.state === "running") {
+      el.hidden = false;
+      el.innerHTML = `<span class="row" style="gap:8px">${icon("flag", 18)}${escapeHtml(seg.name || "Segment")}</span><span>${fmtSeconds(live.seconds)}</span>`;
+      return;
+    }
+  }
+  el.hidden = true;
 }
 function updateLiveDashboard() {
   const r = S.record;
@@ -3056,7 +6457,46 @@ function updateLiveDashboard() {
   $("#live-distance").textContent = r.distance.toFixed(2);
   $("#live-gain").textContent = Math.round(r.gain);
   $("#live-time").textContent = formatClock(r.movingMs);
+  const hr = getHeartRate(), cad = getCadence();
+  const timeEl = $("#live-time"), timeLbl = $("#live-time-label");
+  if (Number.isFinite(hr)) {
+    timeEl.textContent = hr;
+    if (timeLbl) timeLbl.textContent = "bpm";
+  } else if (timeLbl) timeLbl.textContent = "moving";
+  const p = $("#live-power"), pl = $("#live-power-label");
+  if (p) {
+    if (Number.isFinite(cad)) {
+      p.textContent = cad;
+      if (pl) pl.textContent = "rpm";
+    } else {
+      const last = r.samples?.at(-1)?.estimatedPower;
+      p.textContent = Number.isFinite(last) ? Math.round(last) : "0";
+      if (pl) pl.textContent = "watts";
+    }
+  }
+  updateEffortZones(r, hr);
+  const bar = $("#eta-bar");
+  if (bar) bar.hidden = !S.navState;
   updateQuickNav();
+}
+function updateEffortZones(r, hr) {
+  const host = $("#hr-zones");
+  if (!host) return;
+  const age = +localStorage.getItem("profileAge") || null, z = heartRateZone(hr, age);
+  if (z) {
+    const colors2 = ["#657186", "#139b66", "#f28b30", "#d94d4d", "#8b0000"];
+    if (host.children.length !== 5) host.innerHTML = colors2.map((c) => `<span style="background:${c}"></span>`).join("");
+    [...host.children].forEach((el, i) => el.classList.toggle("on", i === z - 1));
+    return;
+  }
+  updatePowerZones(r);
+}
+function updatePowerZones(r) {
+  const host = $("#hr-zones");
+  if (!host) return;
+  const ftp = Math.max(80, (profileData().weight || 70) * 2.4), last = r?.samples?.at(-1)?.estimatedPower || 0, ratio = last / ftp, zone = ratio < 0.55 ? 0 : ratio < 0.75 ? 1 : ratio < 0.9 ? 2 : ratio < 1.05 ? 3 : 4, colors2 = ["#657186", "#139b66", "#f28b30", "#d94d4d", "#8b0000"];
+  if (host.children.length !== 5) host.innerHTML = colors2.map((c) => `<span style="background:${c}"></span>`).join("");
+  [...host.children].forEach((el, i) => el.classList.toggle("on", i === zone));
 }
 function displaySpeed(r) {
   return r.paused ? r.avgSpeed : r.speed * 3.6;
@@ -3066,39 +6506,39 @@ function formatClock(ms) {
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
 }
 function navigationCameraTarget(pos, heading, speedMps = 0) {
-  const nav = S.navState, steps = nav?.steps || [], index = Math.max(0, nav?.index || 0), next = steps[index], nextLocation = next?.maneuver?.location, turnDistance = nextLocation ? turf.distance(pos, nextLocation, { units: "meters" }) : Infinity, nearby = steps.slice(index, index + 5).filter((step) => step.maneuver?.location && turf.distance(pos, step.maneuver.location, { units: "meters" }) <= 320).length, type = String(next?.maneuver?.type || "").toLowerCase(), modifier = String(next?.maneuver?.modifier || "").toLowerCase(), complex = /roundabout|rotary|fork|merge|off ramp|on ramp|arrive/.test(type) || /sharp|uturn/.test(modifier) || nearby >= 3;
-  let state = "normal", zoom = 16.15, pitch = 49;
+  const nav = S.navState, steps = nav?.steps || [], index = Math.max(0, nav?.index || 0), next = steps[index], nextLocation = next?.maneuver?.location, turnDistance = nextLocation ? turf.distance(pos, nextLocation, { units: "meters" }) : Infinity, nearby = steps.slice(index, index + 5).filter((step2) => step2.maneuver?.location && turf.distance(pos, step2.maneuver.location, { units: "meters" }) <= 320).length, type = String(next?.maneuver?.type || "").toLowerCase(), modifier = String(next?.maneuver?.modifier || "").toLowerCase(), complex = /roundabout|rotary|fork|merge|off ramp|on ramp|arrive/.test(type) || /sharp|uturn/.test(modifier) || nearby >= 3;
+  let state4 = "normal", zoom = 16.15, pitch = 49;
   if (complex || turnDistance < 90) {
-    state = "complex";
+    state4 = "complex";
     zoom = 17.35;
     pitch = 59;
   } else if (turnDistance < 220) {
-    state = "approach";
+    state4 = "approach";
     zoom = 16.85;
     pitch = 56;
   } else if (turnDistance < 550) {
-    state = "prepare";
+    state4 = "prepare";
     zoom = 16.35;
     pitch = 52;
   } else if (turnDistance > 1800) {
-    state = "cruise";
+    state4 = "cruise";
     zoom = 15.15;
     pitch = 42;
   } else if (turnDistance > 900) {
-    state = "open";
+    state4 = "open";
     zoom = 15.55;
     pitch = 46;
   }
   const speedKmh = Math.max(0, speedMps * 3.6);
   if (speedKmh > 30) zoom -= 0.28;
-  else if (speedKmh < 12 && (state === "complex" || state === "approach")) zoom += 0.16;
+  else if (speedKmh < 12 && (state4 === "complex" || state4 === "approach")) zoom += 0.16;
   if (S.navCamera.postTurnUntil > Date.now()) {
-    state = "post-turn";
+    state4 = "post-turn";
     zoom = Math.max(16.7, zoom);
     pitch = Math.max(54, pitch);
   }
   const bearing = Number.isFinite(heading) ? heading : nextLocation ? turf.bearing(pos, nextLocation) : map.getBearing();
-  return { state, zoom: Math.max(14.8, Math.min(17.65, zoom)), pitch, bearing, turnDistance, stepIndex: index };
+  return { state: state4, zoom: Math.max(14.8, Math.min(17.65, zoom)), pitch, bearing, turnDistance, stepIndex: index };
 }
 function updateAdaptiveNavigationCamera(pos, heading, speedMps = 0, force = false) {
   if (!S.navState || Date.now() < S.manualExploreUntil) return;
@@ -3128,13 +6568,14 @@ function updateNavigationGuidance(pos) {
   n.index = idx;
   const turnDistance = chosen?.maneuver?.location ? turf.distance(pos, chosen.maneuver.location, { units: "meters" }) : remaining, instruction = chosen?.maneuver?.instruction || chosen?.name || "Continue on route", lanes = laneText(chosen), arrow = turnArrow(chosen?.maneuver);
   $("#nav-instruction").textContent = instruction;
-  $("#nav-next-distance").textContent = `${formatDistance(turnDistance)} to next turn`;
-  $("#nav-lane").textContent = lanes;
-  $("#nav-lane").style.display = lanes ? "block" : "none";
+  $("#nav-next-distance").textContent = formatDistance(turnDistance);
+  $("#nav-lane").innerHTML = laneTiles(chosen);
   $("#nav-arrow").textContent = arrow;
-  $("#nav-remaining").textContent = `${formatDistance(remaining)} remaining`;
   const speed = Math.max(8, S.record?.avgSpeed || r.distance / 1e3 / (r.duration / 3600) || 18), mins = Math.ceil(remaining / 1e3 / speed * 60);
-  $("#nav-eta").textContent = mins >= 60 ? `${Math.floor(mins / 60)} hr ${mins % 60} min left` : `${mins} min left`;
+  setText("#nav-remaining-distance", formatDistance(remaining));
+  setText("#nav-remaining-time", mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`);
+  setText("#nav-eta-time", arrivalClock(mins));
+  updateSpeedLimit(pos);
   voiceGuidance(idx, instruction, turnDistance);
 }
 function voiceGuidance(stepIndex, instruction, distance) {
@@ -3202,24 +6643,25 @@ function crossfadeRouteLine(newGeometry, color, width, onDone) {
   if (map.getSource(tempId)) map.removeSource(tempId);
   map.addSource(tempId, { type: "geojson", data: { type: "Feature", geometry: newGeometry, properties: {} } });
   map.addLayer({ id: tempId, type: "line", source: tempId, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": color, "line-width": width, "line-opacity": 0 } });
-  const duration = 400, start = performance.now();
-  function step(now) {
-    const t = Math.min(1, (now - start) / duration);
+  const duration = 400, start2 = performance.now();
+  function step2(now) {
+    const t = Math.min(1, (now - start2) / duration);
     if (map.getLayer("chosen")) map.setPaintProperty("chosen", "line-opacity", 0.9 * (1 - t));
     if (map.getLayer(tempId)) map.setPaintProperty(tempId, "line-opacity", 0.9 * t);
-    if (t < 1) requestAnimationFrame(step);
+    if (t < 1) requestAnimationFrame(step2);
     else {
       clearLines();
       line("chosen", newGeometry, color, width);
       onDone?.();
     }
   }
-  requestAnimationFrame(step);
+  requestAnimationFrame(step2);
 }
 async function recalculateFrom(pos) {
   const nav = S.navState;
   if (!nav || nav.recalculating) return;
   nav.recalculating = true;
+  document.body.classList.add("rerouting");
   S.lastRerouteAt = Date.now();
   speak("You are off route. Recalculating through your remaining waypoints.");
   toast("Off route \xB7 preserving remaining waypoints\u2026");
@@ -3258,13 +6700,67 @@ async function recalculateFrom(pos) {
     toast("Could not recalculate through the remaining waypoints");
   } finally {
     nav.recalculating = false;
+    document.body.classList.remove("rerouting");
   }
 }
-function laneText(step) {
-  const lanes = step?.intersections?.flatMap((i) => i.lanes || []).filter((l) => l.valid || l.active);
+function laneText(step2) {
+  const lanes = step2?.intersections?.flatMap((i) => i.lanes || []).filter((l) => l.valid || l.active);
   if (lanes?.length) return `Use ${lanes.map((l) => (l.indications || []).join("/")).filter(Boolean).join(", ")} lane`;
-  const road = step?.name || step?.ref;
+  const road = step2?.name || step2?.ref;
   return road ? `Continue toward ${road}` : "";
+}
+function setText(sel, v) {
+  const el = $(sel);
+  if (el) el.textContent = v;
+}
+function arrivalClock(mins) {
+  const d = new Date(Date.now() + Math.max(0, mins) * 6e4);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+function laneIndicationArrow(ind = "") {
+  const t = String(ind).toLowerCase();
+  if (t.includes("uturn")) return "\u21A9";
+  if (t.includes("sharp left")) return "\u2196";
+  if (t.includes("sharp right")) return "\u2197";
+  if (t.includes("slight left")) return "\u2196";
+  if (t.includes("slight right")) return "\u2197";
+  if (t.includes("left")) return "\u2190";
+  if (t.includes("right")) return "\u2192";
+  return "\u2191";
+}
+function laneTiles(step2) {
+  const lanes = step2?.intersections?.flatMap((i) => i.lanes || []) || [];
+  if (!lanes.length) return "";
+  return lanes.slice(0, 6).map((l) => {
+    const on = !!(l.valid || l.active);
+    const ind = (l.indications || [])[0] || "straight";
+    return `<i class="${on ? "on" : ""}">${laneIndicationArrow(ind)}</i>`;
+  }).join("");
+}
+function updateSpeedLimit(pos) {
+  const el = $("#speed-limit");
+  if (!el) return;
+  const limit = currentSpeedLimit(pos);
+  if (!limit) {
+    el.classList.remove("has-limit");
+    el.textContent = "";
+    el.removeAttribute("title");
+    return;
+  }
+  el.classList.add("has-limit");
+  el.textContent = String(limit.speed);
+  el.title = `Speed limit ${limit.speed} ${limit.unit === "mph" ? "mph" : "km/h"}`;
+}
+function currentSpeedLimit(pos) {
+  try {
+    const r = S.route, ann = r?.legs?.[0]?.annotation?.maxspeed;
+    if (!Array.isArray(ann) || !ann.length) return null;
+    const snap = turf.nearestPointOnLine(turf.lineString(r.geometry.coordinates), turf.point(pos)), i = Math.max(0, Math.min(ann.length - 1, snap.properties.index || 0)), m = ann[i];
+    if (!m || m.unknown || m.none || !Number.isFinite(m.speed)) return null;
+    return { speed: m.speed, unit: m.unit };
+  } catch {
+    return null;
+  }
 }
 function turnArrow(m = {}) {
   const mod = m.modifier || "", type = m.type || "";
@@ -3298,7 +6794,7 @@ async function finishRecord(endNav = true) {
     }
   }
   const metrics = activityMetrics(r);
-  S.pendingActivity = { ...r, ...metrics, id: crypto.randomUUID(), name: defaultName, ended: Date.now(), elapsed: r.movingMs, avgSpeed: r.movingMs > 0 ? r.distance / (r.movingMs / 36e5) : 0, photos: [] };
+  S.pendingActivity = { ...r, ...metrics, id: crypto.randomUUID(), routeId: S.route?.savedId || S.editingSavedId || null, name: defaultName, ended: Date.now(), elapsed: r.movingMs, avgSpeed: r.movingMs > 0 ? r.distance / (r.movingMs / 36e5) : 0, photos: [] };
   S.record = null;
   clearActiveSession();
   clearLines();
@@ -3314,7 +6810,7 @@ async function finishRecord(endNav = true) {
   updateQuickNav();
   S.page = "record";
   document.body.classList.add("panel-open");
-  render();
+  render7();
   toast("Ride complete. Name it and add a photo.");
 }
 async function shareSavedActivity(a) {
@@ -3615,10 +7111,10 @@ function showMapLocationMenu(lngLat) {
   $("#map-wrap").appendChild(box);
   const close = () => box.remove();
   $("#navigateHere").onclick = async () => {
-    const start = S.pos || await current();
-    if (!start) return;
+    const start2 = S.pos || await current();
+    if (!start2) return;
     S.mode = "point";
-    S.waypoints = [start, lngLat];
+    S.waypoints = [start2, lngLat];
     S.names = ["Current location", "Dropped pin"];
     await pointRoutes(false);
     open("explore");
@@ -3634,7 +7130,7 @@ function showMapLocationMenu(lngLat) {
       S.names.splice(Math.max(1, S.names.length - 1), 0, "Dropped pin");
       toast("Waypoint added");
     }
-    markers();
+    markers2();
     close();
   };
   $("#googleMapView").onclick = () => {
@@ -3658,13 +7154,13 @@ function showMapLocationMenu(lngLat) {
 }
 function installMapLocationGestures() {
   map.on("contextmenu", (e) => showMapLocationMenu(e.lngLat.toArray()));
-  let timer;
+  let timer2;
   map.getCanvas().addEventListener("touchstart", (e) => {
     if (e.touches.length !== 1) return;
     const t = e.touches[0];
-    timer = setTimeout(() => showMapLocationMenu(map.unproject([t.clientX, t.clientY]).toArray()), 650);
+    timer2 = setTimeout(() => showMapLocationMenu(map.unproject([t.clientX, t.clientY]).toArray()), 650);
   }, { passive: true });
-  ["touchend", "touchmove", "touchcancel"].forEach((n) => map.getCanvas().addEventListener(n, () => clearTimeout(timer), { passive: true }));
+  ["touchend", "touchmove", "touchcancel"].forEach((n) => map.getCanvas().addEventListener(n, () => clearTimeout(timer2), { passive: true }));
 }
 var XWEATHER_ICON_BASE = "https://cdn.aerisapi.com/wxblox/icons/";
 function weatherIconName(item) {
@@ -3684,8 +7180,8 @@ function weatherIconName(item) {
 function weatherIconUrl(item) {
   return XWEATHER_ICON_BASE + weatherIconName(item);
 }
-function weatherMetric(icon, value, label, accent = "") {
-  return `<div class="weather-metric ${accent}"><span class="weather-metric-icon">${icon}</span><b>${value}</b><small>${label}</small></div>`;
+function weatherMetric(icon2, value, label, accent = "") {
+  return `<div class="weather-metric ${accent}"><span class="weather-metric-icon">${icon2}</span><b>${value}</b><small>${label}</small></div>`;
 }
 function groupHourlyByDay(items = []) {
   const groups = /* @__PURE__ */ new Map();
@@ -3772,11 +7268,11 @@ function wrapLng(lng) {
 function windAtScreen(x, y, width, height) {
   const g = S.windGrid;
   if (!g?.cells?.length) return { speed: S.wind.speed, dir: S.wind.dir };
-  const gx = Math.max(0, Math.min(g.cols - 1, x / Math.max(1, width) * (g.cols - 1))), gy = Math.max(0, Math.min(g.rows - 1, y / Math.max(1, height) * (g.rows - 1))), x0 = Math.floor(gx), y0 = Math.floor(gy), x1 = Math.min(g.cols - 1, x0 + 1), y1 = Math.min(g.rows - 1, y0 + 1), tx = gx - x0, ty = gy - y0, c00 = g.cells[y0 * g.cols + x0], c10 = g.cells[y0 * g.cols + x1], c01 = g.cells[y1 * g.cols + x0], c11 = g.cells[y1 * g.cols + x1];
+  const gx = Math.max(0, Math.min(g.cols - 1, x / Math.max(1, width) * (g.cols - 1))), gy = Math.max(0, Math.min(g.rows - 1, y / Math.max(1, height) * (g.rows - 1))), x0 = Math.floor(gx), y0 = Math.floor(gy), x1 = Math.min(g.cols - 1, x0 + 1), y1 = Math.min(g.rows - 1, y0 + 1), tx2 = gx - x0, ty = gy - y0, c00 = g.cells[y0 * g.cols + x0], c10 = g.cells[y0 * g.cols + x1], c01 = g.cells[y1 * g.cols + x0], c11 = g.cells[y1 * g.cols + x1];
   const vector = (c2) => {
     const a2 = (c2.dir + 180) % 360 * Math.PI / 180, s = Math.max(0.1, c2.speed);
     return { x: Math.sin(a2) * s, y: -Math.cos(a2) * s };
-  }, a = vector(c00), b = vector(c10), c = vector(c01), d = vector(c11), vx = (a.x * (1 - tx) + b.x * tx) * (1 - ty) + (c.x * (1 - tx) + d.x * tx) * ty, vy = (a.y * (1 - tx) + b.y * tx) * (1 - ty) + (c.y * (1 - tx) + d.y * tx) * ty;
+  }, a = vector(c00), b = vector(c10), c = vector(c01), d = vector(c11), vx = (a.x * (1 - tx2) + b.x * tx2) * (1 - ty) + (c.x * (1 - tx2) + d.x * tx2) * ty, vy = (a.y * (1 - tx2) + b.y * tx2) * (1 - ty) + (c.y * (1 - tx2) + d.y * tx2) * ty;
   return { vx, vy, speed: Math.hypot(vx, vy) };
 }
 var wf = 0;
@@ -3859,37 +7355,13 @@ async function initAuth() {
         ensurePublicProfile(u).catch((error) => console.warn("Public profile sync failed", error));
         if (new URLSearchParams(location.search).has("sharedRoute")) setTimeout(loadSharedRouteFromUrl, 0);
       }
-      if (S.page === "profile") profile();
-      if (S.page === "routes") routes();
-      if (S.page === "record") record();
+      refreshPage();
     });
   } catch (e) {
     console.error("Firebase authentication unavailable", e);
     resolveAuthReady?.(null);
     resolveAuthReady = null;
   }
-}
-function weatherWidgetCard() {
-  const w = S.weather;
-  return `<div class="card weather-widget-card"><div class="row"><div><b>Weather</b>${w ? `<p class="muted">${Math.round(w.temp)}\xB0C \xB7 ${escapeHtml(w.desc || "")}</p>` : '<p class="muted">Current conditions and forecast</p>'}</div><button class="btn light" id="openWeather">Full forecast \u2192</button></div></div>`;
-}
-function profile() {
-  const standalone = isStandalone();
-  panel.innerHTML = head("Profile", "Account, weather and Home Screen-safe sign-in") + weatherWidgetCard() + (S.user ? `<div class="card"><b>${S.user.displayName || S.user.email || "Rider"}</b><p>${S.user.email || ""}</p><button class="btn light" id="logout">Log out</button></div><div class="card"><h3>Rider profile</h3><div class="field"><label>Weight (kg)</label><input id="profileWeight" type="number" min="30" max="250" value="${profileData().weight}"></div><div class="field"><label>Height (cm)</label><input id="profileHeight" type="number" min="120" max="230" value="${profileData().height}"></div><div class="field"><label>Bike + equipment weight (kg)</label><input id="bikeWeight" type="number" min="5" max="40" value="${profileData().bikeWeight}"></div><button class="btn primary" id="saveProfile">Save rider profile</button><p class="metric-note">Used only for estimated cycling power. This estimate is not a power-meter reading.</p></div>` : `<div class="card"><h2>Sign in</h2>${standalone ? '<p class="muted"><b>Home Screen app detected.</b> Sign in with email/password below, or try Google sign-in. Your login is stored persistently on this device.</p>' : ""}<div class="field"><label>Email</label><input id="authEmail" type="email" autocomplete="email" placeholder="name@example.com"></div><div class="field"><label>Password</label><input id="authPassword" type="password" autocomplete="current-password" minlength="6" placeholder="At least 6 characters"></div><div class="actions"><button class="btn primary" id="emailLogin">Sign in</button><button class="btn light" id="emailCreate">Create account</button><button class="btn light" id="emailReset">Reset password</button></div></div><div class="card"><h3>Google account</h3><p class="muted">${standalone ? "Google sign-in opens in an account popup. If iOS blocks the popup, use email sign-in above." : "Google sign-in opens in a popup and does not use redirect authentication."}</p><div class="actions"><button class="btn light" id="googleLogin">Continue with Google</button></div></div>`);
-  if ($("#openWeather")) $("#openWeather").onclick = () => open("weather");
-  if ($("#logout")) $("#logout").onclick = () => S.logout?.();
-  if ($("#saveProfile")) $("#saveProfile").onclick = () => {
-    const weight = $("#profileWeight").value, height = $("#profileHeight").value, bike = $("#bikeWeight").value;
-    localStorage.setItem("profileWeight", weight);
-    localStorage.setItem("profileHeight", height);
-    localStorage.setItem("bikeWeight", bike);
-    if (S.user) updateRiderMeasurements(S.user.uid, { weightKg: +weight, heightCm: +height, bikeWeightKg: +bike }).catch((error) => console.warn("Rider measurement sync failed", error));
-    toast("Rider profile saved");
-  };
-  if ($("#emailLogin")) $("#emailLogin").onclick = () => emailAction("login");
-  if ($("#emailCreate")) $("#emailCreate").onclick = () => emailAction("create");
-  if ($("#emailReset")) $("#emailReset").onclick = () => emailAction("reset");
-  if ($("#googleLogin")) $("#googleLogin").onclick = () => S.loginGoogle?.().catch(showAuthError);
 }
 async function emailAction(kind) {
   const email = $("#authEmail")?.value.trim(), password = $("#authPassword")?.value || "";
@@ -3970,6 +7442,37 @@ async function current() {
     }
   }, { enableHighAccuracy: false, maximumAge: 3e5, timeout: 1800 }));
 }
+function paintChrome() {
+  const set = (sel, name, size) => {
+    const el = $(sel);
+    if (el) el.innerHTML = icon(name, size);
+  };
+  set("#locate", "pin", 22);
+  set("#map-share", "share", 22);
+  set("#weather", "sun", 22);
+  set("#map-style", "grid", 22);
+  set("#ico-distance", "route", 16);
+  set("#ico-gain", "mtn", 16);
+  set("#ico-time", "clock", 16);
+  set("#ico-power", "bolt", 16);
+  const a = $("#audio-nav");
+  if (a) {
+    a.innerHTML = icon("speaker", 22);
+    a.setAttribute("aria-pressed", String(!!S.audioNavigation));
+  }
+  const saved = localStorage.getItem("theme");
+  if (saved && saved !== "system") document.documentElement.dataset.theme = saved;
+}
+paintChrome();
+var enhanceQueued = false;
+new MutationObserver(() => {
+  if (enhanceQueued) return;
+  enhanceQueued = true;
+  requestAnimationFrame(() => {
+    enhanceQueued = false;
+    enhanceAll(panel);
+  });
+}).observe(panel, { childList: true, subtree: true });
 $("#locate").onclick = async () => {
   const p = await current();
   if (p) {
@@ -3979,7 +7482,6 @@ $("#locate").onclick = async () => {
   }
 };
 $("#weather").onclick = toggleWeather;
-$("#audio-nav").textContent = S.audioNavigation ? "\u{1F50A}" : "\u{1F507}";
 $("#audio-nav").onclick = toggleAudioNavigation;
 $("#map-share").onclick = openMapShareMenu;
 document.addEventListener("click", (e) => {
@@ -4037,6 +7539,10 @@ localStorage.removeItem("activities");
 map.on("load", () => {
   installMapLocationGestures();
   open("explore");
+  setInterval(() => {
+    if (S.user && MAP_PAGES.includes(S.page)) startLiveFriends({ state: S, map, mapboxgl });
+    else stopLiveFriends();
+  }, 8e3);
   loadSharedRouteFromUrl();
   loadJourneyFromUrl();
   setTimeout(promptSessionRecovery, 250);
@@ -4063,4 +7569,166 @@ window.addEventListener("beforeunload", () => persistActiveSession(true));
 window.addEventListener("online", updateOfflineNavigationStatus);
 window.addEventListener("offline", updateOfflineNavigationStatus);
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(console.error);
+var APP = {
+  get state() {
+    return S;
+  },
+  $,
+  panel,
+  toast,
+  escapeHtml,
+  open,
+  head,
+  mobile,
+  colors,
+  fmt,
+  gain,
+  sample,
+  map,
+  MAPBOX_TOKEN,
+  requireAccount,
+  // planning + routes
+  pointRoutes,
+  adventureRoutes,
+  scheduleAdventureRebuild,
+  select,
+  showAllRoutesOnMap,
+  drawAll,
+  cards,
+  markers: markers2,
+  nodes,
+  clearLines,
+  line,
+  geo,
+  setHere,
+  current,
+  addPointToPointWaypoint,
+  renderWaypointFields,
+  renderAdventureWaypointFields,
+  saveRouteByIndex,
+  shareRouteByIndex,
+  shareSavedRouteByIndex,
+  loadSavedRoute,
+  renameSavedRoute,
+  saveEditedSavedRoute,
+  deleteAccountItem,
+  putAccountItem,
+  importGpxFile,
+  exportSelectedRouteGpx,
+  previewRoute3D,
+  savedRouteBadges,
+  savedRouteDate,
+  hasMotorway,
+  cycleScore,
+  directions,
+  fastDirections,
+  validateAdventureLoop,
+  publishAdventureRoutes,
+  // navigation + recording
+  startNavigation,
+  startRecord,
+  stopRecording,
+  endNavigation,
+  finishRecord,
+  updateQuickNav,
+  syncPauseControls,
+  // activities
+  sortedActivities,
+  savePendingActivity,
+  attachActivityPhotos,
+  addPhotosToSavedActivity,
+  deleteSavedPhoto,
+  renameSavedActivity,
+  useSavedActivityRoute,
+  shareSavedActivity,
+  exportActivityPng,
+  displayActivityRoute,
+  activityMetrics,
+  profileData,
+  plot,
+  formatClock,
+  displaySpeed,
+  compressPhoto,
+  sensors: sensors_exports,
+  quality: quality_exports,
+  cues: cues_exports,
+  offline: offline_exports,
+  ratings: ratings_exports,
+  segments: segments_exports,
+  ridePrefs,
+  applyRidePreferences,
+  refreshDaylightLimit,
+  applyNightMode,
+  // weather
+  loadWeather,
+  toggleWeather,
+  weatherIconUrl,
+  groupHourlyByDay,
+  cardinalDirection,
+  // account/auth
+  syncAccountLibrary,
+  emailAction,
+  showAuthError,
+  isStandalone,
+  // sharing
+  openMapShareMenu,
+  createChoiceModal,
+  showUrlShareWindow,
+  absoluteAppUrl,
+  startLiveJourney,
+  showLiveJourneyShare
+};
+function ridePrefs() {
+  if (!S.ridePrefs) S.ridePrefs = defaultPrefs();
+  return S.ridePrefs;
+}
+function applyRidePreferences(routes2) {
+  if (!Array.isArray(routes2) || !routes2.length) return;
+  const prefs = ridePrefs(), ctx = { turf, windBearing: S.weather?.bearing ?? S.wind?.dir, maxKmForDaylight: S.daylightKm };
+  routes2.forEach((r) => applyPreferences(r, prefs, ctx));
+  routes2.forEach((r) => {
+    r.whyThisRoute = whyThisRoute(r, routes2);
+  });
+}
+async function refreshDaylightLimit() {
+  try {
+    const p = S.pos || S.waypoints?.[0];
+    if (!p) return;
+    const sunset = await fetchSunset(p[1], p[0]);
+    S.sunsetMs = sunset;
+    S.daylightKm = daylightLimitKm(sunset, Date.now(), Math.max(12, S.record?.avgSpeed || 18));
+  } catch {
+  }
+}
+async function applyNightMode() {
+  try {
+    if (S.nightModeApplied) return;
+    const p = S.pos || S.waypoints?.[0];
+    if (!p) return;
+    if (!Number.isFinite(S.sunsetMs)) S.sunsetMs = await fetchSunset(p[1], p[0]);
+    if (!Number.isFinite(S.sunsetMs)) return;
+    if (Date.now() < S.sunsetMs) return;
+    S.nightModeApplied = true;
+    if (!localStorage.getItem("theme")) document.documentElement.dataset.theme = "dark";
+    const night = "mapbox://styles/mapbox/navigation-night-v1";
+    if (!String(map.getStyle?.()?.sprite || "").includes("navigation-night")) {
+      map.setStyle(night);
+      map.once("style.load", () => {
+        if (S.route) {
+          clearLines();
+          line("chosen", S.route.geometry, colors[(S.selected || 0) % colors.length], 8);
+        }
+      });
+    }
+    toast("Night mode on for the ride home");
+  } catch (error) {
+    console.warn("Night mode skipped", error);
+  }
+}
+function adventureRangeKm() {
+  const lo = $("#distanceMin"), hi = $("#distanceMax");
+  if (lo && hi) return { minKm: +lo.value, maxKm: +hi.value };
+  if (S.adventureRange && Number.isFinite(S.adventureRange.minKm)) return { minKm: Math.max(3, S.adventureRange.minKm), maxKm: Math.max(6, S.adventureRange.maxKm) };
+  return { minKm: 20, maxKm: 70 };
+}
 //# sourceMappingURL=app.js.map

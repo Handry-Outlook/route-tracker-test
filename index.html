@@ -1,1 +1,95 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Ridewise</title><link rel="manifest" href="manifest.json?v=4.90"><link href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css" rel="stylesheet"><link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" rel="stylesheet"><link rel="stylesheet" href="styles.css?v=4.90"></head><body><div id="app"><nav id="nav"><div class="brand"><img src="icon.png"><b>Ridewise</b></div></nav><main id="map-wrap"><div id="map"></div><canvas id="wind"></canvas><aside id="panel"></aside><div class="tools"><button id="locate">◎</button><button id="map-share" title="Share route or progress">↗</button><button id="weather" title="Weather">☔</button><button id="audio-nav" title="Voice guidance" aria-pressed="true">🔊</button><button id="map-style" title="Map style">◫</button></div><section id="nav-guidance" hidden><div id="nav-lane"></div><div class="nav-main"><div id="nav-arrow">↑</div><div><b id="nav-instruction">Continue</b><span id="nav-next-distance"></span></div></div><div class="nav-trip"><span id="nav-remaining"></span><span id="nav-eta"></span></div></section><section id="quick-nav" hidden><button id="quick-start">▶ Navigation and record now</button><div id="ride-live" hidden><div class="live-metrics"><div><b id="live-speed">0.0</b><small id="live-speed-label">current km/h</small></div><div><b id="live-distance">0.00</b><small>km travelled</small></div><div><b id="live-gain">0</b><small>m elevation</small></div><div><b id="live-time">00:00</b><small>moving time</small></div></div><div class="record-buttons"><button id="pause-recording">Pause recording</button><button id="pause-navigation">Pause navigation</button></div><div class="end-action-buttons"><button id="end-recording" hidden>End recording</button><button id="end-navigation" hidden>End navigation</button></div></div></section><button id="route-undo" hidden>↶ Undo route edit</button><div id="toast"></div></main></div><script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script><script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script><script type="module" src="app.js?v=4.90"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#15324d">
+<title>Ridewise</title>
+<link rel="manifest" href="manifest.json?v=5.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css" rel="stylesheet">
+<link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=5.0">
+</head>
+<body>
+<div id="app">
+  <nav id="nav">
+    <div class="brand"><img src="icon.png" alt=""><b>Ridewise</b></div>
+  </nav>
+
+  <main id="map-wrap">
+    <div id="map"></div>
+    <canvas id="wind"></canvas>
+
+    <section id="nav-guidance" hidden>
+      <div class="nav-main">
+        <span id="nav-arrow">↑</span>
+        <div>
+          <b id="nav-next-distance">—</b>
+          <span id="nav-instruction">Continue</span>
+        </div>
+      </div>
+      <div id="nav-lane"></div>
+      <div class="nav-trip"><span id="nav-remaining"></span><span id="nav-eta"></span></div>
+    </section>
+
+    <div id="reroute-chip"><span class="spinner"></span>Rerouting…</div>
+
+    <div class="tools">
+      <div id="speed-limit" aria-label="Speed limit"></div>
+      <button id="locate" title="Recentre"></button>
+      <button id="map-share" title="Share route or progress"></button>
+      <button id="weather" title="Weather"></button>
+      <button id="audio-nav" title="Voice guidance" aria-pressed="true"></button>
+      <button id="map-style" title="Map style"></button>
+    </div>
+
+    <section id="quick-nav" hidden>
+      <button id="quick-start" type="button">Start navigation</button>
+      <div id="ride-live" hidden>
+        <div id="segment-banner" class="segment-banner" hidden></div>
+        <div class="live-stats">
+          <div class="live-speed">
+            <b id="live-speed">0.0</b>
+            <small id="live-speed-label">current km/h</small>
+          </div>
+          <div class="live-metrics">
+            <div><i id="ico-distance"></i><b id="live-distance">0.00</b><small>km</small></div>
+            <div><i id="ico-gain"></i><b id="live-gain">0</b><small>m gain</small></div>
+            <div><i id="ico-time"></i><b id="live-time">00:00</b><small id="live-time-label">moving</small></div>
+            <div><i id="ico-power"></i><b id="live-power">0</b><small id="live-power-label">watts</small></div>
+          </div>
+          <div class="hr-zones" id="hr-zones"></div>
+        </div>
+        <div class="eta-bar" id="eta-bar" hidden>
+          <div class="stats three">
+            <div class="stat"><b id="nav-eta-time">—</b><small>ETA</small></div>
+            <div class="stat"><b id="nav-remaining-distance">—</b><small>left</small></div>
+            <div class="stat"><b id="nav-remaining-time">—</b><small>time</small></div>
+          </div>
+        </div>
+        <div class="record-buttons">
+          <button id="pause-recording" type="button">Pause recording</button>
+          <button id="pause-navigation" type="button">Pause navigation</button>
+        </div>
+        <div class="end-action-buttons">
+          <button id="end-recording" type="button" hidden>End recording</button>
+          <button id="end-navigation" type="button" hidden>End navigation</button>
+        </div>
+      </div>
+    </section>
+
+    <button id="route-undo" hidden>↶ Undo route edit</button>
+    <aside id="panel"></aside>
+    <div id="toast"></div>
+  </main>
+</div>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
+<script type="module" src="app.js?v=5.0"></script>
+</body>
+</html>

@@ -1,5 +1,5 @@
-const CACHE_NAME='ridewise-v4-90';
-const APP_SHELL=["./","./index.html","./styles.css","./app.js","./icon.png"];
+const CACHE_NAME='ridewise-v5-0';
+const APP_SHELL=['./','./index.html','./styles.css','./app.js','./icon.png'];
 self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)))});
 self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE_NAME).map(key=>caches.delete(key))))]))});
 self.addEventListener('fetch',event=>{const request=event.request;if(request.method!=='GET')return;const url=new URL(request.url);if(url.origin!==self.location.origin)return;event.respondWith((async()=>{try{const response=await fetch(request);if(response?.ok){const responseForCache=response.clone();event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.put(request,responseForCache)).catch(error=>console.warn('Cache update failed',error)))}return response}catch(error){const exact=await caches.match(request);if(exact)return exact;const canonical=new Request(url.origin+url.pathname,{method:'GET'}),fallback=await caches.match(canonical);if(fallback)return fallback;if(request.mode==='navigate'){const page=await caches.match('./index.html');if(page)return page}throw error}})())});
