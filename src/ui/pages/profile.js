@@ -58,12 +58,21 @@ function feedCardHtml(a, given) {
       <div style="flex:1"><b style="font-size:14px;display:block">${APP.escapeHtml(a.ownerDisplayName || 'Rider')}</b><span class="muted" style="font-size:12px;font-weight:600">${relTime(a.startedAt)}</span></div>
     </div>
     <div class="feed-title">${APP.escapeHtml(a.title || 'Cycling activity')}</div>
-    <div class="feed-media">${img ? `<img src="${img}" alt="" loading="lazy">` : routeThumb(coords, 358, 140, { radius: 0 })}</div>
-    <div class="feed-stats stats three">
-      <div class="stat"><b>${fmtKm(a.distanceKm)}</b><small>distance</small></div>
-      <div class="stat"><b>${fmtM(a.elevationGainM)}</b><small>elevation</small></div>
-      <div class="stat"><b>${(a.avgSpeedKmh || 0).toFixed(1)}</b><small>avg km/h</small></div>
-    </div>
+    <div class="feed-media">${img
+      ? `<img src="${img}" alt="${a.routeIsPlanned ? 'Planned route' : 'Route ridden'}" loading="lazy">`
+      : routeThumb(coords, 358, 140, { radius: 0 })}
+      ${a.routeIsPlanned ? '<span class="mini-tag">Planned route · not ridden</span>' : ''}</div>
+    ${a.routeIsPlanned
+      ? `<div class="feed-stats stats three">
+          <div class="stat"><b>${fmtKm(a.plannedDistanceKm)}</b><small>planned</small></div>
+          <div class="stat"><b>—</b><small>elevation</small></div>
+          <div class="stat"><b>—</b><small>avg km/h</small></div>
+        </div>`
+      : `<div class="feed-stats stats three">
+          <div class="stat"><b>${fmtKm(a.distanceKm)}</b><small>distance</small></div>
+          <div class="stat"><b>${fmtM(a.elevationGainM)}</b><small>elevation</small></div>
+          <div class="stat"><b>${(a.avgSpeedKmh || 0).toFixed(1)}</b><small>avg km/h</small></div>
+        </div>`}
     <div class="feed-actions">
       <button data-kudos="${APP.escapeHtml(a.id)}" class="${given ? 'on' : ''}" aria-pressed="${given}">${icon('heart', 18)}<span>${a.kudosCount || 0}</span></button>
       <button data-comments="${APP.escapeHtml(a.id)}">${icon('bubble', 18)}<span>${a.commentCount || 0}</span></button>

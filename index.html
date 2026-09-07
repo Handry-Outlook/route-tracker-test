@@ -50,19 +50,6 @@
       <button id="quick-start" type="button">Start navigation</button>
       <div id="ride-live" hidden>
         <div id="segment-banner" class="segment-banner" hidden></div>
-        <div class="live-stats">
-          <div class="live-speed">
-            <b id="live-speed">0.0</b>
-            <small id="live-speed-label">current km/h</small>
-          </div>
-          <div class="live-metrics">
-            <div><i id="ico-distance"></i><b id="live-distance">0.00</b><small>km</small></div>
-            <div><i id="ico-gain"></i><b id="live-gain">0</b><small>m gain</small></div>
-            <div><i id="ico-time"></i><b id="live-time">00:00</b><small id="live-time-label">moving</small></div>
-            <div><i id="ico-power"></i><b id="live-power">0</b><small id="live-power-label">watts</small></div>
-          </div>
-          <div class="hr-zones" id="hr-zones"></div>
-        </div>
         <div class="eta-bar" id="eta-bar" hidden>
           <div class="stats three">
             <div class="stat"><b id="nav-eta-time">—</b><small>ETA</small></div>
@@ -70,9 +57,28 @@
             <div class="stat"><b id="nav-remaining-time">—</b><small>time</small></div>
           </div>
         </div>
-        <div class="record-buttons">
-          <button id="pause-recording" type="button">Pause recording</button>
-          <button id="pause-navigation" type="button">Pause navigation</button>
+        <button id="ride-expand" class="ride-expand" type="button"
+          aria-expanded="false" aria-controls="ride-detail" aria-label="Show ride stats">
+          <span></span>
+        </button>
+        <div id="ride-detail">
+          <div class="live-stats">
+            <div class="live-speed">
+              <b id="live-speed">0.0</b>
+              <small id="live-speed-label">current km/h</small>
+            </div>
+            <div class="live-metrics">
+              <div><i id="ico-distance"></i><b id="live-distance">0.00</b><small>km</small></div>
+              <div><i id="ico-gain"></i><b id="live-gain">0</b><small>m gain</small></div>
+              <div><i id="ico-time"></i><b id="live-time">00:00</b><small id="live-time-label">moving</small></div>
+              <div><i id="ico-power"></i><b id="live-power">0</b><small id="live-power-label">watts</small></div>
+            </div>
+            <div class="hr-zones" id="hr-zones"></div>
+          </div>
+          <div class="record-buttons">
+            <button id="pause-recording" type="button">Pause recording</button>
+            <button id="pause-navigation" type="button">Pause navigation</button>
+          </div>
         </div>
         <div class="end-action-buttons">
           <button id="end-recording" type="button" hidden>End recording</button>
@@ -82,6 +88,8 @@
     </section>
 
     <button id="route-undo" hidden>↶ Undo route edit</button>
+    <div id="sheet-grip" role="slider" tabindex="0" aria-label="Panel size"
+      aria-valuemin="0" aria-valuemax="3" aria-valuenow="2"><i></i></div>
     <aside id="panel"></aside>
     <div id="toast"></div>
   </main>

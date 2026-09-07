@@ -7,7 +7,8 @@
 //
 // Schema: activities/{id} — {ownerId, ownerDisplayName, ownerPhotoURL,
 //   title, startedAt, distanceKm, elevationGainM, avgSpeedKmh,
-//   routeSummaryGeoJson, photoUrls, kudosCount, commentCount, visibility}
+//   routeSummaryGeoJson, routeIsPlanned, plannedDistanceKm, photoUrls,
+//   kudosCount, commentCount, visibility}
 // activities/{id}/kudos/{uid} — {uid, createdAt}
 // activities/{id}/comments/{commentId} — {authorUid, authorDisplayName, authorPhotoURL, text, createdAt}
 import { getCloud } from '../legacy.js';
@@ -23,6 +24,35 @@ function simplifyRoute(coords, turf, maxPoints = 60) {
   const length = turf.length(line);
   const pts = Array.from({ length: maxPoints }, (_, i) => turf.along(line, (length * i) / (maxPoints - 1)).geometry.coordinates);
   return { type: 'LineString', coordinates: pts };
+}
+
+/**
+ * Which line to show for a ride.
+ *
+ * The recorded trace is what actually happened, so it wins whenever there is
+ * one. But a ride abandoned early, or saved without GPS at all, used to leave
+ * the feed card with no preview whatsoever. Falling back to the route the rider
+ * was following means there is almost always something to show, and the flag
+ * lets the card say which of the two it is drawing rather than passing a plan
+ * off as a ride.
+ */
+function plannedDistanceKm(coords, turf) {
+  try { return turf.length(turf.lineString(coords), { units: 'kilometers' }); } catch { return 0; }
+}
+function routeSummaryFields(coords, plannedRoute, turf) {
+  if (coords.length >= 2) {
+    return { routeSummaryGeoJson: JSON.stringify(simplifyRoute(coords, turf)), routeIsPlanned: false };
+  }
+  if (Array.isArray(plannedRoute) && plannedRoute.length >= 2) {
+    return {
+      routeSummaryGeoJson: JSON.stringify(simplifyRoute(plannedRoute, turf)),
+      routeIsPlanned: true,
+      // The recorded distance is ~0 on these, so the card needs the plan's own
+      // length to have any honest number to show.
+      plannedDistanceKm: plannedDistanceKm(plannedRoute, turf),
+    };
+  }
+  return { routeSummaryGeoJson: null, routeIsPlanned: false };
 }
 
 /**
@@ -51,7 +81,7 @@ export async function publishActivityToFeed(user, activity, turf) {
     distanceKm: activity.distance || 0,
     elevationGainM: activity.gain || 0,
     avgSpeedKmh: activity.avgSpeed || 0,
-    routeSummaryGeoJson: coords.length >= 2 ? JSON.stringify(simplifyRoute(coords, turf)) : null,
+    ...routeSummaryFields(coords, activity.plannedRoute, turf),
     photoUrls,
     kudosCount: 0,
     commentCount: 0,

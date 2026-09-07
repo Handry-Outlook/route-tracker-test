@@ -150,6 +150,16 @@ function wirePlanner() {
 
   $('#roundTrip').onclick = (e) => {
     S.planRoundTrip = !S.planRoundTrip;
+    if (!S.planRoundTrip && S.pointPlan) {
+      // Restore the start/finish the loop switch folded into via-points.
+      S.waypoints = structuredClone(S.pointPlan.waypoints);
+      S.names = structuredClone(S.pointPlan.names);
+      S.pointPlan = null;
+      S.adventureWaypoints = [];
+      S.mode = 'point';
+      render();
+      return;
+    }
     e.currentTarget.classList.toggle('on', S.planRoundTrip);
     const box = $('#roundTripControls');
     if (box) box.hidden = !S.planRoundTrip;
@@ -201,8 +211,20 @@ function wirePlanner() {
     if (S.planRoundTrip) {
       const start = S.waypoints?.[0] || (await APP.current());
       if (!start) return APP.toast('Set a start point first');
+      // A round trip is still a trip TO somewhere. Everything the rider set
+      // after the start becomes a required via-point on the loop, so the
+      // generated route goes past their destination instead of ignoring it.
+      const turf = window.turf;
+      const away = (p) => Array.isArray(p) && turf.distance(p, start, { units: 'kilometers' }) > 0.05;
+      const vias = (S.waypoints || []).slice(1).filter(away);
+      if (vias.length) {
+        S.adventureWaypoints = vias.map((coord, i) => ({ coord, name: S.names?.[i + 1] || '' }));
+      }
+      // Keep the point-to-point pair so switching the toggle back restores it.
+      S.pointPlan = { waypoints: structuredClone(S.waypoints || []), names: structuredClone(S.names || []) };
       S.mode = 'loop';
       S.waypoints = [start, start];
+      S.names = [S.names?.[0] || '', S.names?.[0] || ''];
       await APP.adventureRoutes(false);
     } else {
       if (!S.waypoints?.[0] || !S.waypoints?.at(-1)) return APP.toast('Set both a start and a finish');

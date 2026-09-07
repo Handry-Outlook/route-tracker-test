@@ -93,12 +93,17 @@ function safeCoords(json) {
 function communityCardHtml(a) {
   const coords = safeCoords(a.routeSummaryGeoJson);
   const url = coords ? staticRouteImage(coords, APP.MAPBOX_TOKEN, { w: 320, h: 160 }) : null;
-  return `<button class="card mini-card" data-community="${APP.escapeHtml(a.id)}">
-    <div class="mini-media">${url ? `<img src="${url}" alt="" loading="lazy">` : terrainPlaceholder(152, 74, 'cool', 0)}
+  return `<button class="card mini-card${url ? '' : ' mini-card-flat'}" data-community="${APP.escapeHtml(a.id)}">
+    <div class="mini-media">${url
+      ? `<img src="${url}" alt="${a.routeIsPlanned ? 'Planned route' : 'Route ridden'} for ${APP.escapeHtml(a.title || 'this ride')}" loading="lazy">
+         ${a.routeIsPlanned ? '<span class="mini-tag">Planned route</span>' : ''}`
+      : `<div class="mini-media-empty">${icon('route', 16)}<span>No route recorded</span></div>`}
       ${a.kudosCount ? `<span class="badge dark" style="position:absolute;left:8px;top:8px;min-height:20px;font-size:10px">${icon('heart', 11)}${a.kudosCount}</span>` : ''}
     </div>
     <div class="mini-body"><b>${APP.escapeHtml(a.title || 'Ride')}</b>
-      <span>${fmtKm(a.distanceKm)} · ${fmtM(a.elevationGainM)} · ${APP.escapeHtml(a.ownerDisplayName || 'Rider')}</span></div>
+      <span>${a.routeIsPlanned
+        ? `${fmtKm(a.plannedDistanceKm)} planned · not ridden`
+        : `${fmtKm(a.distanceKm)} · ${fmtM(a.elevationGainM)}`} · ${APP.escapeHtml(a.ownerDisplayName || 'Rider')}</span></div>
   </button>`;
 }
 
@@ -299,11 +304,29 @@ async function homeView() {
   rails.innerHTML =
     railHtml('Community favourites', popular, 'No shared rides yet. Rides you and riders you follow share appear here.') +
     railHtml('New this week', recent, 'Nothing shared in the last seven days.');
-  rails.onclick = (e) => {
+  rails.onclick = async (e) => {
     const b = e.target.closest('[data-community]');
     if (!b) return;
-    S.profileView = 'feed';
-    APP.open('profile');
+    const ride = [...popular, ...recent].find((x) => x.id === b.dataset.community);
+    if (!ride) return;
+    const coords = safeCoords(ride.routeSummaryGeoJson);
+    if (!coords) return APP.toast('That ride has no recorded route to open');
+    if (b.dataset.busy) return;
+    b.dataset.busy = '1';
+    APP.toast('Opening ride…');
+    try {
+      await APP.useSavedActivityRoute({
+        name: ride.title || 'Community ride',
+        distance: ride.distanceKm || 0,
+        elapsed: 0,
+        samples: coords.map((pos) => ({ pos })),
+      });
+    } catch (error) {
+      console.warn('Could not open the community ride', error);
+      APP.toast('Could not open that ride');
+    } finally {
+      delete b.dataset.busy;
+    }
   };
 }
 

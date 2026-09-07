@@ -81,84 +81,141 @@ function weatherCodeIcon(c, hour = 12) {
 }
 
 // src/ui/components/bottomSheet.js
-var SNAP_HEIGHTS = { closed: 0.07, peek: 0.16, half: 0.5, full: 0.92 };
-var VELOCITY_FLING_PX_PER_MS = 0.5;
+var SNAP = { closed: 0.06, peek: 0.17, half: 0.5, full: 0.92 };
+var ORDER = ["closed", "peek", "half", "full"];
+var FLING_PX_PER_MS = 0.45;
+var DRAG_SLOP_PX = 4;
 function createBottomSheet(panel2, { mobile: mobile2 }) {
   let state4 = "half";
-  let handle = panel2.querySelector(".sheet-handle");
-  if (!handle) {
-    handle = document.createElement("div");
-    handle.className = "sheet-handle";
-    handle.setAttribute("aria-hidden", "true");
-    panel2.prepend(handle);
+  const grip = document.getElementById("sheet-grip");
+  const container = () => panel2.offsetParent || panel2.parentElement;
+  const containerHeight = () => container()?.getBoundingClientRect().height || innerHeight;
+  const pxFor = (fraction) => Math.round(containerHeight() * fraction);
+  function publish(px, animate) {
+    const host = container();
+    panel2.style.transition = animate ? "" : "none";
+    const value = `${Math.round(px)}px`;
+    panel2.style.setProperty("--sheet-height", value);
+    if (host) {
+      host.style.setProperty("--sheet-height", value);
+      host.style.setProperty("--sheet-anim", animate ? ".3s cubic-bezier(.2,.8,.2,1)" : "0s");
+    }
   }
-  let dragStartY = null;
-  let dragStartHeight = 0;
+  function setState(next, { animate = true } = {}) {
+    if (!SNAP[next]) next = "half";
+    state4 = next;
+    panel2.dataset.sheetState = state4;
+    document.body.dataset.sheet = state4;
+    if (grip) grip.setAttribute("aria-valuenow", String(ORDER.indexOf(state4)));
+    if (mobile2()) publish(pxFor(SNAP[state4]), animate);
+    else {
+      panel2.style.removeProperty("--sheet-height");
+      container()?.style.removeProperty("--sheet-height");
+    }
+  }
+  let dragging = false;
+  let armed = null;
+  let startY = 0;
+  let startPx = 0;
   let lastY = 0;
   let lastT = 0;
   let velocity = 0;
-  function containerHeightPx() {
-    return (panel2.offsetParent || panel2.parentElement).getBoundingClientRect().height;
-  }
-  function heightPxFor(fraction) {
-    return Math.round(containerHeightPx() * fraction);
-  }
-  function applyHeight(value, animate) {
-    panel2.style.transition = animate ? "" : "none";
-    const container = panel2.offsetParent || panel2.parentElement;
-    if (container) container.style.setProperty("--sheet-height", value);
-    panel2.style.setProperty("--sheet-height", value);
-  }
-  function setState(next, { animate = true } = {}) {
-    if (!SNAP_HEIGHTS[next]) next = "half";
-    state4 = next;
-    panel2.dataset.sheetState = state4;
-    if (mobile2()) applyHeight(`${SNAP_HEIGHTS[state4] * 100}%`, animate);
-  }
-  function onPointerDown(e) {
-    if (!mobile2()) return;
-    dragStartY = e.clientY;
-    lastY = e.clientY;
+  let moved = 0;
+  function begin(clientY) {
+    dragging = true;
+    startY = lastY = clientY;
     lastT = performance.now();
     velocity = 0;
-    dragStartHeight = panel2.getBoundingClientRect().height;
-    panel2.setPointerCapture(e.pointerId);
+    moved = 0;
+    startPx = panel2.getBoundingClientRect().height;
     panel2.style.transition = "none";
+    document.body.classList.add("sheet-dragging");
   }
-  function onPointerMove(e) {
-    if (dragStartY === null) return;
-    const dy = e.clientY - dragStartY;
+  function move(clientY) {
     const now = performance.now();
     const dt = Math.max(1, now - lastT);
-    velocity = (e.clientY - lastY) / dt;
-    lastY = e.clientY;
+    velocity = (clientY - lastY) / dt;
+    lastY = clientY;
     lastT = now;
-    const nextHeight = Math.max(
-      heightPxFor(SNAP_HEIGHTS.closed),
-      Math.min(heightPxFor(0.97), dragStartHeight - dy)
-    );
-    applyHeight(`${nextHeight}px`, false);
+    moved = Math.max(moved, Math.abs(clientY - startY));
+    const max = pxFor(0.94);
+    const min = pxFor(SNAP.closed);
+    publish(Math.max(min, Math.min(max, startPx - (clientY - startY))), false);
   }
-  function onPointerUp() {
-    if (dragStartY === null) return;
-    dragStartY = null;
-    const currentPx = panel2.getBoundingClientRect().height;
-    const currentFraction = currentPx / innerHeight;
+  function end() {
+    if (!dragging) return;
+    dragging = false;
+    document.body.classList.remove("sheet-dragging");
+    const fraction = panel2.getBoundingClientRect().height / containerHeight();
     let next;
-    if (velocity > VELOCITY_FLING_PX_PER_MS) next = currentFraction > SNAP_HEIGHTS.half ? "half" : "peek";
-    else if (velocity < -VELOCITY_FLING_PX_PER_MS) next = currentFraction < SNAP_HEIGHTS.half ? "half" : "full";
-    else {
-      const distances = Object.entries(SNAP_HEIGHTS).map(([key, f]) => [key, Math.abs(f - currentFraction)]);
-      distances.sort((a, b) => a[1] - b[1]);
-      next = distances[0][0];
+    if (velocity > FLING_PX_PER_MS || velocity < -FLING_PX_PER_MS) {
+      const dir = velocity > 0 ? -1 : 1;
+      const from = ORDER.reduce((best, key) => Math.abs(SNAP[key] - fraction) < Math.abs(SNAP[best] - fraction) ? key : best, "half");
+      next = ORDER[Math.max(0, Math.min(ORDER.length - 1, ORDER.indexOf(from) + dir))];
+    } else {
+      next = ORDER.reduce((best, key) => Math.abs(SNAP[key] - fraction) < Math.abs(SNAP[best] - fraction) ? key : best, "half");
     }
     setState(next);
   }
-  handle.addEventListener("pointerdown", onPointerDown);
-  addEventListener("pointermove", onPointerMove);
-  addEventListener("pointerup", onPointerUp);
-  addEventListener("pointercancel", onPointerUp);
+  if (grip) {
+    grip.addEventListener("pointerdown", (e) => {
+      if (!mobile2()) return;
+      e.preventDefault();
+      grip.setPointerCapture?.(e.pointerId);
+      begin(e.clientY);
+    });
+    grip.addEventListener("click", () => {
+      if (!mobile2() || moved > DRAG_SLOP_PX) return;
+      setState(state4 === "full" ? "half" : "full");
+    });
+    grip.addEventListener("keydown", (e) => {
+      const i = ORDER.indexOf(state4);
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setState(ORDER[Math.min(ORDER.length - 1, i + 1)]);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setState(ORDER[Math.max(0, i - 1)]);
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setState(state4 === "full" ? "half" : "full");
+      }
+    });
+  }
+  panel2.addEventListener("pointerdown", (e) => {
+    if (!mobile2() || dragging) return;
+    if (e.target.closest("input, textarea, select, .mapboxgl-ctrl-geocoder")) return;
+    armed = { y: e.clientY, x: e.clientX, atTop: panel2.scrollTop <= 0, id: e.pointerId };
+  }, { passive: true });
+  panel2.addEventListener("pointermove", (e) => {
+    if (!armed || dragging) return;
+    const dy = e.clientY - armed.y;
+    const dx = e.clientX - armed.x;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      armed = null;
+      return;
+    }
+    if (dy <= DRAG_SLOP_PX || !armed.atTop) {
+      if (Math.abs(dy) > DRAG_SLOP_PX) armed = null;
+      return;
+    }
+    armed = null;
+    begin(e.clientY - dy);
+    move(e.clientY);
+  }, { passive: true });
+  addEventListener("pointermove", (e) => {
+    if (dragging) move(e.clientY);
+  }, { passive: true });
+  addEventListener("pointerup", () => {
+    armed = null;
+    end();
+  });
+  addEventListener("pointercancel", () => {
+    armed = null;
+    end();
+  });
   addEventListener("resize", () => setState(state4, { animate: false }));
+  matchMedia("(orientation: portrait)").addEventListener?.("change", () => setState(state4, { animate: false }));
   setState("half", { animate: false });
   return { setState, getState: () => state4 };
 }
@@ -301,6 +358,28 @@ function simplifyRoute(coords, turf2, maxPoints = 60) {
   const pts = Array.from({ length: maxPoints }, (_, i) => turf2.along(line2, length * i / (maxPoints - 1)).geometry.coordinates);
   return { type: "LineString", coordinates: pts };
 }
+function plannedDistanceKm(coords, turf2) {
+  try {
+    return turf2.length(turf2.lineString(coords), { units: "kilometers" });
+  } catch {
+    return 0;
+  }
+}
+function routeSummaryFields(coords, plannedRoute, turf2) {
+  if (coords.length >= 2) {
+    return { routeSummaryGeoJson: JSON.stringify(simplifyRoute(coords, turf2)), routeIsPlanned: false };
+  }
+  if (Array.isArray(plannedRoute) && plannedRoute.length >= 2) {
+    return {
+      routeSummaryGeoJson: JSON.stringify(simplifyRoute(plannedRoute, turf2)),
+      routeIsPlanned: true,
+      // The recorded distance is ~0 on these, so the card needs the plan's own
+      // length to have any honest number to show.
+      plannedDistanceKm: plannedDistanceKm(plannedRoute, turf2)
+    };
+  }
+  return { routeSummaryGeoJson: null, routeIsPlanned: false };
+}
 async function publishActivityToFeed(user, activity, turf2) {
   const db = await getCloud();
   const id = activity.id || crypto.randomUUID();
@@ -322,7 +401,7 @@ async function publishActivityToFeed(user, activity, turf2) {
     distanceKm: activity.distance || 0,
     elevationGainM: activity.gain || 0,
     avgSpeedKmh: activity.avgSpeed || 0,
-    routeSummaryGeoJson: coords.length >= 2 ? JSON.stringify(simplifyRoute(coords, turf2)) : null,
+    ...routeSummaryFields(coords, activity.plannedRoute, turf2),
     photoUrls,
     kudosCount: 0,
     commentCount: 0,
@@ -1095,12 +1174,13 @@ function safeCoords(json) {
 function communityCardHtml(a) {
   const coords = safeCoords(a.routeSummaryGeoJson);
   const url = coords ? staticRouteImage(coords, APP.MAPBOX_TOKEN, { w: 320, h: 160 }) : null;
-  return `<button class="card mini-card" data-community="${APP.escapeHtml(a.id)}">
-    <div class="mini-media">${url ? `<img src="${url}" alt="" loading="lazy">` : terrainPlaceholder(152, 74, "cool", 0)}
+  return `<button class="card mini-card${url ? "" : " mini-card-flat"}" data-community="${APP.escapeHtml(a.id)}">
+    <div class="mini-media">${url ? `<img src="${url}" alt="${a.routeIsPlanned ? "Planned route" : "Route ridden"} for ${APP.escapeHtml(a.title || "this ride")}" loading="lazy">
+         ${a.routeIsPlanned ? '<span class="mini-tag">Planned route</span>' : ""}` : `<div class="mini-media-empty">${icon("route", 16)}<span>No route recorded</span></div>`}
       ${a.kudosCount ? `<span class="badge dark" style="position:absolute;left:8px;top:8px;min-height:20px;font-size:10px">${icon("heart", 11)}${a.kudosCount}</span>` : ""}
     </div>
     <div class="mini-body"><b>${APP.escapeHtml(a.title || "Ride")}</b>
-      <span>${fmtKm(a.distanceKm)} \xB7 ${fmtM(a.elevationGainM)} \xB7 ${APP.escapeHtml(a.ownerDisplayName || "Rider")}</span></div>
+      <span>${a.routeIsPlanned ? `${fmtKm(a.plannedDistanceKm)} planned \xB7 not ridden` : `${fmtKm(a.distanceKm)} \xB7 ${fmtM(a.elevationGainM)}`} \xB7 ${APP.escapeHtml(a.ownerDisplayName || "Rider")}</span></div>
   </button>`;
 }
 function railHtml(title, items, emptyText) {
@@ -1321,11 +1401,29 @@ async function homeView() {
   const rails = $2("#communityRails");
   if (!rails) return;
   rails.innerHTML = railHtml("Community favourites", popular, "No shared rides yet. Rides you and riders you follow share appear here.") + railHtml("New this week", recent, "Nothing shared in the last seven days.");
-  rails.onclick = (e) => {
+  rails.onclick = async (e) => {
     const b = e.target.closest("[data-community]");
     if (!b) return;
-    S2.profileView = "feed";
-    APP.open("profile");
+    const ride = [...popular, ...recent].find((x) => x.id === b.dataset.community);
+    if (!ride) return;
+    const coords = safeCoords(ride.routeSummaryGeoJson);
+    if (!coords) return APP.toast("That ride has no recorded route to open");
+    if (b.dataset.busy) return;
+    b.dataset.busy = "1";
+    APP.toast("Opening ride\u2026");
+    try {
+      await APP.useSavedActivityRoute({
+        name: ride.title || "Community ride",
+        distance: ride.distanceKm || 0,
+        elapsed: 0,
+        samples: coords.map((pos) => ({ pos }))
+      });
+    } catch (error) {
+      console.warn("Could not open the community ride", error);
+      APP.toast("Could not open that ride");
+    } finally {
+      delete b.dataset.busy;
+    }
   };
 }
 function compareView() {
@@ -1524,6 +1622,15 @@ function wirePlanner() {
   $2("#addWaypoint").onclick = () => APP.addPointToPointWaypoint();
   $2("#roundTrip").onclick = (e) => {
     S2.planRoundTrip = !S2.planRoundTrip;
+    if (!S2.planRoundTrip && S2.pointPlan) {
+      S2.waypoints = structuredClone(S2.pointPlan.waypoints);
+      S2.names = structuredClone(S2.pointPlan.names);
+      S2.pointPlan = null;
+      S2.adventureWaypoints = [];
+      S2.mode = "point";
+      render2();
+      return;
+    }
     e.currentTarget.classList.toggle("on", S2.planRoundTrip);
     const box = $2("#roundTripControls");
     if (box) box.hidden = !S2.planRoundTrip;
@@ -1577,8 +1684,16 @@ function wirePlanner() {
     if (S2.planRoundTrip) {
       const start2 = S2.waypoints?.[0] || await APP.current();
       if (!start2) return APP.toast("Set a start point first");
+      const turf2 = window.turf;
+      const away = (p) => Array.isArray(p) && turf2.distance(p, start2, { units: "kilometers" }) > 0.05;
+      const vias = (S2.waypoints || []).slice(1).filter(away);
+      if (vias.length) {
+        S2.adventureWaypoints = vias.map((coord, i) => ({ coord, name: S2.names?.[i + 1] || "" }));
+      }
+      S2.pointPlan = { waypoints: structuredClone(S2.waypoints || []), names: structuredClone(S2.names || []) };
       S2.mode = "loop";
       S2.waypoints = [start2, start2];
+      S2.names = [S2.names?.[0] || "", S2.names?.[0] || ""];
       await APP.adventureRoutes(false);
     } else {
       if (!S2.waypoints?.[0] || !S2.waypoints?.at(-1)) return APP.toast("Set both a start and a finish");
@@ -1833,7 +1948,13 @@ var SORTS = [
   ["effort-desc", "Effort: high to low"],
   ["effort-asc", "Effort: low to high"]
 ];
-var traceOf = (a) => (a?.samples || []).map((s) => s.pos).filter(Boolean);
+var recordedTrace = (a) => (a?.samples || []).map((s) => s.pos).filter(Boolean);
+var traceOf = (a) => {
+  const recorded = recordedTrace(a);
+  if (recorded.length > 1) return recorded;
+  return Array.isArray(a?.plannedRoute) && a.plannedRoute.length > 1 ? a.plannedRoute : recorded;
+};
+var traceIsPlanned = (a) => recordedTrace(a).length <= 1 && Array.isArray(a?.plannedRoute) && a.plannedRoute.length > 1;
 function achievementsFor(activity, others) {
   const out = [];
   const rest = others.filter((x) => x !== activity && x.id !== activity.id);
@@ -1856,7 +1977,8 @@ function detailHtml(a, index) {
   return `<div class="page">
     ${viewHeader(a.name || "Activity", new Date(a.ended || a.started || Date.now()).toLocaleString())}
     <div class="card hero-card">
-      <div class="hero-media" style="height:170px">${img ? `<img src="${img}" alt="" loading="lazy">` : routeThumb(trace, 358, 170, { radius: 0 })}</div>
+      <div class="hero-media" style="height:170px">${img ? `<img src="${img}" alt="${traceIsPlanned(a) ? "Planned route" : "Route ridden"}" loading="lazy">` : routeThumb(trace, 358, 170, { radius: 0 })}
+        ${traceIsPlanned(a) ? '<span class="mini-tag">Planned route</span>' : ""}</div>
     </div>
     ${wins.length ? `<section><p class="section-title" style="margin-bottom:8px">Achievements</p><div class="row" style="gap:8px;flex-wrap:wrap">${wins.map((w) => `<span class="badge gold" style="min-height:30px;padding:0 12px">${icon(w.icon, 14)}${w.label}</span>`).join("")}</div></section>` : ""}
     <div class="stats">
@@ -1979,7 +2101,8 @@ function wirePending() {
 function activityRowHtml(a, index) {
   const trace = traceOf(a);
   return `<article class="route-card" data-activity="${index}" style="display:grid;grid-template-columns:96px 1fr">
-    <div class="route-media" style="height:100%;min-height:86px">${routeThumb(trace, 96, 86, { radius: 0 })}</div>
+    <div class="route-media" style="height:100%;min-height:86px">${trace.length > 1 ? `<img src="${staticRouteImage(trace, APP.MAPBOX_TOKEN, { w: 192, h: 172 })}" alt="${traceIsPlanned(a) ? "Planned route" : "Route ridden"}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">
+         ${traceIsPlanned(a) ? '<span class="mini-tag">Planned</span>' : ""}` : `<div class="mini-media-empty">${icon("route", 15)}<span>No route</span></div>`}</div>
     <div class="route-body">
       <b>${APP.escapeHtml(a.name || "Cycling activity")}</b>
       <span>${new Date(a.ended || a.started || Date.now()).toLocaleDateString()}</span>
@@ -2748,12 +2871,17 @@ function feedCardHtml(a, given) {
       <div style="flex:1"><b style="font-size:14px;display:block">${APP.escapeHtml(a.ownerDisplayName || "Rider")}</b><span class="muted" style="font-size:12px;font-weight:600">${relTime(a.startedAt)}</span></div>
     </div>
     <div class="feed-title">${APP.escapeHtml(a.title || "Cycling activity")}</div>
-    <div class="feed-media">${img ? `<img src="${img}" alt="" loading="lazy">` : routeThumb(coords, 358, 140, { radius: 0 })}</div>
-    <div class="feed-stats stats three">
-      <div class="stat"><b>${fmtKm(a.distanceKm)}</b><small>distance</small></div>
-      <div class="stat"><b>${fmtM(a.elevationGainM)}</b><small>elevation</small></div>
-      <div class="stat"><b>${(a.avgSpeedKmh || 0).toFixed(1)}</b><small>avg km/h</small></div>
-    </div>
+    <div class="feed-media">${img ? `<img src="${img}" alt="${a.routeIsPlanned ? "Planned route" : "Route ridden"}" loading="lazy">` : routeThumb(coords, 358, 140, { radius: 0 })}
+      ${a.routeIsPlanned ? '<span class="mini-tag">Planned route \xB7 not ridden</span>' : ""}</div>
+    ${a.routeIsPlanned ? `<div class="feed-stats stats three">
+          <div class="stat"><b>${fmtKm(a.plannedDistanceKm)}</b><small>planned</small></div>
+          <div class="stat"><b>\u2014</b><small>elevation</small></div>
+          <div class="stat"><b>\u2014</b><small>avg km/h</small></div>
+        </div>` : `<div class="feed-stats stats three">
+          <div class="stat"><b>${fmtKm(a.distanceKm)}</b><small>distance</small></div>
+          <div class="stat"><b>${fmtM(a.elevationGainM)}</b><small>elevation</small></div>
+          <div class="stat"><b>${(a.avgSpeedKmh || 0).toFixed(1)}</b><small>avg km/h</small></div>
+        </div>`}
     <div class="feed-actions">
       <button data-kudos="${APP.escapeHtml(a.id)}" class="${given ? "on" : ""}" aria-pressed="${given}">${icon("heart", 18)}<span>${a.kudosCount || 0}</span></button>
       <button data-comments="${APP.escapeHtml(a.id)}">${icon("bubble", 18)}<span>${a.commentCount || 0}</span></button>
@@ -4153,7 +4281,7 @@ var fmtSeconds = (s) => {
 var $ = (s, r = document) => r.querySelector(s);
 var panel = $("#panel");
 var S = { page: "explore", mode: "point", waypoints: [], names: [], routes: [], route: null, selected: null, markers: [], nodes: [], layers: [], poiMarkers: [], geocoders: {}, weather: null, weatherOn: false, wind: { speed: 15, dir: 240 }, windGrid: null, windGridKey: "", windLoading: false, record: null, watch: null, user: null, navState: null, styleIndex: 0, pendingActivity: null, activityView: null, activitySort: "date-desc", lastVoiceKey: "", lastRerouteAt: 0, wakeLock: null, wakeLockWanted: false, audioNavigation: localStorage.getItem("audioNavigation") !== "off", audioUnlocked: false, headingSamples: [], smoothedHeading: null, headingUnstable: false, manualExploreUntil: 0, wrongWaySince: null, userMarker: null, visualHeading: null, routeUndo: [], previewRun: 0, liveJourney: null, liveUnsub: null, cloud: null, sharedJourneyState: null, cycleLayerOn: false, hourlyWeather: [], adventureWaypoints: [], contextPressTimer: null, editingSavedId: null, accountRoutes: [], accountActivities: [], accountSyncing: false, navCamera: { lastAt: 0, zoom: 16.2, state: "normal", postTurnUntil: 0, lastStep: -1 }, sharedRouteLoading: false, sharedRouteLoaded: false, sharedRiderMarker: null, viewerMarker: null, sharedJourneyId: null, sharedJourneyFitted: false, viewerWatch: null };
-var mobile = () => innerWidth <= 760;
+var mobile = () => matchMedia("(max-width: 760px), (max-height: 480px) and (pointer: coarse)").matches;
 var toast = (t) => {
   const e = $("#toast");
   e.textContent = t;
@@ -4165,6 +4293,7 @@ var fmt = (n) => Number(n || 0).toFixed(1);
 mapboxgl.accessToken = MAPBOX_TOKEN;
 var map = new mapboxgl.Map({ container: "map", style: "mapbox://styles/mapbox/outdoors-v12", center: [-2.5879, 51.4545], zoom: 11, preserveDrawingBuffer: true });
 map.addControl(new mapboxgl.NavigationControl(), "top-right");
+var GUIDANCE_PARAMS = "banner_instructions=true&voice_instructions=true&roundabout_exits=true&voice_units=metric&language=en";
 var MAP_PAGES = ["explore"];
 var PAGE_ALIAS = { journey: "plan", adventure: "explore", routes: "plan", feed: "profile" };
 var NAV = [["explore", "compass", "Adventure"], ["plan", "route", "Plan"], ["record", "record", "Record"], ["segments", "flag", "Segments"], ["profile", "user", "Profile"]];
@@ -4846,17 +4975,22 @@ async function fastDirections(points, timeoutMs = 5200, alternatives = false) {
     clearTimeout(timer2);
   }
 }
+function routeHasGuidance(route) {
+  return !!route?.legs?.some((leg) => leg.steps?.some((step2) => step2.voiceInstructions?.length));
+}
 async function hydrateRouteInstructions(route, points) {
-  if (!route || route.legs?.some((l) => l.steps?.length)) return;
+  if (!route || routeHasGuidance(route)) return;
+  if (!Array.isArray(points) || points.length < 2) return;
   try {
-    const full = await directionsWithTimeout(points, false, 6500), details = full[0];
-    if (details) {
+    const details = (await directions(points, false))[0];
+    if (details && (!route.distance || Math.abs((details.distance || 0) - route.distance) <= route.distance * 0.05)) {
       route.legs = details.legs || [];
       route.duration = details.duration || route.duration;
       route.distance = details.distance || route.distance;
       route.geometry = details.geometry || route.geometry;
     }
-  } catch {
+  } catch (error) {
+    console.warn("Could not load turn instructions", error);
   } finally {
     cards();
   }
@@ -4962,7 +5096,7 @@ function dedupeAdventureCandidates(routes2) {
   return out;
 }
 async function directions(p, alternatives) {
-  const c = p.map((x) => x.join(",")).join(";"), base = `https://api.mapbox.com/directions/v5/mapbox/cycling/${c}?alternatives=${alternatives}&geometries=geojson&overview=full&steps=true&access_token=${MAPBOX_TOKEN}`;
+  const c = p.map((x) => x.join(",")).join(";"), base = `https://api.mapbox.com/directions/v5/mapbox/cycling/${c}?alternatives=${alternatives}&geometries=geojson&overview=full&steps=true&${GUIDANCE_PARAMS}&access_token=${MAPBOX_TOKEN}`;
   try {
     const withAnn = await fetch(`${base}&annotations=maxspeed`);
     if (withAnn.ok) {
@@ -5214,9 +5348,13 @@ function accountCollection(kind) {
 }
 function cacheAccountData(kind, items) {
   if (!S.user) return;
-  localStorage.setItem(accountCacheKey(kind), JSON.stringify(items));
   if (kind === "routes") S.accountRoutes = items;
   else S.accountActivities = items;
+  try {
+    localStorage.setItem(accountCacheKey(kind), JSON.stringify(items));
+  } catch (error) {
+    console.warn(`Offline ${kind} cache skipped: storage is full`, error);
+  }
 }
 function loadAccountCache(kind) {
   if (!S.user) return [];
@@ -5810,20 +5948,34 @@ function routeRequiredWaypoints(route) {
   }
   return (S.waypoints || []).slice(1).filter((point) => Array.isArray(point)).map((point) => [...point]);
 }
+function monotonicRouteProgress(line2, points) {
+  let floor = 0;
+  return points.map((point) => {
+    let at = floor;
+    try {
+      at = Math.max(floor, turf.nearestPointOnLine(line2, turf.point(point)).properties.location || 0);
+    } catch {
+    }
+    floor = at;
+    return at;
+  });
+}
 function insertDraggedPointByRouteProgress(route, required, dragged, original) {
-  const coords = route.geometry.coordinates, line2 = turf.lineString(coords), requiredWithProgress = required.map((point, index) => {
-    const snap = turf.nearestPointOnLine(line2, turf.point(point));
-    return { point, index, at: snap.properties.location || 0 };
-  }), dragSnap = turf.nearestPointOnLine(line2, turf.point(original)), dragAt = dragSnap.properties.location || 0;
-  let inserted = false;
+  const line2 = turf.lineString(route.geometry.coordinates), progress = monotonicRouteProgress(line2, required);
+  let dragAt = 0;
+  try {
+    dragAt = turf.nearestPointOnLine(line2, turf.point(original)).properties.location || 0;
+  } catch {
+  }
   const ordered = [];
-  for (const item of requiredWithProgress.sort((a, b) => a.at - b.at)) {
-    if (!inserted && dragAt <= item.at) {
+  let inserted = false;
+  required.forEach((point, i) => {
+    if (!inserted && dragAt <= progress[i]) {
       ordered.push(dragged);
       inserted = true;
     }
-    ordered.push(item.point);
-  }
+    ordered.push(point);
+  });
   if (!inserted) ordered.push(dragged);
   return ordered;
 }
@@ -5923,6 +6075,22 @@ function markers2() {
 function updateQuickNav() {
   const box = $("#quick-nav"), quickStart = $("#quick-start"), live = $("#ride-live");
   if (!box || !quickStart || !live) return;
+  if (!box.dataset.detail) {
+    box.dataset.detail = "collapsed";
+    document.body.dataset.rideDetail = "collapsed";
+  }
+  const expander = $("#ride-expand");
+  if (expander && !expander.dataset.wired) {
+    expander.dataset.wired = "1";
+    expander.onclick = () => {
+      const open2 = box.dataset.detail === "open";
+      const next = open2 ? "collapsed" : "open";
+      box.dataset.detail = next;
+      document.body.dataset.rideDetail = next;
+      expander.setAttribute("aria-expanded", String(!open2));
+      expander.setAttribute("aria-label", open2 ? "Show ride stats" : "Hide ride stats");
+    };
+  }
   const routeReady = !!S.route && S.selected !== null, active = !!S.record || !!S.navState;
   box.hidden = !routeReady && !active;
   quickStart.hidden = active;
@@ -5972,16 +6140,74 @@ function updateOfflineNavigationStatus() {
 }
 var ACTIVE_SESSION_KEY = "ridewise-active-session-v1";
 var sessionSaveTimer = 0;
+var MAX_PERSISTED_SAMPLES = 900;
+function decimateSamples(list, max) {
+  if (!Array.isArray(list) || list.length <= max) return Array.isArray(list) ? list : [];
+  const step2 = list.length / max, out = [];
+  for (let i = 0; i < max; i++) out.push(list[Math.floor(i * step2)]);
+  if (out[out.length - 1] !== list[list.length - 1]) out.push(list[list.length - 1]);
+  return out;
+}
+function trimPersistedStep(step2) {
+  const { voiceInstructions, bannerInstructions, ...rest } = step2 || {};
+  return rest;
+}
 function serialisableSession() {
   if (!S.record && !S.navState) return null;
-  return { version: 1, ownerId: S.user?.uid || null, savedAt: Date.now(), route: S.route ? structuredClone(S.route) : null, routes: structuredClone(S.routes || []), selected: S.selected, waypoints: structuredClone(S.waypoints || []), names: structuredClone(S.names || []), mode: S.mode, record: S.record ? structuredClone(S.record) : null, navState: S.navState ? { ...structuredClone(S.navState), recalculating: false } : null, pos: S.pos || null, visualHeading: S.visualHeading ?? S.smoothedHeading ?? null };
+  const route = S.route ? { ...structuredClone(S.route), legs: void 0 } : null;
+  const record2 = S.record ? { ...structuredClone(S.record), samples: decimateSamples(S.record.samples, MAX_PERSISTED_SAMPLES) } : null;
+  const navState = S.navState ? { ...structuredClone(S.navState), recalculating: false, spokenVoice: void 0, _maneuverAt: void 0, _maneuverAtFor: void 0, steps: (S.navState.steps || []).map(trimPersistedStep) } : null;
+  return {
+    version: 2,
+    ownerId: S.user?.uid || null,
+    savedAt: Date.now(),
+    route,
+    // The other candidates are not needed to resume and were the largest part.
+    routes: [],
+    selected: S.selected,
+    waypoints: structuredClone(S.waypoints || []),
+    names: structuredClone(S.names || []),
+    mode: S.mode,
+    record: record2,
+    navState,
+    pos: S.pos || null,
+    visualHeading: S.visualHeading ?? S.smoothedHeading ?? null
+  };
 }
+var sessionQuotaWarned = false;
 function persistActiveSession(force = false) {
   clearTimeout(sessionSaveTimer);
   const commit = () => {
-    const data = serialisableSession();
-    if (data) localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(data));
-    else localStorage.removeItem(ACTIVE_SESSION_KEY);
+    let data;
+    try {
+      data = serialisableSession();
+    } catch (error) {
+      console.warn("Could not snapshot the ride", error);
+      return;
+    }
+    try {
+      if (data) localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(data));
+      else localStorage.removeItem(ACTIVE_SESSION_KEY);
+      return;
+    } catch (error) {
+      try {
+        if (data) {
+          data.record = data.record ? { ...data.record, samples: decimateSamples(data.record.samples, 120) } : null;
+          localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(data));
+          return;
+        }
+      } catch {
+      }
+      try {
+        localStorage.removeItem(ACTIVE_SESSION_KEY);
+      } catch {
+      }
+      if (!sessionQuotaWarned) {
+        sessionQuotaWarned = true;
+        console.warn("Ride recovery snapshots disabled: storage is full", error);
+        toast("Storage full \xB7 ride recovery snapshot disabled");
+      }
+    }
   };
   if (force) commit();
   else sessionSaveTimer = setTimeout(commit, 800);
@@ -6108,7 +6334,7 @@ async function startNavigation() {
     toast("Select a route first");
     return false;
   }
-  if (!S.route.legs?.some((l) => l.steps?.length) && S.route._requestPoints?.length) {
+  if (!routeHasGuidance(S.route) && S.route._requestPoints?.length) {
     toast("Preparing turn instructions\u2026");
     await hydrateRouteInstructions(S.route, S.route._requestPoints);
   }
@@ -6552,31 +6778,73 @@ function updateAdaptiveNavigationCamera(pos, heading, speedMps = 0, force = fals
   camera.state = target.state;
   map.easeTo({ center: pos, zoom: target.zoom, pitch: target.pitch, bearing: target.bearing, duration: force ? 650 : 780, essential: true });
 }
+function maneuverDistances(nav) {
+  if (nav._maneuverAtFor === nav.steps) return nav._maneuverAt;
+  let total = 0;
+  const at = nav.steps.map((step2) => {
+    const start2 = total;
+    total += step2.distance || 0;
+    return start2;
+  });
+  at.push(total);
+  nav._maneuverAt = at;
+  nav._maneuverAtFor = nav.steps;
+  return at;
+}
+function recentPaceKmh() {
+  const samples = S.record?.samples;
+  if (!Array.isArray(samples) || samples.length < 4) return null;
+  const cutoff = (samples.at(-1).time || Date.now()) - 12e4;
+  let metres = 0, seconds = 0;
+  for (let i = samples.length - 1; i > 0; i--) {
+    const a = samples[i - 1], b = samples[i];
+    if (!Array.isArray(a.pos) || !Array.isArray(b.pos) || (b.time || 0) < cutoff) break;
+    const dt = ((b.time || 0) - (a.time || 0)) / 1e3;
+    if (dt <= 0 || dt > 20) continue;
+    const d = turf.distance(a.pos, b.pos, { units: "meters" });
+    if (d / dt < 0.5) continue;
+    metres += d;
+    seconds += dt;
+  }
+  return seconds > 25 ? metres / seconds * 3.6 : null;
+}
+function speakNavigationCues(nav, stepIndex, step2, remainingInStep, instruction) {
+  const list = step2?.voiceInstructions;
+  nav.spokenVoice ||= /* @__PURE__ */ new Set();
+  if (Array.isArray(list) && list.length) {
+    for (let k = 0; k < list.length; k++) {
+      const cue = list[k];
+      if (remainingInStep > (cue.distanceAlongGeometry || 0)) continue;
+      const key = stepIndex + ":" + k;
+      if (nav.spokenVoice.has(key)) continue;
+      nav.spokenVoice.add(key);
+      speak(cue.announcement || instruction);
+      return;
+    }
+    return;
+  }
+  voiceGuidance(stepIndex, instruction, remainingInStep);
+}
 function updateNavigationGuidance(pos) {
   const n = S.navState, r = S.route;
-  if (!n || !r || n.paused) return;
-  const lineString = turf.lineString(r.geometry.coordinates), snap = turf.nearestPointOnLine(lineString, turf.point(pos), { units: "kilometers" }), travelled = (snap.properties.location || 0) * 1e3, remaining = Math.max(0, (r.distance || 0) - travelled);
-  let chosen = n.steps.at(-1), idx = n.steps.length - 1;
-  for (let i = n.index; i < n.steps.length; i++) {
-    const loc = n.steps[i].maneuver?.location;
-    if (loc && turf.distance(pos, loc, { units: "meters" }) > 12) {
-      chosen = n.steps[i];
-      idx = i;
-      break;
-    }
-  }
-  n.index = idx;
-  const turnDistance = chosen?.maneuver?.location ? turf.distance(pos, chosen.maneuver.location, { units: "meters" }) : remaining, instruction = chosen?.maneuver?.instruction || chosen?.name || "Continue on route", lanes = laneText(chosen), arrow = turnArrow(chosen?.maneuver);
-  $("#nav-instruction").textContent = instruction;
-  $("#nav-next-distance").textContent = formatDistance(turnDistance);
-  $("#nav-lane").innerHTML = laneTiles(chosen);
-  $("#nav-arrow").textContent = arrow;
-  const speed = Math.max(8, S.record?.avgSpeed || r.distance / 1e3 / (r.duration / 3600) || 18), mins = Math.ceil(remaining / 1e3 / speed * 60);
+  if (!n || !r || n.paused || !n.steps?.length) return;
+  const lineString = turf.lineString(r.geometry.coordinates), snap = turf.nearestPointOnLine(lineString, turf.point(pos), { units: "kilometers" }), travelled = (snap.properties.location || 0) * 1e3, remaining = Math.max(0, (r.distance || 0) - travelled), at = maneuverDistances(n);
+  let current2 = 0;
+  while (current2 + 1 < n.steps.length && at[current2 + 1] <= travelled + 1) current2++;
+  n.index = current2;
+  const upcomingIndex = Math.min(current2 + 1, n.steps.length - 1), upcoming = n.steps[upcomingIndex], remainingInStep = Math.max(0, (at[current2 + 1] || 0) - travelled), turnDistance = upcomingIndex > current2 ? remainingInStep : remaining;
+  const banner = (upcoming?.bannerInstructions || []).find((b) => remainingInStep <= (b.distanceAlongGeometry || Infinity)), primary = banner?.primary, instruction = primary?.text || upcoming?.maneuver?.instruction || upcoming?.name || "Continue on route", secondary = banner?.secondary?.text || "", exit = upcoming?.maneuver?.exit;
+  setText("#nav-instruction", secondary ? instruction + " \xB7 " + secondary : instruction);
+  setText("#nav-next-distance", formatDistance(turnDistance));
+  const lane = $("#nav-lane");
+  if (lane) lane.innerHTML = laneTiles(upcoming);
+  setText("#nav-arrow", exit && /roundabout|rotary/.test(upcoming?.maneuver?.type || "") ? String(exit) : turnArrow(upcoming?.maneuver));
+  const speed = Math.max(6, recentPaceKmh() || S.record?.avgSpeed || r.distance / 1e3 / ((r.duration || 1) / 3600) || 18), mins = Math.ceil(remaining / 1e3 / speed * 60);
   setText("#nav-remaining-distance", formatDistance(remaining));
-  setText("#nav-remaining-time", mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`);
+  setText("#nav-remaining-time", mins >= 60 ? Math.floor(mins / 60) + "h " + mins % 60 + "m" : mins + " min");
   setText("#nav-eta-time", arrivalClock(mins));
   updateSpeedLimit(pos);
-  voiceGuidance(idx, instruction, turnDistance);
+  speakNavigationCues(n, current2, n.steps[current2], remainingInStep, instruction);
 }
 function voiceGuidance(stepIndex, instruction, distance) {
   let band = distance <= 35 ? "now" : distance <= 120 ? "soon" : distance <= 500 ? "advance" : "";
@@ -6626,7 +6894,7 @@ async function fetchRerouteRoute(pos) {
   }
   const via = dedupeNavigationPoints([pos, ...remaining]).slice(0, 24);
   if (via.length < 2) throw new Error("No remaining destination");
-  const coordinates = via.map((point) => point.join(",")).join(";"), response = await fetch(`https://api.mapbox.com/directions/v5/mapbox/cycling/${coordinates}?geometries=geojson&overview=full&steps=true&access_token=${MAPBOX_TOKEN}`), data = await response.json(), route = data.routes?.[0];
+  const coordinates = via.map((point) => point.join(",")).join(";"), response = await fetch(`https://api.mapbox.com/directions/v5/mapbox/cycling/${coordinates}?geometries=geojson&overview=full&steps=true&${GUIDANCE_PARAMS}&access_token=${MAPBOX_TOKEN}`), data = await response.json(), route = data.routes?.[0];
   if (!response.ok || !route) throw new Error(data.message || "No reroute");
   route._requestPoints = structuredClone(via);
   route._rerouteRemaining = remaining;
@@ -6690,6 +6958,8 @@ async function recalculateFrom(pos) {
     nav.totalDuration = route.duration;
     nav.offRouteSince = null;
     S.lastVoiceKey = "";
+    nav.spokenVoice = /* @__PURE__ */ new Set();
+    nav._maneuverAtFor = null;
     crossfadeRouteLine(route.geometry, colors[S.selected % colors.length], 8, showNavigationAlternatives);
     speak(remaining.length > 1 ? "New route ready. Your remaining waypoints are preserved." : "New route ready. Continue to the highlighted route.");
     toast(remaining.length > 1 ? `${remaining.length - 1} waypoint${remaining.length === 2 ? "" : "s"} still required` : "Reroute ready");
@@ -6702,12 +6972,6 @@ async function recalculateFrom(pos) {
     nav.recalculating = false;
     document.body.classList.remove("rerouting");
   }
-}
-function laneText(step2) {
-  const lanes = step2?.intersections?.flatMap((i) => i.lanes || []).filter((l) => l.valid || l.active);
-  if (lanes?.length) return `Use ${lanes.map((l) => (l.indications || []).join("/")).filter(Boolean).join(", ")} lane`;
-  const road = step2?.name || step2?.ref;
-  return road ? `Continue toward ${road}` : "";
 }
 function setText(sel, v) {
   const el = $(sel);
@@ -6794,7 +7058,8 @@ async function finishRecord(endNav = true) {
     }
   }
   const metrics = activityMetrics(r);
-  S.pendingActivity = { ...r, ...metrics, id: crypto.randomUUID(), routeId: S.route?.savedId || S.editingSavedId || null, name: defaultName, ended: Date.now(), elapsed: r.movingMs, avgSpeed: r.movingMs > 0 ? r.distance / (r.movingMs / 36e5) : 0, photos: [] };
+  const plannedCoords = S.route?.geometry?.coordinates;
+  S.pendingActivity = { ...r, ...metrics, id: crypto.randomUUID(), routeId: S.route?.savedId || S.editingSavedId || null, plannedRoute: Array.isArray(plannedCoords) && plannedCoords.length >= 2 ? sample(plannedCoords, Math.min(60, plannedCoords.length)) : null, plannedDistance: S.route?.distance || 0, name: defaultName, ended: Date.now(), elapsed: r.movingMs, avgSpeed: r.movingMs > 0 ? r.distance / (r.movingMs / 36e5) : 0, photos: [] };
   S.record = null;
   clearActiveSession();
   clearLines();

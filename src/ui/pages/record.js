@@ -14,7 +14,15 @@ const SORTS = [
   ['effort-desc', 'Effort: high to low'], ['effort-asc', 'Effort: low to high'],
 ];
 
-const traceOf = (a) => (a?.samples || []).map((s) => s.pos).filter(Boolean);
+const recordedTrace = (a) => (a?.samples || []).map((s) => s.pos).filter(Boolean);
+const traceOf = (a) => {
+  const recorded = recordedTrace(a);
+  if (recorded.length > 1) return recorded;
+  return Array.isArray(a?.plannedRoute) && a.plannedRoute.length > 1 ? a.plannedRoute : recorded;
+};
+/* True when the only line we have is the route the rider intended, not the one
+   they rode -- the previews say so rather than implying it was ridden. */
+const traceIsPlanned = (a) => recordedTrace(a).length <= 1 && Array.isArray(a?.plannedRoute) && a.plannedRoute.length > 1;
 
 /* Only genuine, checkable achievements — each is computed against every other
    saved activity, and nothing is shown when it cannot be proven. */
@@ -40,7 +48,8 @@ function detailHtml(a, index) {
   return `<div class="page">
     ${viewHeader(a.name || 'Activity', new Date(a.ended || a.started || Date.now()).toLocaleString())}
     <div class="card hero-card">
-      <div class="hero-media" style="height:170px">${img ? `<img src="${img}" alt="" loading="lazy">` : routeThumb(trace, 358, 170, { radius: 0 })}</div>
+      <div class="hero-media" style="height:170px">${img ? `<img src="${img}" alt="${traceIsPlanned(a) ? 'Planned route' : 'Route ridden'}" loading="lazy">` : routeThumb(trace, 358, 170, { radius: 0 })}
+        ${traceIsPlanned(a) ? '<span class="mini-tag">Planned route</span>' : ''}</div>
     </div>
     ${wins.length ? `<section><p class="section-title" style="margin-bottom:8px">Achievements</p><div class="row" style="gap:8px;flex-wrap:wrap">${wins.map((w) => `<span class="badge gold" style="min-height:30px;padding:0 12px">${icon(w.icon, 14)}${w.label}</span>`).join('')}</div></section>` : ''}
     <div class="stats">
@@ -162,7 +171,10 @@ function wirePending() {
 function activityRowHtml(a, index) {
   const trace = traceOf(a);
   return `<article class="route-card" data-activity="${index}" style="display:grid;grid-template-columns:96px 1fr">
-    <div class="route-media" style="height:100%;min-height:86px">${routeThumb(trace, 96, 86, { radius: 0 })}</div>
+    <div class="route-media" style="height:100%;min-height:86px">${trace.length > 1
+      ? `<img src="${staticRouteImage(trace, APP.MAPBOX_TOKEN, { w: 192, h: 172 })}" alt="${traceIsPlanned(a) ? 'Planned route' : 'Route ridden'}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">
+         ${traceIsPlanned(a) ? '<span class="mini-tag">Planned</span>' : ''}`
+      : `<div class="mini-media-empty">${icon('route', 15)}<span>No route</span></div>`}</div>
     <div class="route-body">
       <b>${APP.escapeHtml(a.name || 'Cycling activity')}</b>
       <span>${new Date(a.ended || a.started || Date.now()).toLocaleDateString()}</span>

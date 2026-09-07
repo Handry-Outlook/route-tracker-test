@@ -162,7 +162,7 @@ textarea { padding: 10px 12px; min-height: 80px; }
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
 .head p { margin-top: 4px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .close { display: none; }
-.sheet-handle { display: none; }
+#sheet-grip { display: none; }
 .page { display: flex; flex-direction: column; gap: 14px; }
 
 .tools { position: absolute; right: 13px; z-index: 12; display: flex; flex-direction: column; gap: 8px; bottom: 18px; align-items: flex-end; }
@@ -222,6 +222,7 @@ body.navigating #speed-limit.has-limit { display: inline-flex; }
 .end-action-buttons button[hidden] { display: none; }
 .segment-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--gold); color: #132238; border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow-soft); font-weight: 800; font-size: 14px; margin-bottom: 10px; }
 .segment-banner[hidden] { display: none; }
+.ride-expand { display: none; }
 
 .offline-nav-status { position: absolute; z-index: 82; top: 12px; left: 50%; transform: translateX(-50%); background: #8a4b00; color: #fff; padding: 8px 12px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 800; box-shadow: var(--shadow); }
 .offline-nav-status[hidden] { display: none; }
@@ -255,7 +256,23 @@ body.navigating #speed-limit.has-limit { display: inline-flex; }
 .map-location-menu b, .share-choice b { font-size: 17px; }
 .map-location-menu p, .share-choice p { margin: 2px 0 4px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .map-location-menu button, .share-choice button { border: 0; border-radius: var(--radius-md); padding: 13px; background: var(--surface-muted); text-align: left; font-weight: 700; font-size: 14px; color: var(--text); }
-.map-location-menu button:first-of-type, .share-choice button:first-of-type { background: var(--blue); color: #fff; }
+.map-location-menu button:nth-of-type(2), .share-choice button:nth-of-type(2) { background: var(--blue); color: #fff; }
+/* Marks a preview drawn from the rider's plan rather than their GPS trace. */
+.mini-media .mini-tag, .route-media .mini-tag, .hero-media .mini-tag, .feed-media .mini-tag {
+  position: absolute; right: 6px; bottom: 6px; z-index: 2;
+  background: color-mix(in srgb, var(--navy) 88%, transparent); color: #fff;
+  border-radius: var(--radius-pill); padding: 3px 8px;
+  font-size: 9px; font-weight: 800; letter-spacing: .01em; line-height: 1.3;
+}
+
+/* A community ride published without GPS has no preview to show. */
+.mini-media-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; height: 100%; min-height: 74px; background: var(--surface-muted);
+  color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; padding: 8px;
+}
+.mini-card-flat { opacity: .82; }
+
 .popup-close { position: absolute !important; right: 8px; top: 8px; width: 32px; height: 32px; border-radius: 50% !important; background: var(--surface-muted) !important; color: var(--text) !important; text-align: center !important; font-size: 20px; padding: 0 !important; }
 .share-link-label { font-size: 11px; color: var(--muted); font-weight: 800; }
 .share-link-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 8px; }
@@ -376,43 +393,199 @@ body.navigating #speed-limit.has-limit { display: inline-flex; }
 .metric-note { font-size: 11px; color: var(--muted); line-height: 1.45; }
 
 /* ---------- mobile ---------- */
-@media (max-width: 760px) {
+/* =========================================================================
+   PHONE
+   The panel becomes a bottom sheet. Two rules govern everything below:
+   nothing floats over the sheet, and every control the thumb needs is at
+   least 44px. --sheet-height is published in px by the sheet controller.
+   ========================================================================= */
+@media (max-width: 760px), (max-height: 480px) and (pointer: coarse) {
   #app { grid-template-columns: 1fr; grid-template-rows: 1fr var(--tab-h); }
-  #map-wrap { grid-row: 1; }
-  #nav { grid-row: 2; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
+  #map-wrap { grid-row: 1; --sheet-height: 50%; --sheet-anim: .3s cubic-bezier(.2,.8,.2,1); }
+
+  /* ---- bottom nav ---- */
+  #nav {
+    grid-row: 2; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    background: var(--surface); border-top: 1px solid var(--line);
+  }
   .brand { display: none; }
-  .tab { min-height: 54px; color: var(--muted); border-radius: var(--radius-md); }
+  .tab { min-height: 48px; gap: 3px; color: var(--muted); border-radius: var(--radius-md); font-size: 10px; }
   .tab.active { background: transparent; color: var(--blue); }
   .tab.tab-record { color: var(--accent); }
 
-  #panel { --sheet-height: 50%; position: absolute; z-index: 40; left: 0; right: 0; top: auto; bottom: 0; width: auto; height: var(--sheet-height); max-height: 97%; border: 0; border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 26px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px #10233d30; transition: height .32s cubic-bezier(.2, .8, .2, 1); }
+  /* ---- the sheet ---- */
+  #panel {
+    position: absolute; z-index: 40; left: 0; right: 0; top: auto; bottom: 0; width: auto;
+    height: var(--sheet-height); max-height: 94%;
+    border: 0; border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding: 32px 16px calc(18px + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 30px #10233d30;
+    transition: height var(--sheet-anim, .3s cubic-bezier(.2,.8,.2,1));
+    overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  }
   #panel[data-sheet-state="peek"], #panel[data-sheet-state="closed"] { overflow: hidden; }
-  .sheet-handle { display: block; position: absolute; left: 50%; top: 9px; transform: translateX(-50%); width: 40px; height: 5px; border-radius: var(--radius-pill); background: var(--line); touch-action: none; cursor: grab; }
-  .close { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; width: 36px; height: 36px; background: var(--surface-muted); color: var(--text); font-size: 20px; }
+  #panel[data-sheet-state="closed"] > * { opacity: 0; pointer-events: none; }
+  .sheet-dragging #panel { transition: none; }
 
+  /* The grip is a sibling of #panel so page re-renders cannot destroy it, and
+     it is a 34px strip rather than a 5px bar so it can actually be grabbed. */
+  #sheet-grip {
+    display: block; position: absolute; z-index: 41; left: 0; right: 0;
+    bottom: calc(var(--sheet-height) - 30px); height: 30px;
+    background: var(--surface); border: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    touch-action: none; cursor: grab;
+    transition: bottom var(--sheet-anim, .3s cubic-bezier(.2,.8,.2,1));
+  }
+  #sheet-grip i {
+    position: absolute; left: 50%; top: 11px; transform: translateX(-50%);
+    width: 44px; height: 5px; border-radius: var(--radius-pill); background: var(--line);
+  }
+  #sheet-grip:active { cursor: grabbing; }
+  #sheet-grip:active i, .sheet-dragging #sheet-grip i { background: var(--muted); }
+  #sheet-grip:focus-visible i { outline: 2px solid var(--blue); outline-offset: 4px; }
+
+  /* Page chrome inside the sheet. The header sticks below the grip strip, and
+     the action bar clears the home indicator. */
+  /* Pins directly below the opaque grip strip. */
+  .view-header { top: 30px; padding-top: 2px; }
+  .action-bar {
+    margin: 6px -16px calc(-18px - env(safe-area-inset-bottom));
+    padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+  }
+  .close { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; width: 40px; height: 40px; background: var(--surface-muted); color: var(--text); font-size: 20px; }
+
+  /* ---- map chrome: always above the sheet, never over the guidance banner ---- */
   #map-search { left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top)); width: auto; }
-  #nav-guidance { left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top)); width: auto; border-radius: 16px; }
+  #nav-guidance { left: 10px; right: 10px; top: calc(10px + env(safe-area-inset-top)); width: auto; border-radius: 16px; padding: 12px 14px; }
   .nav-main b { font-size: 26px; }
   .nav-main span { font-size: 15px; }
   #nav-arrow { width: 50px; height: 50px; font-size: 26px; }
-  #quick-nav { left: 12px; right: 12px; width: auto; }
+  #reroute-chip { left: 10px; top: auto; bottom: calc(var(--sheet-height) + 12px); }
+
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stats.three, .eta-bar .stats, .live-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stats.three, .eta-bar .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .live-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .mapboxgl-ctrl-top-right { display: none; }
 
-  /* Floating controls track the sheet so they are never hidden behind it. */
-  .tools, .style-menu { bottom: calc(var(--sheet-height, 16%) + 12px); transition: bottom .32s cubic-bezier(.2, .8, .2, 1); }
-  #quick-nav { bottom: calc(var(--sheet-height, 16%) + 10px); transition: bottom .32s cubic-bezier(.2, .8, .2, 1); }
-  #toast { bottom: calc(var(--sheet-height, 16%) + 70px); }
-  .route-loading.compact { bottom: calc(var(--sheet-height, 16%) + 16px); }
+  /* Floating controls ride on top of the sheet. The min() stops them climbing
+     into the guidance banner when the sheet is pulled to full height. */
+  .tools, .style-menu {
+    bottom: min(calc(var(--sheet-height) + 12px), calc(100% - 210px));
+    transition: bottom var(--sheet-anim, .3s cubic-bezier(.2,.8,.2,1));
+  }
+  .tools { right: 10px; gap: 10px; }
+  .tools button { width: 44px; height: 44px; }
+  #quick-nav {
+    left: 10px; right: 10px; width: auto;
+    bottom: min(calc(var(--sheet-height) + 10px), calc(100% - 260px));
+    max-height: calc(100% - 270px); overflow-y: auto; overscroll-behavior: contain;
+    transition: bottom var(--sheet-anim, .3s cubic-bezier(.2,.8,.2,1));
+  }
+  #toast { bottom: min(calc(var(--sheet-height) + 64px), calc(100% - 150px)); }
+  .route-loading.compact { bottom: min(calc(var(--sheet-height) + 16px), calc(100% - 200px)); }
+  .route-loading { max-width: calc(100% - 32px); }
+
+  /* Non-map pages own the screen: the map controls would only be in the way. */
   .panel-open .tools, .panel-open #quick-nav, .panel-open #map-search { display: none !important; }
   body:not(.map-view) #nav-guidance { display: none !important; }
+
+  /* ---- riding and navigating ----------------------------------------
+     The live dashboard used to float over the middle of the map as a tall
+     card, leaving barely any map to navigate by. It is now a bar on the
+     bottom edge: the numbers you steer by stay visible, and the rest is one
+     tap away behind a pull-up. */
+  #ride-live:not([hidden]) { display: flex; flex-direction: column; gap: 8px; }
+  .ride-expand {
+    order: -1; display: block; position: relative; margin: 0 auto;
+    width: 64px; height: 28px; border: 0; border-radius: var(--radius-pill);
+    background: var(--surface); box-shadow: var(--shadow-soft);
+  }
+  .ride-expand span {
+    position: absolute; left: 50%; top: 50%; width: 11px; height: 11px;
+    border-left: 2.5px solid var(--muted); border-top: 2.5px solid var(--muted);
+    transform: translate(-50%, -25%) rotate(45deg); transition: transform .25s;
+  }
+  body[data-ride-detail="open"] .ride-expand span { transform: translate(-50%, -70%) rotate(225deg); }
+
+  body[data-ride-detail="collapsed"] #ride-detail { display: none; }
+  /* Recording without navigation has no ETA strip, so a compact speed readout
+     takes its place rather than leaving the bar empty. */
+  body[data-ride-detail="collapsed"] #eta-bar[hidden] ~ #ride-detail { display: block; }
+  body[data-ride-detail="collapsed"] #eta-bar[hidden] ~ #ride-detail .live-metrics,
+  body[data-ride-detail="collapsed"] #eta-bar[hidden] ~ #ride-detail .hr-zones,
+  body[data-ride-detail="collapsed"] #eta-bar[hidden] ~ #ride-detail .record-buttons { display: none; }
+  body[data-ride-detail="collapsed"] #eta-bar[hidden] ~ #ride-detail .live-speed { padding-bottom: 0; border-bottom: 0; }
+  body[data-ride-detail="collapsed"] #eta-bar[hidden] ~ #ride-detail .live-speed b { font-size: 32px; }
+
+  .live-stats { padding: 12px 14px; border-radius: 18px; }
+  .live-speed b { font-size: 38px; }
+  .live-metrics b { font-size: 17px; }
+  .eta-bar { margin-top: 0; padding: 10px 12px; }
+  .record-buttons, .end-action-buttons { margin-top: 0; }
+  /* One visible end button should span the bar, not sit in half of it. */
+  .end-action-buttons { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  /* Floating over the map, the tinted-transparent fill left this reading as
+     bare red text on top of streets. It needs its own surface. */
+  .end-action-buttons button, .record-buttons button {
+    background: var(--surface); box-shadow: var(--shadow); min-height: 50px;
+  }
+  .end-action-buttons button { color: var(--red); }
+
+  /* The planner sheet has no role during turn-by-turn, and its grip would
+     compete with the ride bar for the same edge. */
+  body.navigating #panel, body.navigating #sheet-grip { display: none; }
+  body.navigating #quick-nav { bottom: 10px; max-height: 64%; }
+  /* --sheet-height is stale while the sheet is hidden, so anchor the map tools
+     to the ride bar instead, and get them out of the way when it opens. */
+  body.navigating .tools { bottom: min(160px, calc(100% - 210px)); }
+  body.navigating[data-ride-detail="open"] .tools { display: none; }
+
+  body.navigating .tools {
+    max-height: calc(100% - 190px); flex-wrap: wrap-reverse;
+    align-content: flex-end; gap: 8px;
+  }
+
+  /* Menus anchored to the map must stay inside it on a narrow screen. */
+  .map-location-menu, .share-choice {
+    max-height: calc(100% - 32px); overflow-y: auto; overscroll-behavior: contain;
+  }
+  .mapboxgl-ctrl-geocoder .suggestions { max-height: 40vh; }
 }
+
 @media (max-width: 390px) {
   .tab span { font-size: 9px; }
   .route-grid { gap: 10px; }
   .badge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #nav-arrow { width: 44px; height: 44px; font-size: 22px; }
+  .nav-main b { font-size: 23px; }
+}
+
+@media (max-width: 339px) {
+  .live-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Short screens (landscape phones) cannot afford the tall sheet or banner. */
+@media (max-width: 900px) and (max-height: 480px) {
+  #panel { max-height: 88%; padding-top: 26px; }
+  #nav-guidance { padding: 8px 12px; }
+  #nav-arrow { width: 38px; height: 38px; font-size: 20px; }
+  .nav-main b { font-size: 19px; }
+  #nav-lane { display: none; }
+  .tools { flex-direction: row; }
+
+  body.navigating #nav-guidance { right: auto; width: min(46%, 360px); }
+  body.navigating #quick-nav {
+    left: 10px; right: auto; width: min(46%, 360px);
+    bottom: 10px; max-height: calc(100% - 20px);
+  }
+  body.navigating .tools {
+    flex-direction: column; right: 10px; bottom: 10px;
+    max-height: calc(100% - 20px); flex-wrap: wrap-reverse; align-content: flex-end;
+  }
+  /* The ride bar already owns the left column, so the tools can stay put. */
+  body.navigating[data-ride-detail="open"] .tools { display: flex; }
 }
 
 /* Mapbox's geocoder draws its own search icon inside the field, so the input
@@ -479,11 +652,11 @@ body.route-detail #quick-nav { display: none !important; }
 }
 
 /* ---- 3. Real desktop layout: docked panel, map fills the rest ---- */
-@media (min-width: 761px) {
-  #app { grid-template-columns: 92px 520px 1fr; }
+@media (min-width: 761px) and (min-height: 481px), (min-width: 761px) and (pointer: fine) {
+  #app { grid-template-columns: 92px min(520px, 42vw) 1fr; }
   #map-wrap { grid-column: 3; }
   #panel {
-    position: fixed; z-index: 30; left: 92px; top: 0; bottom: 0; width: 520px;
+    position: fixed; z-index: 30; left: 92px; top: 0; bottom: 0; width: min(520px, 42vw);
     border-radius: 0; border: 0; border-right: 1px solid var(--line);
     box-shadow: none; padding: 20px 22px;
   }
@@ -494,14 +667,14 @@ body.route-detail #quick-nav { display: none !important; }
 }
 /* Only genuinely wide screens show the recommended loops as a grid. Laptops
    below this keep the carousel, which is where the arrows and drag matter. */
-@media (min-width: 1100px) {
+@media (min-width: 1100px) and (min-height: 481px), (min-width: 1100px) and (pointer: fine) {
   .deck-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .deck-grid .deck-card { width: auto; }
 }
 /* Nothing to scroll, nothing to point at. Set by the carousel controller on
    load and on resize, so it follows the grid breakpoint automatically. */
 .carousel-wrap.no-scroll .carousel-arrow { display: none; }
-@media (min-width: 1500px) { #app { grid-template-columns: 92px 560px 1fr; } #panel { width: 560px; } }
+@media (min-width: 1500px) and (min-height: 481px), (min-width: 1500px) and (pointer: fine) { #app { grid-template-columns: 92px 560px 1fr; } #panel { width: 560px; } }
 
 /* ---- 2. Stable loading: one anchor, forward-only steps, skeletons ---- */
 .route-progress { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 14px; box-shadow: var(--shadow-soft); }
