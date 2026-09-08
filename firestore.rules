@@ -69,12 +69,35 @@ service cloud.firestore {
         allow update: if false;
       }
 
+      // The club's main channel. Anyone signed in can read and post; a rider
+      // can only post as themselves and can only withdraw their own message.
+      match /messages/{messageId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && request.auth.uid == request.resource.data.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 800;
+        allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+        allow update: if false;
+      }
+
       match /events/{eventId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null && request.auth.uid == request.resource.data.createdBy;
         allow update: if request.auth != null && (request.auth.uid == resource.data.createdBy
           || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['goingCount']));
         allow delete: if request.auth != null && request.auth.uid == resource.data.createdBy;
+
+        // One ride's own thread, same rules as the club channel.
+        match /messages/{messageId} {
+          allow read: if request.auth != null;
+          allow create: if request.auth != null && request.auth.uid == request.resource.data.uid
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 800;
+          allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+          allow update: if false;
+        }
 
         match /attendees/{uid} {
           allow read: if request.auth != null;

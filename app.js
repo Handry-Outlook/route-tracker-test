@@ -358,6 +358,25 @@ function simplifyRoute(coords, turf2, maxPoints = 60) {
   const pts = Array.from({ length: maxPoints }, (_, i) => turf2.along(line2, length * i / (maxPoints - 1)).geometry.coordinates);
   return { type: "LineString", coordinates: pts };
 }
+var DEFAULT_PRIVACY_RADIUS_M = 400;
+function clipPrivacyEnds(coords, turf2, metres = DEFAULT_PRIVACY_RADIUS_M) {
+  if (!Array.isArray(coords) || coords.length < 2 || !(metres > 0)) return coords || null;
+  const beyond = (a, b) => {
+    try {
+      return turf2.distance(a, b, { units: "meters" }) > metres;
+    } catch {
+      return true;
+    }
+  };
+  const first = coords[0];
+  const last = coords[coords.length - 1];
+  let start2 = 0;
+  while (start2 < coords.length && !beyond(coords[start2], first)) start2++;
+  let end = coords.length - 1;
+  while (end > start2 && !beyond(coords[end], last)) end--;
+  const clipped = coords.slice(start2, end + 1);
+  return clipped.length >= 2 ? clipped : null;
+}
 function plannedDistanceKm(coords, turf2) {
   try {
     return turf2.length(turf2.lineString(coords), { units: "kilometers" });
@@ -365,22 +384,30 @@ function plannedDistanceKm(coords, turf2) {
     return 0;
   }
 }
-function routeSummaryFields(coords, plannedRoute, turf2) {
+function routeSummaryFields(coords, plannedRoute, turf2, privacyRadiusM = DEFAULT_PRIVACY_RADIUS_M) {
   if (coords.length >= 2) {
-    return { routeSummaryGeoJson: JSON.stringify(simplifyRoute(coords, turf2)), routeIsPlanned: false };
+    const shown = clipPrivacyEnds(coords, turf2, privacyRadiusM);
+    return {
+      routeSummaryGeoJson: shown ? JSON.stringify(simplifyRoute(shown, turf2)) : null,
+      routeIsPlanned: false,
+      routeEndsHidden: !!privacyRadiusM
+    };
   }
   if (Array.isArray(plannedRoute) && plannedRoute.length >= 2) {
+    const shown = clipPrivacyEnds(plannedRoute, turf2, privacyRadiusM);
+    if (!shown) return { routeSummaryGeoJson: null, routeIsPlanned: false, routeEndsHidden: !!privacyRadiusM };
     return {
-      routeSummaryGeoJson: JSON.stringify(simplifyRoute(plannedRoute, turf2)),
+      routeSummaryGeoJson: JSON.stringify(simplifyRoute(shown, turf2)),
       routeIsPlanned: true,
+      routeEndsHidden: !!privacyRadiusM,
       // The recorded distance is ~0 on these, so the card needs the plan's own
       // length to have any honest number to show.
       plannedDistanceKm: plannedDistanceKm(plannedRoute, turf2)
     };
   }
-  return { routeSummaryGeoJson: null, routeIsPlanned: false };
+  return { routeSummaryGeoJson: null, routeIsPlanned: false, routeEndsHidden: false };
 }
-async function publishActivityToFeed(user, activity, turf2) {
+async function publishActivityToFeed(user, activity, turf2, privacyRadiusM = DEFAULT_PRIVACY_RADIUS_M) {
   const db = await getCloud();
   const id = activity.id || crypto.randomUUID();
   const coords = (activity.samples || []).map((s) => s.pos).filter(Boolean);
@@ -401,7 +428,7 @@ async function publishActivityToFeed(user, activity, turf2) {
     distanceKm: activity.distance || 0,
     elevationGainM: activity.gain || 0,
     avgSpeedKmh: activity.avgSpeed || 0,
-    ...routeSummaryFields(coords, activity.plannedRoute, turf2),
+    ...routeSummaryFields(coords, activity.plannedRoute, turf2, privacyRadiusM),
     photoUrls,
     kudosCount: 0,
     commentCount: 0,
@@ -1285,6 +1312,7 @@ function filtersView() {
     const prefs = APP.ridePrefs();
     prefs[b.dataset.pref] = !prefs[b.dataset.pref];
     b.classList.toggle("on", prefs[b.dataset.pref]);
+    APP.saveRidePrefs();
     if (b.dataset.pref === "beforeSunset" && prefs.beforeSunset) APP.refreshDaylightLimit();
   };
   $2("#filterRoundTrip").onclick = (e) => {
@@ -1482,6 +1510,7 @@ function compareView() {
   };
 }
 async function render() {
+  if (!APP.isCurrentPage("explore")) return;
   const S2 = APP.state;
   if (S2.adventureView === "compare") return compareView();
   if (S2.adventureView === "search") return searchView();
@@ -1846,12 +1875,12 @@ function libraryHtml() {
   }
   const all = S2.accountRoutes || [];
   const cols = collectionsOf(all);
-  const active = S2.libraryCollection || "All routes";
-  const items = active === "All routes" ? all : all.filter((x) => x.collection === active);
+  const active2 = S2.libraryCollection || "All routes";
+  const items = active2 === "All routes" ? all : all.filter((x) => x.collection === active2);
   return `
   <div class="between">
     <div class="hscroll" id="collections" style="flex:1">
-      ${["All routes", ...cols].map((c) => `<button class="chip ${active === c ? "on" : ""}" data-collection="${APP.escapeHtml(c)}">${c === "All routes" ? "" : icon("folder", 14)}${APP.escapeHtml(c)}</button>`).join("")}
+      ${["All routes", ...cols].map((c) => `<button class="chip ${active2 === c ? "on" : ""}" data-collection="${APP.escapeHtml(c)}">${c === "All routes" ? "" : icon("folder", 14)}${APP.escapeHtml(c)}</button>`).join("")}
     </div>
     <div class="segmented" id="layoutToggle" style="width:88px;flex:0 0 auto">
       <button data-layout="grid" class="${S2.libraryLayout === "grid" ? "on" : ""}">${icon("grid", 18)}</button>
@@ -1920,6 +1949,7 @@ function refreshResults() {
   return true;
 }
 async function render2() {
+  if (!APP.isCurrentPage("plan")) return;
   const S2 = state3();
   APP.panel.innerHTML = `<div class="page">
     ${rootHeader("Plan route", "Build a route, or open one you saved")}
@@ -2064,10 +2094,18 @@ function pendingHtml(d) {
         ${photos.length < 6 ? `<label class="photo-add" style="cursor:pointer">${icon("plus", 22)}<input id="activityPhotos" type="file" accept="image/*" multiple hidden></label>` : ""}
       </div>
     </section>
-    <div class="card pad flat between">
-      <div><b style="font-size:14px;display:block">Share to feed</b><span class="muted" style="font-size:12px;font-weight:600">Visible to riders who follow you</span></div>
-      <input type="checkbox" id="shareToFeed" checked hidden>
-      <button class="toggle on" id="shareToggle" aria-pressed="true"><i></i></button>
+    <div class="card pad flat">
+      <div class="between">
+        <div><b style="font-size:14px;display:block">Share to feed</b><span class="muted" style="font-size:12px;font-weight:600">Visible to riders who follow you</span></div>
+        <input type="checkbox" id="shareToFeed" checked hidden>
+        <button class="toggle on" id="shareToggle" aria-pressed="true"><i></i></button>
+      </div>
+      <div class="between" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+        <div><b style="font-size:13px;display:block">Hide start and finish</b><span class="muted" style="font-size:12px;font-weight:600">Keeps your address off the shared map</span></div>
+        <select id="privacyRadius" style="min-height:40px;font-size:13px;max-width:130px">
+          ${[[0, "Show all"], [200, "200 m"], [400, "400 m"], [800, "800 m"], [1500, "1.5 km"]].map(([m, label]) => `<option value="${m}" ${(APP.ridePrefs().privacyRadiusM ?? 400) === m ? "selected" : ""}>${label}</option>`).join("")}
+        </select>
+      </div>
     </div>
     <div class="row" style="gap:10px">
       <button class="btn light" id="discardActivity" style="flex:1">Discard</button>
@@ -2081,6 +2119,13 @@ function wirePending() {
   const photos = $2("#activityPhotos");
   if (photos) photos.onchange = (e) => APP.attachActivityPhotos([...e.target.files]);
   $2("#shareToggle").onclick = (e) => {
+    const radius = $2("#privacyRadius");
+    if (radius) radius.onchange = () => {
+      const prefs = APP.ridePrefs();
+      prefs.privacyRadiusM = Number(radius.value);
+      APP.saveRidePrefs();
+      APP.toast(prefs.privacyRadiusM ? `Start and finish hidden within ${prefs.privacyRadiusM} m` : "Whole route will be shared");
+    };
     const box = $2("#shareToFeed");
     box.checked = !box.checked;
     e.currentTarget.classList.toggle("on", box.checked);
@@ -2200,6 +2245,7 @@ function wireHome() {
   };
 }
 async function render3() {
+  if (!APP.isCurrentPage("record")) return;
   const S2 = APP.state;
   const activities = S2.accountActivities || [];
   if (Number.isInteger(S2.activityDetailIndex) && activities[S2.activityDetailIndex]) {
@@ -2221,6 +2267,163 @@ async function render3() {
   }
   APP.panel.innerHTML = homeHtml();
   wireHome();
+}
+
+// src/social/chat.js
+var MAX_LENGTH = 800;
+var PAGE = 100;
+function messagePath(clubId, eventId) {
+  return eventId ? ["clubs", clubId, "events", eventId, "messages"] : ["clubs", clubId, "messages"];
+}
+function messageAuthor(user) {
+  return {
+    uid: user.uid,
+    displayName: user.displayName || user.email?.split("@")[0] || "Rider",
+    photoURL: user.photoURL || null
+  };
+}
+async function sendMessage(user, { clubId, eventId, text }) {
+  const body = (text || "").trim().slice(0, MAX_LENGTH);
+  if (!body) throw new Error("Nothing to send");
+  if (!clubId) throw new Error("No club");
+  const db = await getCloud();
+  await db.addDoc(db.collection(db.firestore, ...messagePath(clubId, eventId)), {
+    ...messageAuthor(user),
+    text: body,
+    // A client clock, so an optimistic local echo and the stored value sort the
+    // same way. Ordering within a busy second is not worth a server round trip.
+    sentAt: Date.now()
+  });
+}
+function watchMessages({ clubId, eventId }, onChange, max = PAGE) {
+  let stop = null;
+  let cancelled = false;
+  getCloud().then((db) => {
+    if (cancelled) return;
+    const q = db.query(
+      db.collection(db.firestore, ...messagePath(clubId, eventId)),
+      db.orderBy("sentAt", "desc"),
+      db.limit(max)
+    );
+    stop = db.onSnapshot(
+      q,
+      (snap) => {
+        if (cancelled) return;
+        onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse());
+      },
+      (error) => {
+        console.warn("Chat stream failed", error);
+        if (!cancelled) onChange(null);
+      }
+    );
+  }).catch((error) => {
+    console.warn("Chat unavailable", error);
+    if (!cancelled) onChange(null);
+  });
+  return () => {
+    cancelled = true;
+    if (stop) stop();
+    stop = null;
+  };
+}
+async function deleteMessage({ clubId, eventId, id }) {
+  const db = await getCloud();
+  await db.deleteDoc(db.doc(db.firestore, ...messagePath(clubId, eventId), id));
+}
+
+// src/ui/components/chat.js
+var active = null;
+function unmountChat() {
+  if (!active) return;
+  active.stop();
+  active = null;
+}
+function initials(name) {
+  return (name || "R").trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
+}
+function avatarColor(uid2) {
+  let h = 0;
+  for (const ch of String(uid2 || "")) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `hsl(${h} 62% 46%)`;
+}
+function timeLabel(ms) {
+  const d = new Date(ms || Date.now());
+  const today = /* @__PURE__ */ new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  return sameDay ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : `${d.toLocaleDateString([], { day: "numeric", month: "short" })} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+}
+function messageHtml(m, mine) {
+  return `<div class="chat-msg${mine ? " mine" : ""}" data-msg="${APP.escapeHtml(m.id)}">
+    ${mine ? "" : `<span class="avatar sm" style="background:${avatarColor(m.uid)}">${initials(m.displayName)}</span>`}
+    <div class="chat-bubble">
+      ${mine ? "" : `<b>${APP.escapeHtml(m.displayName || "Rider")}</b>`}
+      <p>${APP.escapeHtml(m.text || "")}</p>
+      <span class="chat-time">${timeLabel(m.sentAt)}${mine ? ` \xB7 <button class="chat-del" data-del="${APP.escapeHtml(m.id)}">Delete</button>` : ""}</span>
+    </div>
+  </div>`;
+}
+function mountChat(hostId, { clubId, eventId, title, emptyText }) {
+  unmountChat();
+  const host = APP.$(`#${hostId}`);
+  if (!host) return;
+  const S2 = APP.state;
+  if (!S2.user) {
+    host.innerHTML = `<div class="empty" style="padding:14px">Sign in to join the conversation.</div>`;
+    return;
+  }
+  host.innerHTML = `<section class="chat">
+    <div class="between" style="margin-bottom:8px">
+      <span class="section-title">${APP.escapeHtml(title)}</span>
+      <span class="muted" style="font-size:11px;font-weight:700" id="${hostId}-count"></span>
+    </div>
+    <div class="chat-log" id="${hostId}-log"><div class="empty" style="padding:14px">Loading messages\u2026</div></div>
+    <form class="chat-compose" id="${hostId}-form">
+      <input id="${hostId}-input" type="text" maxlength="800" placeholder="Message the group" autocomplete="off">
+      <button class="btn primary sm" type="submit" aria-label="Send">${icon("send", 16)}</button>
+    </form>
+  </section>`;
+  const log = APP.$(`#${hostId}-log`);
+  const form = APP.$(`#${hostId}-form`);
+  const input = APP.$(`#${hostId}-input`);
+  const count = APP.$(`#${hostId}-count`);
+  const stop = watchMessages({ clubId, eventId }, (messages) => {
+    if (!document.body.contains(log)) return;
+    if (messages === null) {
+      log.innerHTML = `<div class="empty" style="padding:14px">Messages could not be loaded.</div>`;
+      return;
+    }
+    count.textContent = messages.length ? `${messages.length} message${messages.length === 1 ? "" : "s"}` : "";
+    log.innerHTML = messages.length ? messages.map((m) => messageHtml(m, m.uid === S2.user.uid)).join("") : `<div class="empty" style="padding:14px">${APP.escapeHtml(emptyText)}</div>`;
+    log.scrollTop = log.scrollHeight;
+  });
+  active = { stop, hostId };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    input.disabled = true;
+    try {
+      await sendMessage(S2.user, { clubId, eventId, text });
+    } catch (error) {
+      console.warn("Message failed to send", error);
+      APP.toast("Message could not be sent");
+      input.value = text;
+    } finally {
+      input.disabled = false;
+      input.focus();
+    }
+  };
+  log.onclick = async (e) => {
+    const b = e.target.closest("[data-del]");
+    if (!b) return;
+    try {
+      await deleteMessage({ clubId, eventId, id: b.dataset.del });
+    } catch (error) {
+      console.warn("Message delete failed", error);
+      APP.toast("Could not delete that message");
+    }
+  };
 }
 
 // src/social/clubs.js
@@ -2289,13 +2492,19 @@ async function listEvents(clubId, max = 10) {
     return [];
   }
 }
-async function createEvent(user, clubId, { title, startsAt, meetPoint, distanceKm }) {
+async function createEvent(user, clubId, { title, startsAt, meetPoint, distanceKm, route }) {
+  if (!route?.id) throw new Error("A club ride needs a saved route");
   const db = await getCloud();
   const ref = await db.addDoc(db.collection(db.firestore, "clubs", clubId, "events"), {
     title: title.slice(0, 100),
     startsAt,
     meetPoint: (meetPoint || "").slice(0, 120),
+    // Taken from the route itself rather than typed, so the figure on the
+    // calendar always matches the line everyone will actually ride.
     distanceKm: Number(distanceKm) || 0,
+    routeId: route.id,
+    routeName: (route.name || "Route").slice(0, 120),
+    routeGeoJson: route.geoJson || null,
     createdBy: user.uid,
     goingCount: 0
   });
@@ -2420,8 +2629,8 @@ function challengeProgressKm(activities, challenge) {
 
 // src/ui/pages/segments.js
 var WEEK = 7 * 864e5;
-var initials = (n = "") => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "R";
-var avatarColor = (uid2 = "") => ["#8b5bd6", "#00a6a6", "#176bdb", "#f28b30", "#139b66"][[...uid2].reduce((a, c) => a + c.charCodeAt(0), 0) % 5];
+var initials2 = (n = "") => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "R";
+var avatarColor2 = (uid2 = "") => ["#8b5bd6", "#00a6a6", "#176bdb", "#f28b30", "#139b66"][[...uid2].reduce((a, c) => a + c.charCodeAt(0), 0) % 5];
 var startOfWeek = () => {
   const d = /* @__PURE__ */ new Date();
   d.setHours(0, 0, 0, 0);
@@ -2440,13 +2649,14 @@ var goHome2 = () => {
 function eventRowHtml(clubId, e, going) {
   const d = new Date(e.startsAt || Date.now());
   return `<div class="between" style="padding:10px 0;border-top:1px solid var(--line)">
-    <div class="row" style="gap:10px">
+    <button class="row event-open" data-event="${APP.escapeHtml(e.id)}" style="gap:10px;background:none;border:0;padding:0;text-align:left;flex:1">
       <div class="event-date"><b>${d.getDate()}</b><small>${d.toLocaleDateString([], { month: "short" }).toUpperCase()}</small></div>
       <div>
         <b style="font-size:14px;display:block">${APP.escapeHtml(e.title || "Group ride")}${e.distanceKm ? ` \xB7 ${Math.round(e.distanceKm)} km` : ""}</b>
         <span class="muted" style="font-size:12px;font-weight:600">${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}${e.meetPoint ? ` \xB7 ${APP.escapeHtml(e.meetPoint)}` : ""} \xB7 ${e.goingCount || 0} going</span>
+        ${e.routeName ? `<span class="muted" style="font-size:11px;font-weight:700;display:block;margin-top:2px">${icon("route", 11)} ${APP.escapeHtml(e.routeName)}</span>` : ""}
       </div>
-    </div>
+    </button>
     <button class="btn ${going ? "light" : "primary"} sm" data-going="${APP.escapeHtml(e.id)}" data-club="${APP.escapeHtml(clubId)}" data-on="${going ? "1" : "0"}">${going ? "Going" : "Join"}</button>
   </div>`;
 }
@@ -2678,12 +2888,14 @@ async function clubView() {
       </div>
     </section>
 
+    <div id="clubChat"></div>
+
     <section>
       <div class="between" style="margin-bottom:8px"><span class="section-title">${icon("trophy", 15)} This week</span><span class="muted" style="font-size:12px;font-weight:700">Distance</span></div>
       <div class="card pad flat">
         ${board.length ? board.slice(0, 10).map((r, i) => `<div class="leader-row">
           <span class="rank">${i + 1}</span>
-          <span class="avatar sm" style="background:${avatarColor(r.uid)}">${initials(r.name)}</span>
+          <span class="avatar sm" style="background:${avatarColor2(r.uid)}">${initials2(r.name)}</span>
           <span style="flex:1;font-size:14px;font-weight:${r.uid === S2.user.uid ? 800 : 600}">${APP.escapeHtml(r.name)}${r.uid === S2.user.uid ? " (you)" : ""}</span>
           <b style="font-size:14px">${r.total ? fmtKm(r.total) : "\u2014"}</b>
         </div>`).join("") : '<div class="empty" style="padding:14px">No member rides shared this week.</div>'}
@@ -2721,11 +2933,223 @@ async function clubView() {
       }
     };
   });
+  APP.panel.querySelectorAll("[data-event]").forEach((b) => {
+    b.onclick = () => {
+      S2.segmentsEventId = b.dataset.event;
+      S2.segmentsView = "event";
+      render4();
+    };
+  });
+  mountChat("clubChat", {
+    clubId,
+    title: "Club chat",
+    emptyText: "No messages yet. Say hello to the club."
+  });
+}
+async function newEventView() {
+  const S2 = view();
+  const saved = APP.state.accountRoutes || [];
+  const back = () => {
+    APP.clearRoutePreview();
+    S2.segmentsView = S2.segmentsClubId ? "club" : "home";
+    render4();
+  };
+  if (!saved.length) {
+    APP.panel.innerHTML = `<div class="page">
+      ${viewHeader("New club ride", "A saved route is required")}
+      <div class="card pad flat">
+        <p class="muted" style="font-size:13px;line-height:1.5;margin-bottom:12px">A club ride has to point at a route everyone can load and follow. Plan one and save it, then come back and pick it here.</p>
+        <button class="btn cta block" id="goPlan">${icon("route", 16)}Plan a route</button>
+      </div>
+    </div>`;
+    wireHeader(back);
+    APP.$("#goPlan").onclick = () => {
+      APP.state.planView = "planner";
+      APP.open("plan");
+    };
+    return;
+  }
+  const when = new Date(Date.now() + 864e5);
+  when.setHours(8, 30, 0, 0);
+  const iso = new Date(when.getTime() - when.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
+  const fromRoute = S2.clubRideFromRoute;
+  const preferred = saved.find((r) => r.name === fromRoute?.name) || saved[0];
+  if (!S2.clubRideRouteId || !saved.some((r) => String(r.id) === String(S2.clubRideRouteId))) {
+    S2.clubRideRouteId = preferred?.id;
+  }
+  const coordsOfRoute = (r) => r?.route?.geometry?.coordinates || r?.geometry?.coordinates || null;
+  const metresOf = (r) => r?.route?.distance ?? r?.distance ?? 0;
+  const ascentOf = (r) => r?.route?.ascent ?? r?.ascent ?? 0;
+  const card = (r) => {
+    const coords = coordsOfRoute(r);
+    const on = String(r.id) === String(S2.clubRideRouteId);
+    return `<button class="route-pick${on ? " on" : ""}" data-route="${APP.escapeHtml(String(r.id))}">
+      <span class="route-pick-media">${routeThumb(coords || [], 84, 64, { radius: 10 })}</span>
+      <span class="route-pick-body">
+        <b>${APP.escapeHtml(r.name || r.savedName || "Saved route")}</b>
+        <span>${fmtKm(metresOf(r) / 1e3)}${ascentOf(r) ? ` \xB7 ${fmtM(ascentOf(r))}` : ""}</span>
+        <span class="route-pick-hint">${on ? "Shown on the map" : "Tap to preview"}</span>
+      </span>
+      <span class="route-pick-tick">${on ? icon("check", 16) : ""}</span>
+    </button>`;
+  };
+  APP.panel.innerHTML = `<div class="page">
+    ${viewHeader("New club ride", "Everyone rides the same saved route")}
+    <div class="field"><label>Title</label><input id="evTitle" type="text" value="${APP.escapeHtml(fromRoute?.name || "")}" placeholder="Saturday social"></div>
+    <div class="field"><label>Date and time</label><input id="evWhen" type="datetime-local" value="${iso}"></div>
+    <div class="field"><label>Meeting point</label><input id="evMeet" type="text" placeholder="Ashton Court gate"></div>
+
+    <section>
+      <div class="between" style="margin-bottom:8px">
+        <span class="section-title">Route</span>
+        <button class="btn light sm" id="evNewRoute">${icon("plus", 14)}New route</button>
+      </div>
+      <div id="routePicks">${saved.map(card).join("")}</div>
+      <p class="muted" style="font-size:11px;font-weight:600;margin-top:6px">Members open this exact route from the ride.</p>
+    </section>
+
+    <div class="action-bar"><button class="btn cta" id="evSubmit">Add ride</button></div>
+  </div>`;
+  wireHeader(back);
+  const previewFor = (id) => {
+    const r = saved.find((x) => String(x.id) === String(id));
+    const coords = coordsOfRoute(r);
+    if (!coords || coords.length < 2) {
+      APP.toast("That route has no line to preview");
+      return;
+    }
+    APP.previewRouteOnMap(coords);
+  };
+  APP.$("#routePicks").onclick = (e) => {
+    const b = e.target.closest("[data-route]");
+    if (!b) return;
+    S2.clubRideRouteId = b.dataset.route;
+    APP.$("#routePicks").innerHTML = saved.map(card).join("");
+    previewFor(S2.clubRideRouteId);
+    APP.setSheetState("half");
+  };
+  APP.$("#evNewRoute").onclick = () => {
+    APP.clearRoutePreview();
+    APP.state.planView = "planner";
+    S2.clubRideReturn = true;
+    APP.open("plan");
+  };
+  previewFor(S2.clubRideRouteId);
+  APP.$("#evSubmit").onclick = async (e) => {
+    const btn = e.currentTarget;
+    const title = APP.$("#evTitle").value.trim();
+    const whenValue = APP.$("#evWhen").value;
+    const chosen = saved.find((r) => String(r.id) === String(S2.clubRideRouteId));
+    if (!title) return APP.toast("Give the ride a title");
+    if (!whenValue) return APP.toast("Pick a date and time");
+    if (!chosen) return APP.toast("Pick a route for this ride");
+    const coords = coordsOfRoute(chosen);
+    btn.disabled = true;
+    try {
+      await createEvent(S2.user, S2.segmentsClubId, {
+        title,
+        startsAt: new Date(whenValue).getTime(),
+        meetPoint: APP.$("#evMeet").value.trim(),
+        distanceKm: metresOf(chosen) / 1e3,
+        route: {
+          id: chosen.id,
+          name: chosen.name || chosen.savedName || "Saved route",
+          geoJson: coords ? JSON.stringify({ type: "LineString", coordinates: APP.sample(coords, Math.min(60, coords.length)) }) : null
+        }
+      });
+      APP.toast("Club ride added");
+      APP.clearRoutePreview();
+      S2.clubRideFromRoute = null;
+      S2.segmentsView = "club";
+      render4();
+    } catch (error) {
+      console.warn("Could not add the club ride", error);
+      APP.toast("Could not add that ride");
+      btn.disabled = false;
+    }
+  };
+}
+async function eventView() {
+  const S2 = view();
+  const clubId = S2.segmentsClubId;
+  const eventId = S2.segmentsEventId;
+  const back = () => {
+    S2.segmentsView = "club";
+    S2.segmentsEventId = null;
+    render4();
+  };
+  APP.panel.innerHTML = `<div class="page">${viewHeader("Ride", "Loading\u2026")}<div class="empty">Loading ride\u2026</div></div>`;
+  wireHeader(back);
+  const events = await listEvents(clubId, 40);
+  if (!APP.isCurrentPage("segments") || S2.segmentsView !== "event") return;
+  const ride = events.find((e) => e.id === eventId);
+  if (!ride) {
+    APP.toast("That ride is no longer listed");
+    return back();
+  }
+  const going = await isAttending(S2.user.uid, clubId, eventId).catch(() => false);
+  if (!APP.isCurrentPage("segments") || S2.segmentsView !== "event") return;
+  let coords = null;
+  try {
+    coords = ride.routeGeoJson ? JSON.parse(ride.routeGeoJson)?.coordinates : null;
+  } catch {
+    coords = null;
+  }
+  const when = new Date(ride.startsAt || Date.now());
+  APP.panel.innerHTML = `<div class="page">
+    ${viewHeader(ride.title || "Group ride", `${when.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })} \xB7 ${when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`)}
+
+    <div class="card" style="overflow:hidden">
+      <div class="route-media" style="height:150px">${coords?.length > 1 ? `<img src="${staticRouteImage(coords, APP.MAPBOX_TOKEN, { w: 720, h: 300 })}" alt="Route for ${APP.escapeHtml(ride.title || "this ride")}" loading="lazy">` : `<div class="mini-media-empty">${icon("route", 16)}<span>No route attached</span></div>`}</div>
+      <div style="padding:12px 14px">
+        <div class="stats three" style="margin-bottom:10px">
+          <div class="stat"><b>${ride.distanceKm ? fmtKm(ride.distanceKm) : "\u2014"}</b><small>distance</small></div>
+          <div class="stat"><b>${ride.goingCount || 0}</b><small>going</small></div>
+          <div class="stat"><b>${when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</b><small>start</small></div>
+        </div>
+        ${ride.meetPoint ? `<p class="muted" style="font-size:12px;font-weight:600;margin-bottom:10px">${icon("pin", 12)} ${APP.escapeHtml(ride.meetPoint)}</p>` : ""}
+        <div class="row" style="gap:8px">
+          <button class="btn ${going ? "light" : "primary"} sm" id="eventGoing" style="flex:1">${going ? "Going" : "Join ride"}</button>
+          ${ride.routeId ? `<button class="btn light sm" id="eventLoadRoute" style="flex:1">${icon("route", 14)}Load route</button>` : ""}
+        </div>
+      </div>
+    </div>
+
+    <div id="eventChat"></div>
+  </div>`;
+  wireHeader(back);
+  APP.$("#eventGoing").onclick = async (e) => {
+    e.currentTarget.disabled = true;
+    try {
+      await toggleAttendance(S2.user, clubId, eventId, going);
+      render4();
+    } catch (error) {
+      console.warn("Attendance failed", error);
+      APP.toast("Could not update");
+      e.currentTarget.disabled = false;
+    }
+  };
+  const load = APP.$("#eventLoadRoute");
+  if (load) load.onclick = async () => {
+    if (!coords || coords.length < 2) return APP.toast("This ride has no route to load");
+    await APP.useSavedActivityRoute({
+      name: ride.routeName || ride.title || "Club ride",
+      distance: ride.distanceKm || 0,
+      elapsed: 0,
+      samples: coords.map((pos) => ({ pos }))
+    });
+  };
+  mountChat("eventChat", {
+    clubId,
+    eventId,
+    title: "Ride chat",
+    emptyText: "No messages yet. Sort out the meeting point here."
+  });
 }
 function formView(title, subtitle, fields, onSubmit, submitLabel) {
   APP.panel.innerHTML = `<div class="page">
     ${viewHeader(title, subtitle)}
-    ${fields.map((f) => `<div class="field"><label>${f.label}</label><input id="${f.id}" type="${f.type || "text"}" ${f.value !== void 0 ? `value="${APP.escapeHtml(String(f.value))}"` : ""} ${f.min !== void 0 ? `min="${f.min}"` : ""} placeholder="${APP.escapeHtml(f.placeholder || "")}"></div>`).join("")}
+    ${fields.map((f) => `<div class="field"><label>${f.label}</label>${f.type === "select" ? `<select id="${f.id}">${(f.options || []).map((o) => `<option value="${APP.escapeHtml(String(o.value))}" ${String(o.value) === String(f.value) ? "selected" : ""}>${APP.escapeHtml(o.label)}</option>`).join("")}</select>` : `<input id="${f.id}" type="${f.type || "text"}" ${f.value !== void 0 ? `value="${APP.escapeHtml(String(f.value))}"` : ""} ${f.min !== void 0 ? `min="${f.min}"` : ""} placeholder="${APP.escapeHtml(f.placeholder || "")}">`}${f.hint ? `<small class="muted" style="font-size:11px;font-weight:600;display:block;margin-top:4px">${f.hint}</small>` : ""}</div>`).join("")}
     <div class="action-bar"><button class="btn cta" id="formSubmit">${submitLabel}</button></div>
   </div>`;
   wireHeader(() => {
@@ -2752,9 +3176,12 @@ function formView(title, subtitle, fields, onSubmit, submitLabel) {
   };
 }
 async function render4() {
+  if (!APP.isCurrentPage("segments")) return;
+  unmountChat();
   const S2 = view();
   if (!S2.user && S2.segmentsView !== "home") S2.segmentsView = "home";
   if (S2.segmentsView === "club") return clubView();
+  if (S2.segmentsView === "event" && S2.segmentsClubId && S2.segmentsEventId) return eventView();
   if (S2.segmentsView === "newClub") {
     return formView("New club", "Riders can find and join it", [
       { id: "name", label: "Club name", required: true, placeholder: "Bristol Gravel Collective" },
@@ -2784,29 +3211,7 @@ async function render4() {
     });
     return;
   }
-  if (S2.segmentsView === "newEvent") {
-    const when = new Date(Date.now() + 864e5);
-    when.setHours(8, 30, 0, 0);
-    const iso = new Date(when.getTime() - when.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
-    const fromRoute = S2.clubRideFromRoute;
-    return formView("New club ride", fromRoute ? "Prefilled from your route" : "Add a group ride to the calendar", [
-      { id: "title", label: "Title", required: true, value: fromRoute?.name || "", placeholder: "Saturday social" },
-      { id: "when", label: "Date and time", type: "datetime-local", value: iso, required: true },
-      { id: "meetPoint", label: "Meeting point", placeholder: "Ashton Court gate" },
-      { id: "distanceKm", label: "Distance (km)", type: "number", min: 0, value: fromRoute ? Math.round(fromRoute.distanceKm) : "", placeholder: "60" }
-    ], async (v) => {
-      await createEvent(S2.user, S2.segmentsClubId, {
-        title: v.title,
-        startsAt: new Date(v.when).getTime(),
-        meetPoint: v.meetPoint,
-        distanceKm: v.distanceKm
-      });
-      APP.toast("Club ride added");
-      S2.clubRideFromRoute = null;
-      S2.segmentsView = "club";
-      render4();
-    }, "Add ride");
-  }
+  if (S2.segmentsView === "newEvent") return newEventView();
   if (S2.segmentsView === "newChallenge") {
     const end = new Date(Date.now() + 30 * 864e5);
     return formView("New challenge", "Progress counts your saved rides", [
@@ -2829,8 +3234,8 @@ async function render4() {
 }
 
 // src/ui/pages/profile.js
-var initials2 = (name = "") => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "R";
-var avatarColor2 = (uid2 = "") => ["#8b5bd6", "#00a6a6", "#176bdb", "#f28b30", "#139b66"][[...uid2].reduce((a, c) => a + c.charCodeAt(0), 0) % 5];
+var initials3 = (name = "") => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "R";
+var avatarColor3 = (uid2 = "") => ["#8b5bd6", "#00a6a6", "#176bdb", "#f28b30", "#139b66"][[...uid2].reduce((a, c) => a + c.charCodeAt(0), 0) % 5];
 function relTime(ms) {
   const diff = Date.now() - (ms || 0);
   const mins = Math.round(diff / 6e4);
@@ -2867,7 +3272,7 @@ function feedCardHtml(a, given) {
   const img = coords ? staticRouteImage(coords, APP.MAPBOX_TOKEN, { w: 640, h: 280 }) : null;
   return `<article class="card feed-card" data-feed="${APP.escapeHtml(a.id)}">
     <div class="feed-head row">
-      <span class="avatar" style="background:${avatarColor2(a.ownerId)}">${a.ownerPhotoURL ? `<img src="${APP.escapeHtml(a.ownerPhotoURL)}" alt="">` : initials2(a.ownerDisplayName)}</span>
+      <span class="avatar" style="background:${avatarColor3(a.ownerId)}">${a.ownerPhotoURL ? `<img src="${APP.escapeHtml(a.ownerPhotoURL)}" alt="">` : initials3(a.ownerDisplayName)}</span>
       <div style="flex:1"><b style="font-size:14px;display:block">${APP.escapeHtml(a.ownerDisplayName || "Rider")}</b><span class="muted" style="font-size:12px;font-weight:600">${relTime(a.startedAt)}</span></div>
     </div>
     <div class="feed-title">${APP.escapeHtml(a.title || "Cycling activity")}</div>
@@ -2934,7 +3339,7 @@ function wireFeed() {
     }
     const flags = await Promise.all(people.map((p) => isFollowing(S2.user.uid, p.uid).catch(() => false)));
     box2.innerHTML = people.map((p, i) => `<div class="item">
-      <span class="row"><span class="avatar sm" style="background:${avatarColor2(p.uid)}">${initials2(p.displayName)}</span>${APP.escapeHtml(p.displayName || "Rider")}</span>
+      <span class="row"><span class="avatar sm" style="background:${avatarColor3(p.uid)}">${initials3(p.displayName)}</span>${APP.escapeHtml(p.displayName || "Rider")}</span>
       <button class="btn ${flags[i] ? "light" : "primary"} sm" data-follow="${APP.escapeHtml(p.uid)}" data-on="${flags[i] ? "1" : "0"}">${flags[i] ? "Following" : "Follow"}</button>
     </div>`).join("");
     box2.querySelectorAll("[data-follow]").forEach((b) => {
@@ -3003,12 +3408,12 @@ async function loadThread(box, id) {
   const comments = await listComments(id).catch(() => []);
   box.innerHTML = `
     ${comments.length ? comments.map((c) => `<div class="comment-row" style="margin-bottom:10px">
-      <span class="avatar sm" style="background:${avatarColor2(c.authorUid)}">${initials2(c.authorDisplayName)}</span>
+      <span class="avatar sm" style="background:${avatarColor3(c.authorUid)}">${initials3(c.authorDisplayName)}</span>
       <div style="flex:1"><div class="row" style="gap:6px"><b style="font-size:13px">${APP.escapeHtml(c.authorDisplayName || "Rider")}</b></div>
       <div class="comment-bubble">${APP.escapeHtml(c.text || "")}</div></div>
     </div>`).join("") : '<p class="muted" style="font-size:12px;font-weight:600">No comments yet.</p>'}
     <div class="comment-compose">
-      <span class="avatar sm" style="background:${avatarColor2(S2.user?.uid || "")}">${initials2(S2.user?.displayName || S2.user?.email || "You")}</span>
+      <span class="avatar sm" style="background:${avatarColor3(S2.user?.uid || "")}">${initials3(S2.user?.displayName || S2.user?.email || "You")}</span>
       <input type="text" placeholder="Add a comment" autocomplete="off">
       <button class="iconbtn round" style="background:var(--blue);color:#fff;border:0">${icon("send", 18)}</button>
     </div>`;
@@ -3079,7 +3484,7 @@ async function youHtml() {
   const name = S2.user.displayName || S2.user.email?.split("@")[0] || "Rider";
   return `
     <div style="text-align:center">
-      <span class="avatar lg" style="background:linear-gradient(135deg,var(--accent),var(--blue))">${initials2(name)}</span>
+      <span class="avatar lg" style="background:linear-gradient(135deg,var(--accent),var(--blue))">${initials3(name)}</span>
       <h2 style="margin-top:10px">${APP.escapeHtml(name)}</h2>
       <p class="muted" style="font-size:13px;font-weight:600">${APP.escapeHtml(S2.user.email || "")}</p>
     </div>
@@ -3146,6 +3551,7 @@ function wireYou() {
   });
 }
 async function render5() {
+  if (!APP.isCurrentPage("profile")) return;
   const S2 = view2();
   APP.panel.innerHTML = shellHtml('<div class="empty">Loading\u2026</div>', S2.profileView);
   APP.$("#profileTabs").onclick = (e) => {
@@ -3529,37 +3935,69 @@ async function fetchOverpassArea(bbox, bufferDeg = 0.01) {
     return null;
   }
 }
+function wayBounds(way) {
+  const coords = way?.coords;
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of coords) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+}
 function pointNearWay(point, way, toleranceKm, turf2) {
   if (way.coords.length < 2) return false;
   try {
     const line2 = turf2.lineString(way.coords);
     const snap = turf2.nearestPointOnLine(line2, turf2.point(point));
-    return (snap.properties.dist || Infinity) <= toleranceKm;
+    const dist = snap.properties.dist;
+    return Number.isFinite(dist) && dist <= toleranceKm;
   } catch {
     return false;
   }
 }
-function scoreRouteAgainstOverpass(routeCoords, overpassData, turf2, sampleEveryKm = 0.12) {
+async function scoreRouteAgainstOverpass(routeCoords, overpassData, turf2, options = {}) {
+  const { sampleEveryKm = 0.12, maxSamples = 240, shouldContinue = () => true } = options;
   if (!overpassData?.ways?.length || !routeCoords?.length) return null;
   const line2 = turf2.lineString(routeCoords);
   const totalKm = turf2.length(line2);
   if (totalKm < 0.05) return null;
+  const ways = [];
+  for (const way of overpassData.ways) {
+    const bounds = wayBounds(way);
+    if (bounds) ways.push({ way, bounds });
+  }
+  if (!ways.length) return null;
+  const step2 = Math.max(sampleEveryKm, totalKm / maxSamples);
+  const pad = 0.02 / 111 + 5e-4;
   let weightedKm = 0;
   let unpavedKm = 0;
   let sampledKm = 0;
-  for (let d = 0; d < totalKm; d += sampleEveryKm) {
+  let n = 0;
+  for (let d = 0; d < totalKm; d += step2, n++) {
+    if ((n & 31) === 0) {
+      if (!shouldContinue()) return null;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
     const point = turf2.along(line2, d).geometry.coordinates;
+    const px = point[0];
+    const py = point[1];
     let bestWeight = 0;
     let unpaved = false;
-    for (const way of overpassData.ways) {
-      if (!pointNearWay(point, way, 0.02, turf2)) continue;
-      const weight = INFRA_WEIGHTS[way.highway] ?? 0.15;
+    for (const entry of ways) {
+      const b = entry.bounds;
+      if (px < b.minX - pad || px > b.maxX + pad) continue;
+      if (py < b.minY - pad || py > b.maxY + pad) continue;
+      if (!pointNearWay(point, entry.way, 0.02, turf2)) continue;
+      const weight = INFRA_WEIGHTS[entry.way.highway] ?? 0.15;
       if (weight > bestWeight) bestWeight = weight;
-      if (/unpaved|gravel|dirt|ground|grass/.test(way.surface)) unpaved = true;
+      if (/unpaved|gravel|dirt|ground|grass/.test(entry.way.surface)) unpaved = true;
     }
-    weightedKm += bestWeight * sampleEveryKm;
-    if (unpaved) unpavedKm += sampleEveryKm;
-    sampledKm += sampleEveryKm;
+    weightedKm += bestWeight * step2;
+    if (unpaved) unpavedKm += step2;
+    sampledKm += step2;
   }
   const score = Math.round(Math.min(100, weightedKm / Math.max(0.05, sampledKm) * 100));
   const unpavedShare = unpavedKm / Math.max(0.05, sampledKm);
@@ -3595,7 +4033,15 @@ __export(quality_exports, {
 });
 var QUIET = { cycleway: 1, path: 0.9, track: 0.75, living_street: 0.7, residential: 0.5, unclassified: 0.45, tertiary: 0.25, secondary: 0.1, primary: 0 };
 function defaultPrefs() {
-  return { avoidHills: false, quietRoads: true, pavedOnly: false, tailwindHome: false, beforeSunset: false };
+  return {
+    avoidHills: false,
+    quietRoads: true,
+    pavedOnly: false,
+    tailwindHome: false,
+    beforeSunset: false,
+    // Metres trimmed from each end of a shared route. 0 shares the whole line.
+    privacyRadiusM: 400
+  };
 }
 function cyclewayAnchors(overpassData, start2, radiusKm, turf2, max = 12) {
   const ways = overpassData?.ways || [];
@@ -3972,7 +4418,7 @@ async function offlineSizeBytes() {
 var markers = /* @__PURE__ */ new Map();
 var timer = 0;
 var running = false;
-var initials3 = (n = "") => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "R";
+var initials4 = (n = "") => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "R";
 var colorFor = (uid2 = "") => ["#8b5bd6", "#00a6a6", "#176bdb", "#f28b30", "#139b66"][[...uid2].reduce((a, c) => a + c.charCodeAt(0), 0) % 5];
 async function fetchActiveFriends(uid2) {
   const uids = await listFollowingUids(uid2).catch(() => []);
@@ -3999,7 +4445,7 @@ function markerElement(friend) {
   const el = document.createElement("div");
   el.className = "friend-marker";
   el.style.background = colorFor(friend.ownerId);
-  el.textContent = initials3(friend.name);
+  el.textContent = initials4(friend.name);
   el.title = `${friend.name} is riding now`;
   return el;
 }
@@ -4300,9 +4746,38 @@ var NAV = [["explore", "compass", "Adventure"], ["plan", "route", "Plan"], ["rec
 $("#nav").insertAdjacentHTML("beforeend", NAV.map(([p, i, label]) => `<button class="tab${p === "record" ? " tab-record" : ""}" data-p="${p}">${icon(i, 22)}<span>${label}</span></button>`).join(""));
 $("#nav").onclick = (e) => {
   const b = e.target.closest("[data-p]");
-  if (b) open(b.dataset.p);
+  if (b) {
+    S.userNavigated = true;
+    open(b.dataset.p);
+  }
+};
+addEventListener("keydown", (e) => {
+  if (!(e.key === "z" || e.key === "Z") || !(e.ctrlKey || e.metaKey) || e.shiftKey) return;
+  const el = document.activeElement;
+  if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+  if (!S.routeUndo.length) return;
+  e.preventDefault();
+  undoRouteEdit();
+  toast("Route edit undone");
+});
+$("#edit-done").onclick = async () => {
+  if (S.editingSavedId) {
+    S.editingSavedId = null;
+    S.routeUndo = [];
+    S.nodes.forEach((m) => m.remove());
+    S.nodes = [];
+    updateUndoButton();
+    updateEditBanner();
+    toast("Finished editing \xB7 your changes are saved");
+    return;
+  }
+  if (S.selected === null) return;
+  await saveRouteByIndex(S.selected);
 };
 var sheet = createBottomSheet(panel, { mobile });
+function setSheetState(state4) {
+  if (mobile()) sheet.setState(state4);
+}
 function stop3DPreview() {
   S.previewRun++;
   map.stop();
@@ -4344,7 +4819,17 @@ function bind() {
   if (b) b.onclick = () => open(S.page === "weather" ? "profile" : "explore");
 }
 var PAGES = { explore: () => render(), plan: () => render2(), record: () => render3(), segments: () => render4(), profile: () => render5(), weather: () => weather() };
-function render7() {
+var renderCoalesceKey = "";
+function isCurrentPage(key) {
+  return S.page === key || key === "explore" && MAP_PAGES.includes(S.page);
+}
+function render7(force = false) {
+  const key = `${S.page}:${S.routeDetailOpen ? "detail" : "main"}`;
+  if (!force && renderCoalesceKey === key) return;
+  renderCoalesceKey = key;
+  requestAnimationFrame(() => {
+    renderCoalesceKey = "";
+  });
   const fn = S.routeDetailOpen && MAP_PAGES.includes(S.page) ? () => render6() : PAGES[S.page] || PAGES.explore;
   try {
     const out = fn();
@@ -5127,6 +5612,11 @@ async function accept(rs, append) {
   S.selected = null;
   S.route = null;
   drawAll();
+  if (S.routes.length) {
+    S.selected = 0;
+    S.route = S.routes[0];
+    nodes();
+  }
   cards();
   stars();
   updateQuickNav();
@@ -5163,14 +5653,22 @@ async function enrich(r) {
   r.wind = Array.isArray(r.wind) ? r.wind : [];
   refineCycleScoreWithOverpass(r);
 }
+var cycleScoreTimer = 0;
+function scheduleCycleScoreRefinement(route, delayMs = 1200) {
+  clearTimeout(cycleScoreTimer);
+  cycleScoreTimer = setTimeout(() => refineCycleScoreWithOverpass(route), delayMs);
+}
 async function refineCycleScoreWithOverpass(route) {
   routeStep("score");
+  const current2 = () => Array.isArray(S.routes) && S.routes.includes(route);
   try {
     const coords = route?.geometry?.coordinates;
     if (!coords?.length) return;
     const bbox = turf.bbox(turf.lineString(coords));
     const data = await fetchOverpassArea(bbox);
-    const result = data && scoreRouteAgainstOverpass(coords, data, turf);
+    if (!current2()) return;
+    const result = data && await scoreRouteAgainstOverpass(coords, data, turf, { shouldContinue: current2 });
+    if (!current2()) return;
     if (result) {
       route.osmCycleScore = result.score;
       route.surfaceUnpavedShare = result.unpavedShare;
@@ -5179,7 +5677,7 @@ async function refineCycleScoreWithOverpass(route) {
     console.warn("Overpass cycle-infra scoring unavailable; keeping estimate", error);
   } finally {
     route.cycleScorePending = false;
-    if (S.routes.includes(route)) {
+    if (current2()) {
       applyRidePreferences(S.routes);
       cards();
       if (S.page === "explore" && !S.routeDetailOpen) refreshPage();
@@ -5244,6 +5742,37 @@ function addRouteDirectionArrows(sourceId, color, width) {
   ensureRouteArrowImage(imageId, color);
   map.addLayer({ id: layerId, type: "symbol", source: sourceId, layout: { "symbol-placement": "line", "symbol-spacing": width >= 8 ? 90 : 130, "icon-image": imageId, "icon-size": width >= 8 ? 0.65 : 0.48, "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-rotation-alignment": "map" }, paint: { "icon-opacity": width >= 8 ? 0.95 : 0.62 } });
   S.layers.push(layerId);
+}
+var ROUTE_PREVIEW_LAYER = "route-preview";
+function clearRoutePreview() {
+  if (map.getLayer(ROUTE_PREVIEW_LAYER)) map.removeLayer(ROUTE_PREVIEW_LAYER);
+  if (map.getSource(ROUTE_PREVIEW_LAYER)) map.removeSource(ROUTE_PREVIEW_LAYER);
+  S.layers = S.layers.filter((id) => id !== ROUTE_PREVIEW_LAYER);
+}
+function fitMapToCoords(coords) {
+  if (!Array.isArray(coords) || coords.length < 2) return;
+  let minX = 180, minY = 90, maxX = -180, maxY = -90;
+  for (const c of coords) {
+    if (c[0] < minX) minX = c[0];
+    if (c[0] > maxX) maxX = c[0];
+    if (c[1] < minY) minY = c[1];
+    if (c[1] > maxY) maxY = c[1];
+  }
+  const bottom = mobile() ? Math.round(innerHeight * 0.42) : 60;
+  try {
+    map.fitBounds([[minX, minY], [maxX, maxY]], { padding: { top: 70, left: 40, right: 40, bottom }, duration: 600 });
+  } catch (error) {
+    console.warn("Could not frame the route", error);
+  }
+}
+function previewRouteOnMap(coords, { fit = true } = {}) {
+  clearRoutePreview();
+  if (!Array.isArray(coords) || coords.length < 2) return false;
+  map.addSource(ROUTE_PREVIEW_LAYER, { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } } });
+  map.addLayer({ id: ROUTE_PREVIEW_LAYER, type: "line", source: ROUTE_PREVIEW_LAYER, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": colors[1] || "#2f7fd8", "line-width": 6, "line-opacity": 0.95 } });
+  S.layers.push(ROUTE_PREVIEW_LAYER);
+  if (fit) fitMapToCoords(coords);
+  return true;
 }
 function clearLines() {
   const ids = [...new Set(S.layers)];
@@ -5448,9 +5977,23 @@ async function saveRouteByIndex(i) {
   if (!route) return;
   if (!Array.isArray(route.requiredNavigationWaypoints)) route.requiredNavigationWaypoints = navigationWaypointSequence();
   const name = prompt("Route name", S.mode === "loop" ? `${S.names[0] || "Adventure"} loop` : `${S.names[0] || "Start"} to ${S.names.at(-1) || "Finish"}`);
-  if (!name?.trim()) return;
-  await putAccountItem("routes", { id: crypto.randomUUID(), name: name.trim(), route: structuredClone(route), names: structuredClone(S.names), waypoints: structuredClone(S.waypoints), mode: S.mode, createdAt: Date.now() });
+  if (!name?.trim()) return false;
+  const savedItem = { id: crypto.randomUUID(), name: name.trim(), route: structuredClone(route), names: structuredClone(S.names), waypoints: structuredClone(S.waypoints), mode: S.mode, createdAt: Date.now() };
+  await putAccountItem("routes", savedItem);
+  if (S.selected === i) {
+    S.editingSavedId = savedItem.id;
+    if (S.route) S.route.savedName = savedItem.name;
+  }
+  S.routeUndo = [];
+  updateUndoButton();
+  updateEditBanner();
   toast("Route saved to your account");
+  if (S.clubRideReturn) {
+    S.clubRideReturn = false;
+    S.segmentsView = "newEvent";
+    open("segments");
+  }
+  return true;
 }
 async function renameSavedRoute(saved, index) {
   if (!requireAccount("rename routes")) return;
@@ -5492,10 +6035,10 @@ function undoRouteEdit() {
 }
 function updateUndoButton() {
   const b = $("#route-undo");
-  if (b) {
-    b.hidden = !S.routeUndo.length || S.page !== "explore";
-    b.onclick = undoRouteEdit;
-  }
+  if (!b) return;
+  b.hidden = !S.routeUndo.length || !!S.navState;
+  b.onclick = undoRouteEdit;
+  updateEditBanner();
 }
 function savedRouteBadges(item) {
   const route = item.route || {}, badges = [];
@@ -5515,6 +6058,23 @@ function savedRouteMiniChart(values, color) {
   const lo = Math.min(...values), hi = Math.max(...values), points = values.map((v, i) => `${(i / (values.length - 1) * 100).toFixed(1)},${(34 - (v - lo) / (hi - lo || 1) * 28).toFixed(1)}`).join(" ");
   return `<svg class="saved-mini-chart" viewBox="0 0 100 38" preserveAspectRatio="none" aria-hidden="true"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.2" vector-effect="non-scaling-stroke"/></svg>`;
 }
+function updateEditBanner() {
+  const box = $("#edit-banner"), label = $("#edit-banner-text"), action = $("#edit-done");
+  if (!box || !label || !action) return;
+  const editable = !!S.route && S.selected !== null && !S.navState;
+  const library = editable && !!S.editingSavedId;
+  const unsavedEdit = editable && !S.editingSavedId && S.routeUndo.length > 0;
+  box.hidden = !(library || unsavedEdit);
+  if (box.hidden) return;
+  box.dataset.mode = library ? "library" : "unsaved";
+  if (library) {
+    label.textContent = `Editing "${S.route.savedName || "saved route"}" \xB7 changes save automatically`;
+    action.textContent = "Done";
+  } else {
+    label.textContent = "Route edited \xB7 not saved yet";
+    action.textContent = "Save route";
+  }
+}
 function loadSavedRoute(x, edit = true) {
   S.route = structuredClone(x.route);
   S.routes = [S.route];
@@ -5526,11 +6086,17 @@ function loadSavedRoute(x, edit = true) {
   S.route.savedName = x.name || "Saved route";
   clearLines();
   line("chosen", S.route.geometry, colors[0], 8);
-  open("explore");
+  fitMapToCoords(S.route.geometry?.coordinates);
+  if (MAP_PAGES.includes(S.page)) open("explore");
+  else {
+    render7();
+    setSheetState("half");
+  }
   cards();
   if (edit) nodes();
   updateQuickNav();
-  toast(edit ? "Saved route opened in edit mode" : "Saved route opened");
+  updateEditBanner();
+  toast(edit ? "Drag the blue handles to reshape \xB7 changes save automatically" : "Saved route opened");
 }
 function exportSelectedRouteGpx() {
   if (!S.route) return toast("Select a route first");
@@ -5809,6 +6375,7 @@ function select(i) {
   nodes();
   cards();
   updateQuickNav();
+  updateEditBanner();
 }
 function drawCharts() {
   document.querySelectorAll("[data-e]").forEach((c) => {
@@ -5900,18 +6467,56 @@ function drawChartPlaceholder(c, text) {
   x.fillText(text, w / 2, h / 2);
   x.textAlign = "start";
 }
+function waypointIndexFor(location2) {
+  if (!Array.isArray(location2)) return -1;
+  const required = S.route?.requiredNavigationWaypoints || [];
+  let best = -1, bestM = WAYPOINT_GRAB_M;
+  required.forEach((point, i) => {
+    try {
+      const m = turf.distance(point, location2, { units: "meters" });
+      if (m <= bestM) {
+        bestM = m;
+        best = i;
+      }
+    } catch {
+    }
+  });
+  return best;
+}
 function nodes() {
   S.nodes.forEach((m) => m.remove());
   S.nodes = [];
-  const steps = S.route?.legs?.flatMap((l) => l.steps) || [];
-  steps.slice(1, -1).forEach((step2, stepIndex) => {
+  const steps = S.route?.legs?.flatMap((leg) => leg.steps) || [];
+  const places = [];
+  steps.slice(1, -1).forEach((step2) => {
+    const location2 = step2.maneuver?.location;
+    if (!Array.isArray(location2)) return;
+    const waypointIndex = waypointIndexFor(location2);
+    const existing = places.find((place) => {
+      try {
+        const a = map.project(place.location), b = map.project(location2);
+        return Math.hypot(a.x - b.x, a.y - b.y) <= HANDLE_SPACING_PX;
+      } catch {
+        return false;
+      }
+    });
+    if (existing) {
+      if (waypointIndex >= 0 && existing.waypointIndex < 0) {
+        existing.location = location2;
+        existing.waypointIndex = waypointIndex;
+      }
+      return;
+    }
+    places.push({ location: location2, waypointIndex });
+  });
+  places.forEach(({ location: location2, waypointIndex }) => {
     const el = document.createElement("div");
-    el.className = "turn";
-    el.title = "Drag to reshape this route";
-    const marker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat(step2.maneuver.location).addTo(map);
+    el.className = waypointIndex >= 0 ? "turn turn-waypoint" : "turn";
+    el.title = waypointIndex >= 0 ? "Drag to move this waypoint" : "Drag to reshape this route";
+    if (waypointIndex >= 0) el.dataset.waypoint = String(waypointIndex);
+    const marker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat(location2).addTo(map);
     marker.on("dragend", async () => {
-      const dragged = marker.getLngLat().toArray();
-      await reshapeSelectedRoute(dragged, step2.maneuver.location);
+      await reshapeSelectedRoute(marker.getLngLat().toArray(), location2, waypointIndex);
     });
     S.nodes.push(marker);
   });
@@ -5960,7 +6565,19 @@ function monotonicRouteProgress(line2, points) {
     return at;
   });
 }
-function insertDraggedPointByRouteProgress(route, required, dragged, original) {
+function alignWaypointNames(nextPoints, previousPoints, previousNames) {
+  const same = (a, b) => Array.isArray(a) && Array.isArray(b) && Math.abs(a[0] - b[0]) < 1e-7 && Math.abs(a[1] - b[1]) < 1e-7;
+  return nextPoints.map((point) => {
+    const i = previousPoints.findIndex((p) => same(p, point));
+    return i >= 0 ? previousNames[i] || "" : "Route edit";
+  });
+}
+var WAYPOINT_GRAB_M = 15;
+var HANDLE_SPACING_PX = 30;
+function insertDraggedPointByRouteProgress(route, required, dragged, original, movingIndex = -1) {
+  if (movingIndex >= 0 && movingIndex < required.length) {
+    return required.map((point, i) => i === movingIndex ? [...dragged] : point);
+  }
   const line2 = turf.lineString(route.geometry.coordinates), progress = monotonicRouteProgress(line2, required);
   let dragAt = 0;
   try {
@@ -5979,66 +6596,98 @@ function insertDraggedPointByRouteProgress(route, required, dragged, original) {
   if (!inserted) ordered.push(dragged);
   return ordered;
 }
-function buildWaypointPreservingEditPoints(route, dragged, original) {
+function buildWaypointPreservingEditPoints(route, dragged, original, movingIndex = -1) {
   const start2 = route.geometry.coordinates[0], required = routeRequiredWaypoints(route), isLoop = isClosedLoop(route.geometry.coordinates);
   if (!required.length) return isLoop ? buildLoopViaPoints(route.geometry.coordinates, dragged, original) : [start2, dragged, route.geometry.coordinates.at(-1)];
-  const ordered = insertDraggedPointByRouteProgress(route, required, dragged, original), points = [start2, ...ordered];
+  const ordered = insertDraggedPointByRouteProgress(route, required, dragged, original, movingIndex), points = [start2, ...ordered];
   if (!isLoop) {
     const finish2 = route.geometry.coordinates.at(-1);
     if (turf.distance(points.at(-1), finish2) > 5e-3) points.push(finish2);
   } else if (turf.distance(points.at(-1), start2) > 5e-3) points.push(start2);
   return dedupeNavigationPoints(points).slice(0, 24);
 }
-function routeContainsRequiredWaypoints(route, required, toleranceM = 90) {
-  if (!required.length) return true;
+function snapPointsToRoute(route, points) {
   const line2 = turf.lineString(route.geometry.coordinates);
-  return required.every((point) => {
+  return points.map((point) => {
     try {
-      return (turf.nearestPointOnLine(line2, turf.point(point)).properties.dist || Infinity) * 1e3 <= toleranceM;
+      const snap = turf.nearestPointOnLine(line2, turf.point(point));
+      return snap?.geometry?.coordinates ? [...snap.geometry.coordinates] : [...point];
     } catch {
-      return false;
+      return [...point];
     }
   });
 }
-async function reshapeSelectedRoute(dragged, original) {
+function missingRequiredWaypoints(route, required, toleranceM = 90) {
+  if (!required.length) return [];
+  const line2 = turf.lineString(route.geometry.coordinates);
+  const out = [];
+  required.forEach((point, index) => {
+    let metres = Infinity;
+    try {
+      const d = turf.nearestPointOnLine(line2, turf.point(point)).properties.dist;
+      metres = Number.isFinite(d) ? d * 1e3 : Infinity;
+    } catch (error) {
+      console.warn("Could not measure a waypoint", error);
+    }
+    if (!(metres <= toleranceM)) out.push({ index, metres: Math.round(metres) });
+  });
+  return out;
+}
+async function reshapeSelectedRoute(dragged, original, movingIndex = -1) {
   if (!S.route || S.selected === null) return;
   const oldRoute = S.route, isLoop = isClosedLoop(oldRoute.geometry.coordinates), required = routeRequiredWaypoints(oldRoute);
   toast(required.length ? "Reshaping while preserving every waypoint\u2026" : isLoop ? "Reshaping loop while preserving its circuit\u2026" : "Reshaping selected route\u2026");
   pushRouteUndo();
   try {
-    const via = buildWaypointPreservingEditPoints(oldRoute, dragged, original), candidates = await directions(via, false), next = candidates[0];
-    if (!next) throw new Error("No reshaped route returned");
-    if (isLoop && !validLoop(next.geometry.coordinates, oldRoute.geometry.coordinates)) throw new Error("The reshaped result collapsed the loop");
-    if (!routeContainsRequiredWaypoints(next, required)) throw new Error("The reshaped route omitted a required waypoint");
+    const via = buildWaypointPreservingEditPoints(oldRoute, dragged, original, movingIndex), candidates = await fastDirections(via, 9e3, false), next = candidates[0];
+    if (!next) throw new Error("NO_ROUTE");
+    if (isLoop && !validLoop(next.geometry.coordinates, oldRoute.geometry.coordinates)) throw new Error("LOOP_COLLAPSED");
+    const missed = missingRequiredWaypoints(next, via.slice(1));
+    if (missed.length) throw Object.assign(new Error("WAYPOINT_LOST"), { missed });
     next._requestPoints = structuredClone(via);
-    next.requiredNavigationWaypoints = structuredClone(required);
-    next.requiredWaypointNames = structuredClone(oldRoute.requiredWaypointNames || []);
+    next.requiredNavigationWaypoints = snapPointsToRoute(next, via.slice(1));
+    next.requiredWaypointNames = alignWaypointNames(via.slice(1), required, oldRoute.requiredWaypointNames || []);
     next.waypointEfficient = oldRoute.waypointEfficient;
     next.qualityLabel = oldRoute.qualityLabel;
     next.rangeStatus = oldRoute.rangeStatus;
     next.savedName = oldRoute.savedName;
-    await enrich(next);
     next.poi = oldRoute.poi;
     next.name = oldRoute.name;
+    prepareImmediateRouteMetrics(next);
+    next.elev = oldRoute.elev;
+    next.wind = oldRoute.wind;
+    next.ascent = oldRoute.ascent;
     next.cycleScore = cycleScore(next);
     S.routes[S.selected] = next;
     S.route = next;
-    if (S.editingSavedId) await saveEditedSavedRoute();
     clearLines();
     line("chosen", next.geometry, colors[S.selected % colors.length], 8);
     nodes();
     cards();
     updateQuickNav();
+    updateEditBanner();
     toast(required.length ? "Route reshaped \xB7 all waypoints preserved" : isLoop ? "Loop reshaped and preserved" : "Route reshaped");
+    enrich(next).then(() => {
+      if (S.route !== next) return;
+      next.cycleScore = cycleScore(next);
+      cards();
+      if (S.editingSavedId) return saveEditedSavedRoute();
+    }).catch((error) => console.warn("Route detail refresh failed", error));
+    scheduleCycleScoreRefinement(next);
   } catch (error) {
-    console.warn("Route reshaping rejected:", error);
+    console.warn("Route reshaping rejected:", error.message, error.missed ? JSON.stringify(error.missed) : "");
     S.route = oldRoute;
     S.routes[S.selected] = oldRoute;
     clearLines();
     line("chosen", oldRoute.geometry, colors[S.selected % colors.length], 8);
     nodes();
     cards();
-    toast(required.length ? "Edit rejected because a required waypoint would be lost" : "That edit would collapse the loop, so the previous route was restored");
+    const reasons = {
+      NO_ROUTE: "No cycling route exists through that point",
+      LOOP_COLLAPSED: "That edit would collapse the loop, so the previous route was restored",
+      WAYPOINT_LOST: error.missed?.length ? `Edit undone \xB7 ${error.missed.length} waypoint${error.missed.length === 1 ? "" : "s"} would be left behind` : "Edit undone \xB7 a waypoint would be left behind"
+    };
+    toast(reasons[error.message] || "That edit could not be applied, so the previous route was restored");
   }
 }
 function validLoop(next, previous) {
@@ -6091,13 +6740,13 @@ function updateQuickNav() {
       expander.setAttribute("aria-label", open2 ? "Show ride stats" : "Hide ride stats");
     };
   }
-  const routeReady = !!S.route && S.selected !== null, active = !!S.record || !!S.navState;
-  box.hidden = !routeReady && !active;
-  quickStart.hidden = active;
-  live.hidden = !active;
-  box.classList.toggle("recording-active", active);
-  if (routeReady && !active) quickStart.onclick = startNavigation;
-  if (active) {
+  const routeReady = !!S.route && S.selected !== null, active2 = !!S.record || !!S.navState;
+  box.hidden = !routeReady && !active2;
+  quickStart.hidden = active2;
+  live.hidden = !active2;
+  box.classList.toggle("recording-active", active2);
+  if (routeReady && !active2) quickStart.onclick = startNavigation;
+  if (active2) {
     box.style.display = "block";
     box.style.visibility = "visible";
     box.style.opacity = "1";
@@ -6134,9 +6783,9 @@ function updateOfflineNavigationStatus() {
     badge.className = "offline-nav-status";
     $("#map-wrap")?.appendChild(badge);
   }
-  const active = !!S.navState && !navigator.onLine;
-  badge.hidden = !active;
-  if (active) badge.textContent = "Offline navigation \xB7 GPS guidance active \xB7 rerouting unavailable";
+  const active2 = !!S.navState && !navigator.onLine;
+  badge.hidden = !active2;
+  if (active2) badge.textContent = "Offline navigation \xB7 GPS guidance active \xB7 rerouting unavailable";
 }
 var ACTIVE_SESSION_KEY = "ridewise-active-session-v1";
 var sessionSaveTimer = 0;
@@ -6554,7 +7203,7 @@ async function savePendingActivity() {
   }).catch((error) => console.warn("Segment matching skipped", error));
   if (shareToFeed) {
     try {
-      await publishActivityToFeed(S.user, saved, turf);
+      await publishActivityToFeed(S.user, saved, turf, ridePrefs().privacyRadiusM ?? 400);
     } catch (error) {
       console.warn("Publishing to feed failed; activity is still saved privately", error);
     }
@@ -7059,7 +7708,7 @@ async function finishRecord(endNav = true) {
   }
   const metrics = activityMetrics(r);
   const plannedCoords = S.route?.geometry?.coordinates;
-  S.pendingActivity = { ...r, ...metrics, id: crypto.randomUUID(), routeId: S.route?.savedId || S.editingSavedId || null, plannedRoute: Array.isArray(plannedCoords) && plannedCoords.length >= 2 ? sample(plannedCoords, Math.min(60, plannedCoords.length)) : null, plannedDistance: S.route?.distance || 0, name: defaultName, ended: Date.now(), elapsed: r.movingMs, avgSpeed: r.movingMs > 0 ? r.distance / (r.movingMs / 36e5) : 0, photos: [] };
+  S.pendingActivity = { ...r, ...metrics, id: crypto.randomUUID(), routeId: S.route?.savedId || S.editingSavedId || null, plannedRoute: Array.isArray(plannedCoords) && plannedCoords.length >= 2 ? sample(plannedCoords, Math.min(60, plannedCoords.length)) : null, name: defaultName, ended: Date.now(), elapsed: r.movingMs, avgSpeed: r.movingMs > 0 ? r.distance / (r.movingMs / 36e5) : 0, photos: [] };
   S.record = null;
   clearActiveSession();
   clearLines();
@@ -7367,14 +8016,57 @@ function openGoogleMapsLocation(lngLat, threeD = false) {
   const win = window.open(threeD ? threeDUrl : standard, "_blank", "noopener,noreferrer");
   if (!win) toast("Allow pop-ups to open Google Maps");
 }
+async function describePlace(lngLat) {
+  try {
+    const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat.join(",")}.json?limit=1&access_token=${MAPBOX_TOKEN}`);
+    if (!r.ok) return null;
+    const d = await r.json(), f = d.features?.[0];
+    return f?.place_name || f?.text || null;
+  } catch {
+    return null;
+  }
+}
+function revealRouteInPlace() {
+  if (MAP_PAGES.includes(S.page)) open("explore");
+  else {
+    render7();
+    setSheetState("half");
+  }
+  fitMapToCoords(S.route?.geometry?.coordinates);
+}
 function showMapLocationMenu(lngLat) {
   document.querySelector(".map-location-menu")?.remove();
   const box = document.createElement("div");
   box.className = "map-location-menu";
-  box.innerHTML = '<button class="popup-close" aria-label="Close">\xD7</button><b>Use this location</b><button id="navigateHere">Navigate there</button><button id="addMapWaypoint">Add as waypoint</button><button id="googleMapView">View in Google Maps</button><button id="googleMap3d">View in Google Maps 3D</button><button id="copyMapCoordinates">Copy coordinates</button>';
+  box.innerHTML = '<button class="popup-close" aria-label="Close">\xD7</button><b>Use this location</b><button id="setDestination">Set as destination</button><button id="navigateHere">Navigate from my location</button><button id="addMapWaypoint">Add as waypoint</button><button id="googleMapView">View in Google Maps</button><button id="googleMap3d">View in Google Maps 3D</button><button id="copyMapCoordinates">Copy coordinates</button>';
   box.querySelector(".popup-close").onclick = () => box.remove();
   $("#map-wrap").appendChild(box);
   const close = () => box.remove();
+  $("#setDestination").onclick = async () => {
+    S.mode = "point";
+    const start2 = S.waypoints?.[0] || S.pos || await current();
+    if (!start2) {
+      toast("Set a start point first, then pick a destination");
+      return;
+    }
+    if (!Array.isArray(S.waypoints) || S.waypoints.length < 2) {
+      S.waypoints = [start2, lngLat];
+      S.names = [S.names?.[0] || "Start", "Dropped pin"];
+    } else {
+      S.waypoints[0] = start2;
+      S.waypoints[S.waypoints.length - 1] = lngLat;
+      S.names[S.waypoints.length - 1] = "Dropped pin";
+    }
+    close();
+    markers2();
+    await pointRoutes(false);
+    revealRouteInPlace();
+    const label = await describePlace(lngLat);
+    if (label) {
+      S.names[S.waypoints.length - 1] = label;
+      refreshPage();
+    }
+  };
   $("#navigateHere").onclick = async () => {
     const start2 = S.pos || await current();
     if (!start2) return;
@@ -7382,7 +8074,7 @@ function showMapLocationMenu(lngLat) {
     S.waypoints = [start2, lngLat];
     S.names = ["Current location", "Dropped pin"];
     await pointRoutes(false);
-    open("explore");
+    revealRouteInPlace();
     close();
   };
   $("#addMapWaypoint").onclick = () => {
@@ -7801,9 +8493,12 @@ function showMapStyles() {
 }
 localStorage.removeItem("routes");
 localStorage.removeItem("activities");
+map.on("zoomend", () => {
+  if (S.nodes.length && S.route) nodes();
+});
 map.on("load", () => {
   installMapLocationGestures();
-  open("explore");
+  if (!S.userNavigated) open("explore");
   setInterval(() => {
     if (S.user && MAP_PAGES.includes(S.page)) startLiveFriends({ state: S, map, mapboxgl });
     else stopLiveFriends();
@@ -7851,6 +8546,7 @@ var APP = {
   sample,
   map,
   MAPBOX_TOKEN,
+  isCurrentPage,
   requireAccount,
   // planning + routes
   pointRoutes,
@@ -7864,6 +8560,9 @@ var APP = {
   nodes,
   clearLines,
   line,
+  previewRouteOnMap,
+  clearRoutePreview,
+  setSheetState,
   geo,
   setHere,
   current,
@@ -7921,6 +8620,7 @@ var APP = {
   ratings: ratings_exports,
   segments: segments_exports,
   ridePrefs,
+  saveRidePrefs,
   applyRidePreferences,
   refreshDaylightLimit,
   applyNightMode,
@@ -7943,9 +8643,24 @@ var APP = {
   startLiveJourney,
   showLiveJourneyShare
 };
+var RIDE_PREFS_KEY = "ridewise-ride-prefs-v1";
 function ridePrefs() {
-  if (!S.ridePrefs) S.ridePrefs = defaultPrefs();
+  if (!S.ridePrefs) {
+    let stored = null;
+    try {
+      stored = JSON.parse(localStorage.getItem(RIDE_PREFS_KEY));
+    } catch {
+    }
+    S.ridePrefs = { ...defaultPrefs(), ...stored && typeof stored === "object" ? stored : {} };
+  }
   return S.ridePrefs;
+}
+function saveRidePrefs() {
+  try {
+    localStorage.setItem(RIDE_PREFS_KEY, JSON.stringify(ridePrefs()));
+  } catch (error) {
+    console.warn("Could not store ride preferences", error);
+  }
 }
 function applyRidePreferences(routes2) {
   if (!Array.isArray(routes2) || !routes2.length) return;

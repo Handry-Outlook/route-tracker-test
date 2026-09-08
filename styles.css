@@ -177,6 +177,7 @@ body.navigating #map-search { display: none; }
 
 #toast { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 99; background: #132238; color: #fff; padding: 11px 16px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .2s; max-width: calc(100% - 40px); }
 #toast.show { opacity: 1; }
+#edit-banner:not([hidden]) ~ #route-undo { top: 60px; }
 #route-undo { position: absolute; z-index: 40; top: 16px; left: 50%; transform: translateX(-50%); border: 0; border-radius: var(--radius-pill); padding: 10px 16px; background: var(--surface); box-shadow: var(--shadow); font-weight: 700; font-size: 13px; }
 
 /* ---------- navigation chrome ---------- */
@@ -228,7 +229,34 @@ body.navigating #speed-limit.has-limit { display: inline-flex; }
 .offline-nav-status[hidden] { display: none; }
 
 /* ---------- map overlays, markers, menus ---------- */
-.turn { width: 14px; height: 14px; border: 3px solid var(--blue); background: var(--surface); border-radius: 50%; cursor: grab; }
+.turn {
+  width: 32px; height: 32px; cursor: grab; background: transparent; border: 0;
+  display: flex; align-items: center; justify-content: center; touch-action: none;
+}
+.turn::after {
+  content: ''; width: 15px; height: 15px; border: 3px solid var(--blue);
+  background: var(--surface); border-radius: 50%; box-shadow: 0 1px 4px #10233d55;
+}
+/* A handle that is a committed waypoint: filled, so it reads as pinned. */
+.turn-waypoint { z-index: 2; }
+.turn-waypoint::after { background: var(--blue); border-color: #fff; width: 17px; height: 17px; }
+.turn:active { cursor: grabbing; }
+.turn:active::after { transform: scale(1.25); }
+
+/* Edit mode: says what is happening and how to stop. */
+#edit-banner {
+  position: absolute; z-index: 41; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; max-width: calc(100% - 28px);
+  background: var(--blue); color: #fff; border-radius: var(--radius-pill);
+  padding: 8px 8px 8px 16px; box-shadow: var(--shadow); font-size: 12px; font-weight: 700;
+}
+#edit-banner[hidden] { display: none; }
+#edit-banner span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#edit-banner button {
+  flex: 0 0 auto; border: 0; border-radius: var(--radius-pill);
+  background: #ffffff26; color: #fff; font-weight: 800; font-size: 12px;
+  min-height: 32px; padding: 0 14px;
+}
 .poi-star { width: 30px; height: 30px; border: 2px solid #fff; border-radius: 50%; background: var(--gold); color: #fff; font-size: 16px; box-shadow: 0 3px 9px #0005; }
 .user-location-marker { position: relative; width: 52px; height: 52px; pointer-events: none; }
 .user-heading-cone { position: absolute; left: 50%; top: 50%; width: 32px; height: 46px; transform-origin: 50% 88%; clip-path: polygon(50% 0, 100% 100%, 50% 82%, 0 100%); background: linear-gradient(180deg, var(--blue), transparent); opacity: .85; transition: transform .3s linear; }
@@ -257,6 +285,48 @@ body.navigating #speed-limit.has-limit { display: inline-flex; }
 .map-location-menu p, .share-choice p { margin: 2px 0 4px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .map-location-menu button, .share-choice button { border: 0; border-radius: var(--radius-md); padding: 13px; background: var(--surface-muted); text-align: left; font-weight: 700; font-size: 14px; color: var(--text); }
 .map-location-menu button:nth-of-type(2), .share-choice button:nth-of-type(2) { background: var(--blue); color: #fff; }
+/* ---- Saved-route picker (club rides) ----------------------------------
+   Cards rather than a dropdown: the shape and the length are what tell you
+   which route this is, and tapping one draws it on the map. */
+.route-pick {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: 10px; margin-bottom: 8px;
+  min-height: 84px; color: var(--text);
+}
+.route-pick.on { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue) inset; }
+.route-pick-media { flex: 0 0 auto; line-height: 0; border-radius: 10px; overflow: hidden; }
+.route-pick-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.route-pick-body b { font-size: 14px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.route-pick-body span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.route-pick-hint { font-size: 11px !important; font-weight: 700 !important; }
+.route-pick.on .route-pick-hint { color: var(--blue) !important; }
+.route-pick-tick { flex: 0 0 auto; color: var(--blue); display: inline-flex; }
+
+/* ---- Club and ride chat ------------------------------------------------
+   The log scrolls on its own so the composer stays put while reading back. */
+.chat-log {
+  max-height: 320px; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: 10px;
+}
+.chat-msg { display: flex; gap: 8px; align-items: flex-end; }
+.chat-msg.mine { flex-direction: row-reverse; }
+.chat-bubble {
+  max-width: 78%; background: var(--surface-muted); color: var(--text);
+  border-radius: 14px; padding: 8px 11px;
+}
+.chat-msg.mine .chat-bubble { background: var(--blue); color: #fff; }
+.chat-bubble b { display: block; font-size: 11px; font-weight: 800; margin-bottom: 2px; color: var(--muted); }
+.chat-bubble p { font-size: 13px; line-height: 1.4; word-break: break-word; }
+.chat-bubble .chat-time { display: block; margin-top: 4px; font-size: 10px; font-weight: 700; color: var(--muted); }
+.chat-msg.mine .chat-bubble b, .chat-msg.mine .chat-bubble .chat-time { color: #ffffffc4; }
+.chat-del { border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; padding: 0; }
+.chat-compose { display: flex; gap: 8px; margin-top: 8px; }
+.chat-compose input { flex: 1; min-height: 44px; }
+.chat-compose button { min-height: 44px; padding: 0 16px; }
+
 /* Marks a preview drawn from the rider's plan rather than their GPS trace. */
 .mini-media .mini-tag, .route-media .mini-tag, .hero-media .mini-tag, .feed-media .mini-tag {
   position: absolute; right: 6px; bottom: 6px; z-index: 2;
