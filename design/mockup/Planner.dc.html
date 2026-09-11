@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; background: #e9edf2; font-family: Inter, -apple-system, "SF Pro Text", system-ui, sans-serif; color: #132238; -webkit-font-smoothing: antialiased; }
+    a { color: #176bdb; } a:hover { color: #f28b30; }
+    * { box-sizing: border-box; }
+    .phone { position: relative; width: 390px; height: 844px; overflow: hidden; background: #f5f7fa; color: #132238; }
+    .safe { padding-top: 54px; }
+    h1, h2, h3, p { margin: 0; }
+    .card { background: #ffffff; border: 1px solid #dbe2ea; border-radius: 16px; box-shadow: 0 4px 14px #10233d18; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid #dbe2ea; background: #ffffff; font-size: 13px; font-weight: 600; color: #132238; white-space: nowrap; }
+    .chip.on { background: #15324d; border-color: #15324d; color: #fff; }
+    .chip.orange { background: #f28b30; border-color: #f28b30; color: #fff; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 18px; border-radius: 12px; font-weight: 700; font-size: 15px; border: 0; }
+    .btn.primary { background: #176bdb; color: #fff; }
+    .btn.cta { background: #f28b30; color: #fff; box-shadow: 0 8px 22px #f28b3055; }
+    .btn.ghost { background: #ffffff; border: 1px solid #dbe2ea; color: #132238; }
+    .iconbtn { width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: #ffffff; border: 1px solid #dbe2ea; color: #132238; box-shadow: 0 4px 14px #10233d18; }
+    .muted { color: #657186; }
+    .tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; padding: 8px 8px 20px; background: #ffffff; border-top: 1px solid #dbe2ea; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+    .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 10px; font-weight: 600; color: #657186; border-radius: 12px; }
+    .tab.on { color: #176bdb; }
+    .tab.rec { color: #f28b30; }
+    .tab.rec svg { width: 30px; height: 30px; }
+    .searchbar { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-radius: 999px; background: #ffffff; box-shadow: 0 12px 34px #10233d25; color: #657186; font-size: 15px; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .badge.blue { background: #e5efff; color: #1754a3; }
+    .badge.orange { background: #fff0e1; color: #a35400; }
+    .badge.green { background: #e3f7ee; color: #0d6b47; }
+    .badge.red { background: #fde5e5; color: #a82525; }
+    .badge.dark { background: #132238cc; color: #fff; backdrop-filter: blur(6px); }
+    .stat b { display: block; font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+    .stat small { font-size: 11px; color: #657186; font-weight: 600; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #fff; }
+    .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #ffffff; border-radius: 20px 20px 0 0; box-shadow: 0 -8px 30px #10233d30; padding: 8px 16px 16px; }
+    .handle { width: 40px; height: 5px; border-radius: 999px; background: #dbe2ea; margin: 0 auto 12px; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .hscroll { display: flex; gap: 12px; overflow: hidden; }
+    .section-title { font-size: 15px; font-weight: 800; }
+    .toggle { width: 46px; height: 28px; border-radius: 999px; background: #dbe2ea; position: relative; }
+    .toggle.on { background: #139b66; }
+    .toggle i { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+    .toggle.on i { left: 21px; }
+    .slider { position: relative; height: 32px; }
+    .slider .track { position: absolute; left: 0; right: 0; top: 14px; height: 4px; border-radius: 999px; background: #dbe2ea; }
+    .slider .fill { position: absolute; left: 0; top: 14px; height: 4px; border-radius: 999px; background: #176bdb; }
+    .slider .knob { position: absolute; top: 5px; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid #176bdb; box-shadow: 0 4px 14px #10233d18; }
+  </style>
+</helmet>
+
+<div class="phone">
+  <svg width="390" height="844" viewBox="0 0 390 844" xmlns="http://www.w3.org/2000/svg" style="display:block;position:absolute;inset:0"><defs><linearGradient id="pr" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="390" height="844" fill="#eaeee7"/>
+    <path d="M-20 120 C 80 90, 140 160, 220 120 S 380 60, 420 110 L 420 -10 L -20 -10z" fill="#d5e6c6"/>
+    <path d="M150 300 c 60 -30 140 -10 180 30 c 30 30 20 90 -30 110 c -70 30 -160 0 -170 -50 c -5 -40 0 -70 20 -90z" fill="#d5e6c6"/>
+    <path d="M-20 560 c 60 20 90 80 60 140 c -20 40 -60 60 -60 60z" fill="#d5e6c6"/>
+    <path d="M-20 400 C 60 380, 100 430, 140 470 S 200 560, 240 600 S 330 700, 420 690 L 420 760 C 330 760, 250 680, 200 640 S 110 520, 60 480 S -20 450, -20 450z" fill="#c6dcf1"/>
+    <g stroke="#f6f7f3" stroke-width="3" fill="none"><path d="M0 200 L390 240M0 330 L390 300M40 0 L60 844M300 0 L280 844M120 0 L110 844"/></g>
+    <g stroke="#ffffff" stroke-width="6" fill="none" stroke-linecap="round"><path d="M0 260 C 100 250, 200 280, 390 250"/><path d="M200 0 C 210 200, 180 400, 210 844"/><path d="M0 700 C 120 660, 260 720, 390 690"/></g>
+    <g font-family="Inter, system-ui" font-size="11" font-weight="600" fill="#7b8794"><text x="230" y="105">Ashton Court</text><text x="60" y="380">Bedminster</text><text x="250" y="330">Clifton</text><text x="120" y="770">Long Ashton</text></g>
+    <path d="M62 640 C 110 560, 150 600, 190 520 S 250 400, 232 330 S 300 210, 336 150" stroke="#ffffff" stroke-width="11" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".8"/><path d="M62 640 C 110 560, 150 600, 190 520 S 250 400, 232 330 S 300 210, 336 150" stroke="url(#pr)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <g><circle cx="62" cy="640" r="15" fill="#f28b30" stroke="#fff" stroke-width="3"/><text x="62" y="645" text-anchor="middle" font-family="Inter, system-ui" font-size="13" font-weight="800" fill="#fff">A</text></g><g><circle cx="232" cy="330" r="15" fill="#15324d" stroke="#fff" stroke-width="3"/><text x="232" y="335" text-anchor="middle" font-family="Inter, system-ui" font-size="13" font-weight="800" fill="#fff">B</text></g><g><circle cx="336" cy="150" r="15" fill="#176bdb" stroke="#fff" stroke-width="3"/><text x="336" y="155" text-anchor="middle" font-family="Inter, system-ui" font-size="13" font-weight="800" fill="#fff">C</text></g>
+    
+    
+    
+  </svg>
+  <div style="position:absolute;left:16px;right:16px;top:54px;display:flex;flex-direction:column;gap:10px">
+    <div class="row"><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M15 5l-7 7 7 7"/></svg></div><div class="searchbar" style="flex:1;height:44px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Add a waypoint</span></div></div>
+    <div class="row" style="gap:8px"><span class="chip on" style="box-shadow:0 4px 14px #10233d18">Road</span><span class="chip" style="box-shadow:0 4px 14px #10233d18">Gravel</span><span class="chip" style="box-shadow:0 4px 14px #10233d18">MTB</span><span class="chip" style="box-shadow:0 4px 14px #10233d18">Mixed</span></div>
+  </div>
+  <div class="sheet" style="display:flex;flex-direction:column;gap:14px;padding-bottom:20px">
+    <div class="handle"></div>
+    <div class="between"><div><b style="font-size:16px;display:block">Round trip</b><span class="muted" style="font-size:12px;font-weight:600">Auto-generate a loop from Clifton</span></div><div class="toggle on"><i></i></div></div>
+    <div class="row" style="gap:14px;align-items:stretch">
+      <div style="flex:1"><div class="between" style="margin-bottom:4px"><span class="muted" style="font-size:12px;font-weight:700">Distance</span><b style="color:#176bdb">45 km</b></div><div class="slider"><div class="track"></div><div class="fill" style="width:40%"></div><div class="knob" style="left:calc(40% - 11px)"></div></div><span class="muted" style="font-size:12px;font-weight:700;display:block;margin-top:6px">Direction</span></div>
+      <svg width="84" height="84" viewBox="0 0 84 84" xmlns="http://www.w3.org/2000/svg"><circle cx="42" cy="42" r="38" fill="#f5f7fa" stroke="#dbe2ea"/><g font-family="Inter, system-ui" font-size="10" font-weight="700" fill="#657186" text-anchor="middle"><text x="42" y="14">N</text><text x="74" y="46">E</text><text x="42" y="78">S</text><text x="10" y="46">W</text></g><g transform="rotate(35 42 42)"><path d="M42 16 L48 42 L42 38 L36 42z" fill="#f28b30"/><path d="M42 68 L36 42 L42 46 L48 42z" fill="#dbe2ea"/></g><circle cx="42" cy="42" r="4" fill="#fff" stroke="#15324d" stroke-width="2"/></svg>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px"><div class="row" style="gap:10px;height:40px"><span class="muted"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M8 6h.01M16 6h.01M8 12h.01M16 12h.01M8 18h.01M16 18h.01"/></svg></span><span style="width:26px;height:26px;border-radius:50%;background:#f28b30;color:#fff;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">A</span><span style="font-size:14px;font-weight:600;flex:1">Clifton Suspension Bridge</span><span class="muted"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 6l12 12M18 6L6 18"/></svg></span></div><div class="row" style="gap:10px;height:40px"><span class="muted"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M8 6h.01M16 6h.01M8 12h.01M16 12h.01M8 18h.01M16 18h.01"/></svg></span><span style="width:26px;height:26px;border-radius:50%;background:#15324d;color:#fff;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">B</span><span style="font-size:14px;font-weight:600;flex:1">Ashton Court Estate</span><span class="muted"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 6l12 12M18 6L6 18"/></svg></span></div><div class="row" style="gap:10px;height:40px"><span class="muted"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M8 6h.01M16 6h.01M8 12h.01M16 12h.01M8 18h.01M16 18h.01"/></svg></span><span style="width:26px;height:26px;border-radius:50%;background:#176bdb;color:#fff;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">C</span><span style="font-size:14px;font-weight:600;flex:1">Pill Harbour</span><span class="muted"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 6l12 12M18 6L6 18"/></svg></span></div></div>
+    <svg width="358" height="70" viewBox="0 0 358 70" xmlns="http://www.w3.org/2000/svg" style="display:block"><defs><linearGradient id="ef" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#176bdb" stop-opacity=".25"/><stop offset="1" stop-color="#176bdb" stop-opacity="0"/></linearGradient></defs><polygon points="0,70 0,70 30,62 60,66 90,40 120,30 150,44 180,48 210,22 240,14 270,34 300,52 330,58 358,64 358,70" fill="url(#ef)"/><polyline points="0,70 30,62 60,66 90,40 120,30 150,44 180,48 210,22 240,14 270,34 300,52 330,58 358,64" fill="none" stroke="#9fb0c2" stroke-width="2"/><polyline points="60,66 90,40 120,30" fill="none" stroke="#139b66" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="180,48 210,22 240,14" fill="none" stroke="#d94d4d" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="120,30 150,44 180,48" fill="none" stroke="#f28b30" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="between"><div class="row" style="gap:8px"><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></div><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg></div><span class="muted" style="font-size:12px;font-weight:700">GPX</span></div><div class="row" style="gap:8px"><span style="font-size:13px;font-weight:700" class="row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M7 18a4 4 0 0 1-.5-8A6 6 0 0 1 18 9a4 4 0 0 1 0 9h-1M12 12v8M9 17l3 3 3-3"/></svg>Offline</span><div class="toggle"><i></i></div></div></div>
+    <div class="btn primary" style="height:50px">Save route · 45 km · 520 m</div>
+  </div>
+</div></x-dc>
+</body>
+</html>

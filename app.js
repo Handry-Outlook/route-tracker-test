@@ -4,11 +4,15 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// <define:__FIREBASE_CONFIG__>
+var define_FIREBASE_CONFIG_default = { apiKey: "AIzaSyBjfLYgpiZLJ8ucR7XqY7cBsrfD1UCs_V4", authDomain: "route-planner-942bd.firebaseapp.com", projectId: "route-planner-942bd", storageBucket: "route-planner-942bd.firebasestorage.app", messagingSenderId: "305443119883", appId: "1:305443119883:web:e83a8ef2dc5334a753380e" };
+
 // src/config.js
-var MAPBOX_TOKEN = "pk.eyJ1IjoibWV0ZW9ncm91cC1tYXBib3giLCJhIjoiY2pudWJyMWVhMDQ0bjNxdXFsNWJ5M2ZtbSJ9.ANOKYyv5s0VFVbnesnGGUQ";
-var firebaseConfig = { apiKey: "AIzaSyBjfLYgpiZLJ8ucR7XqY7cBsrfD1UCs_V4", authDomain: "route-planner-942bd.firebaseapp.com", projectId: "route-planner-942bd", storageBucket: "route-planner-942bd.firebasestorage.app", messagingSenderId: "305443119883", appId: "1:305443119883:web:e83a8ef2dc5334a753380e" };
-var X_WEATHER_ID = "wgE96YE3scTQLKjnqiMsv";
-var X_WEATHER_SECRET = "1XwHqbCjiTqtzWi8txyN4JtM0ezVNuEfaDXQdkjq";
+var read = (value, fallback) => typeof value === "undefined" ? fallback : value;
+var MAPBOX_TOKEN = read("pk.eyJ1IjoibWV0ZW9ncm91cC1tYXBib3giLCJhIjoiY2pudWJyMWVhMDQ0bjNxdXFsNWJ5M2ZtbSJ9.ANOKYyv5s0VFVbnesnGGUQ", "");
+var firebaseConfig = read(define_FIREBASE_CONFIG_default, {});
+var X_WEATHER_ID = read("", "");
+var X_WEATHER_SECRET = read("", "");
 
 // src/weather-api.js
 var BASE_URL = "https://data.api.xweather.com/conditions";
@@ -4726,7 +4730,7 @@ var fmtSeconds = (s) => {
 // src/legacy.js
 var $ = (s, r = document) => r.querySelector(s);
 var panel = $("#panel");
-var S = { page: "explore", mode: "point", waypoints: [], names: [], routes: [], route: null, selected: null, markers: [], nodes: [], layers: [], poiMarkers: [], geocoders: {}, weather: null, weatherOn: false, wind: { speed: 15, dir: 240 }, windGrid: null, windGridKey: "", windLoading: false, record: null, watch: null, user: null, navState: null, styleIndex: 0, pendingActivity: null, activityView: null, activitySort: "date-desc", lastVoiceKey: "", lastRerouteAt: 0, wakeLock: null, wakeLockWanted: false, audioNavigation: localStorage.getItem("audioNavigation") !== "off", audioUnlocked: false, headingSamples: [], smoothedHeading: null, headingUnstable: false, manualExploreUntil: 0, wrongWaySince: null, userMarker: null, visualHeading: null, routeUndo: [], previewRun: 0, liveJourney: null, liveUnsub: null, cloud: null, sharedJourneyState: null, cycleLayerOn: false, hourlyWeather: [], adventureWaypoints: [], contextPressTimer: null, editingSavedId: null, accountRoutes: [], accountActivities: [], accountSyncing: false, navCamera: { lastAt: 0, zoom: 16.2, state: "normal", postTurnUntil: 0, lastStep: -1 }, sharedRouteLoading: false, sharedRouteLoaded: false, sharedRiderMarker: null, viewerMarker: null, sharedJourneyId: null, sharedJourneyFitted: false, viewerWatch: null };
+var S = { page: "explore", mode: "point", waypoints: [], names: [], routes: [], route: null, selected: null, markers: [], nodes: [], layers: [], poiMarkers: [], geocoders: {}, weather: null, weatherOn: false, wind: { speed: 15, dir: 240 }, windGrid: null, windGridKey: "", windLoading: false, record: null, watch: null, user: null, navState: null, styleIndex: 0, pendingActivity: null, activityView: null, activitySort: "date-desc", lastVoiceKey: "", lastRerouteAt: 0, wakeLock: null, wakeLockWanted: false, audioNavigation: localStorage.getItem("audioNavigation") !== "off", audioUnlocked: false, headingSamples: [], smoothedHeading: null, headingUnstable: false, manualExploreUntil: 0, wrongWaySince: null, userMarker: null, visualHeading: null, routeUndo: [], previewRun: 0, liveJourney: null, liveUnsub: null, cloud: null, sharedJourneyState: null, cycleLayerOn: false, hourlyWeather: [], adventureWaypoints: [], contextPressTimer: null, editingSavedId: null, accountRoutes: [], accountActivities: [], accountSyncing: false, navCamera: { lastAt: 0, lastReframeAt: 0, zoom: 16.2, pitch: 49, state: "normal", postTurnUntil: 0, lastStep: -1 }, sharedRouteLoading: false, sharedRouteLoaded: false, sharedRiderMarker: null, viewerMarker: null, sharedJourneyId: null, sharedJourneyFitted: false, viewerWatch: null };
 var mobile = () => matchMedia("(max-width: 760px), (max-height: 480px) and (pointer: coarse)").matches;
 var toast = (t) => {
   const e = $("#toast");
@@ -7415,17 +7419,72 @@ function navigationCameraTarget(pos, heading, speedMps = 0) {
   const bearing = Number.isFinite(heading) ? heading : nextLocation ? turf.bearing(pos, nextLocation) : map.getBearing();
   return { state: state4, zoom: Math.max(14.8, Math.min(17.65, zoom)), pitch, bearing, turnDistance, stepIndex: index };
 }
+var NAV_FOLLOW_MS = 900;
+function navigationCameraPadding() {
+  const wrap = $("#map-wrap");
+  if (!wrap) return { top: 0, bottom: 0, left: 0, right: 0 };
+  const box = wrap.getBoundingClientRect();
+  const visible = (el) => {
+    if (!el || el.hidden) return 0;
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden") return 0;
+    const r = el.getBoundingClientRect();
+    return r.height > 0 ? r.height : 0;
+  };
+  const top = Math.min(box.height * 0.3, visible($("#nav-guidance")) + 20);
+  const bottom = Math.min(box.height * 0.45, visible($("#quick-nav")) + 20);
+  return { top: Math.round(top), bottom: Math.round(bottom), left: 0, right: 0 };
+}
+function navigationCameraLead(pos, heading, speedMps) {
+  const speed = Math.max(0, speedMps || 0);
+  if (!Number.isFinite(heading) || speed < 1.5) return pos;
+  const seconds = Math.min(7, 1.4 + speed * 0.35);
+  const km = speed * seconds / 1e3;
+  try {
+    return turf.destination(pos, km, heading, { units: "kilometers" }).geometry.coordinates;
+  } catch {
+    return pos;
+  }
+}
+function riderOffScreen(pos, padding) {
+  try {
+    const wrap = $("#map-wrap");
+    if (!wrap) return false;
+    const box = wrap.getBoundingClientRect();
+    const p = map.project(pos);
+    const margin = 40;
+    return p.x < margin || p.y < padding.top + margin || p.x > box.width - margin || p.y > box.height - padding.bottom - margin;
+  } catch {
+    return false;
+  }
+}
 function updateAdaptiveNavigationCamera(pos, heading, speedMps = 0, force = false) {
   if (!S.navState || Date.now() < S.manualExploreUntil) return;
-  const now = Date.now(), target = navigationCameraTarget(pos, heading, speedMps), camera = S.navCamera;
+  const now = Date.now();
+  const target = navigationCameraTarget(pos, heading, speedMps);
+  const camera = S.navCamera;
   if (target.stepIndex !== camera.lastStep && camera.lastStep >= 0) camera.postTurnUntil = now + 4500;
   camera.lastStep = target.stepIndex;
-  if (!force && now - camera.lastAt < 1200) return;
-  if (!force && Math.abs(target.zoom - camera.zoom) < 0.14 && target.state === camera.state && now - camera.lastAt < 2600) return;
+  const padding = navigationCameraPadding();
+  const lost = riderOffScreen(pos, padding);
+  const reframeDue = force || lost || Math.abs(target.zoom - camera.zoom) >= 0.14 && now - camera.lastReframeAt >= 1200 || target.state !== camera.state && now - camera.lastReframeAt >= 1200;
+  if (reframeDue) {
+    camera.lastReframeAt = now;
+    camera.zoom = target.zoom;
+    camera.pitch = target.pitch;
+    camera.state = target.state;
+  }
   camera.lastAt = now;
-  camera.zoom = target.zoom;
-  camera.state = target.state;
-  map.easeTo({ center: pos, zoom: target.zoom, pitch: target.pitch, bearing: target.bearing, duration: force ? 650 : 780, essential: true });
+  map.easeTo({
+    center: navigationCameraLead(pos, heading, speedMps),
+    zoom: camera.zoom ?? target.zoom,
+    pitch: camera.pitch ?? target.pitch,
+    bearing: target.bearing,
+    padding,
+    // A recentre after losing the rider should be immediate, not a long glide.
+    duration: force ? 650 : lost ? 260 : NAV_FOLLOW_MS,
+    essential: true
+  });
 }
 function maneuverDistances(nav) {
   if (nav._maneuverAtFor === nav.steps) return nav._maneuverAt;

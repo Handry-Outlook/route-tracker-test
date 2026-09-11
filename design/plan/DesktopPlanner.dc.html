@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+  html, body { height:100%; }
+  body { margin:0; background:#e9edf2; font-family:Inter,-apple-system,"SF Pro Text",system-ui,sans-serif; color:#132238; -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  a { color:#176bdb; } a:hover { color:#f28b30; }
+  h1,h2,h3,p { margin:0; }
+  .frame { position:relative; width:100%; height:100%; overflow:hidden; background:#f5f7fa; display:flex; }
+  .rail { width:88px; background:#15324d; padding:14px 6px; display:flex; flex-direction:column; gap:4px; flex:0 0 auto; }
+  .rail .brand { color:#fff; text-align:center; font-size:11px; font-weight:800; margin-bottom:10px; }
+  .rail .brand i { display:block; width:40px; height:40px; margin:0 auto 6px; border-radius:11px; background:linear-gradient(135deg,#f28b30,#176bdb); }
+  .tab { border:0; background:transparent; color:#b8c7d6; border-radius:12px; min-height:56px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-size:10px; font-weight:600; }
+  .tab.on { background:#ffffff1f; color:#fff; }
+  .tab.rec { color:#f28b30; }
+  .panel { width:460px; flex:0 0 auto; background:#fff; border-right:1px solid #dbe2ea; display:flex; flex-direction:column; }
+  .panel-head { padding:18px 20px 12px; border-bottom:1px solid #dbe2ea; }
+  .panel-body { padding:16px 20px; overflow:auto; display:flex; flex-direction:column; gap:14px; flex:1; }
+  .map { flex:1; position:relative; overflow:hidden; }
+  .card { background:#fff; border:1px solid #dbe2ea; border-radius:16px; box-shadow:0 4px 14px #10233d18; }
+  .pad { padding:14px; }
+  .row { display:flex; align-items:center; gap:10px; }
+  .between { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .muted { color:#657186; }
+  .title { font-size:22px; font-weight:800; letter-spacing:-.02em; }
+  .sub { font-size:13px; font-weight:600; color:#657186; margin-top:3px; }
+  .sec { font-size:15px; font-weight:800; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 16px; border:0; border-radius:12px; font-weight:700; font-size:14px; background:#edf2f7; color:#132238; }
+  .btn.primary { background:#176bdb; color:#fff; }
+  .btn.cta { background:#f28b30; color:#fff; }
+  .btn.sm { min-height:36px; font-size:13px; padding:0 12px; border-radius:10px; }
+  .btn.ghost { background:#fff; border:1px solid #dbe2ea; }
+  .chip { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:0 12px; border-radius:999px; border:1px solid #dbe2ea; background:#fff; font-size:13px; font-weight:600; white-space:nowrap; }
+  .chip.on { background:#15324d; border-color:#15324d; color:#fff; }
+  .badge { display:inline-flex; align-items:center; gap:5px; min-height:24px; padding:0 9px; border-radius:999px; font-size:11px; font-weight:700; }
+  .badge.blue { background:#176bdb22; color:#176bdb; }
+  .badge.green { background:#139b6622; color:#139b66; }
+  .badge.orange { background:#f28b3028; color:#a35400; }
+  .badge.red { background:#d94d4d22; color:#d94d4d; }
+  .badge.dark { background:#132238cc; color:#fff; }
+  .stat b { display:block; font-size:16px; font-weight:800; }
+  .stat small { display:block; font-size:11px; color:#657186; font-weight:600; margin-top:2px; }
+  .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+  .tile { background:#edf2f7; border-radius:12px; padding:10px 6px; text-align:center; }
+  .iconbtn { width:42px; height:42px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; background:#fff; border:1px solid #dbe2ea; box-shadow:0 4px 14px #10233d18; }
+  .tools { position:absolute; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; }
+  .rail-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .carousel { position:relative; padding:0 20px; }
+  .carousel .track { overflow:hidden; }
+  .track { display:flex; gap:12px; overflow:hidden; }
+  .arrow { position:absolute; top:50%; transform:translateY(-50%); width:36px; height:36px; border-radius:50%; background:#fff; border:1px solid #dbe2ea; box-shadow:0 6px 18px #10233d28; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .arrow.l { left:-4px; } .arrow.r { right:-4px; }
+  .sbar { height:6px; border-radius:999px; background:#dbe2ea; margin-top:10px; position:relative; }
+  .sbar i { position:absolute; left:0; top:0; height:6px; width:38%; border-radius:999px; background:#9fb0c2; }
+  .skel { background:linear-gradient(90deg,#edf2f7 25%,#e3e9f0 37%,#edf2f7 63%); border-radius:8px; }
+  .note { border-left:3px solid #f28b30; padding:2px 0 2px 12px; }
+  .kv { display:grid; grid-template-columns:132px 1fr; gap:8px 14px; font-size:13px; }
+  .kv b { font-weight:700; }
+  .step { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid #dbe2ea; }
+  .step:last-child { border-bottom:0; }
+  .num { width:26px; height:26px; border-radius:50%; background:#15324d; color:#fff; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .pill-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .col2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .col3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+</style>
+</helmet>
+
+<div class="frame">
+  <nav class="rail">
+  <div class="brand"><i></i>Ridewise</div>
+  <div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>Adventure</span></div><div class="tab on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8 17h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5"/></svg><span>Plan</span></div><div class="tab rec"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg><span>Record</span></div><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 21V4h11l-2 4 2 4H5"/></svg><span>Segments</span></div><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Profile</span></div>
+</nav>
+  <div class="panel" style="width:520px">
+    <div class="panel-head"><div class="title">Plan route</div><div class="sub">Build a route, or open one you saved</div></div>
+    <div class="panel-body">
+      <div class="card pad">
+        <div class="sec" style="margin-bottom:10px">Waypoints</div>
+        <div class="row" style="padding:8px 0;border-bottom:1px solid #dbe2ea">
+          <span class="muted"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></span>
+          <span style="width:26px;height:26px;border-radius:50%;background:#f28b30;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">A</span>
+          <span style="flex:1;font-size:14px;font-weight:600">Clifton Suspension Bridge</span><span class="muted"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 6l12 12M18 6L6 18"/></svg></span></div><div class="row" style="padding:8px 0;border-bottom:1px solid #dbe2ea">
+          <span class="muted"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></span>
+          <span style="width:26px;height:26px;border-radius:50%;background:#15324d;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">B</span>
+          <span style="flex:1;font-size:14px;font-weight:600">Ashton Court Estate</span><span class="muted"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 6l12 12M18 6L6 18"/></svg></span></div><div class="row" style="padding:8px 0;border-bottom:1px solid #dbe2ea">
+          <span class="muted"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></span>
+          <span style="width:26px;height:26px;border-radius:50%;background:#176bdb;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">C</span>
+          <span style="flex:1;font-size:14px;font-weight:600">Pill Harbour</span><span class="muted"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+        <button class="btn ghost sm" style="margin-top:10px">+ Add waypoint</button>
+      </div>
+      <div class="card pad">
+        <div class="between"><div><b style="font-size:14px;display:block">Round trip</b><span class="muted" style="font-size:12px;font-weight:600">Loop back to the start</span></div>
+          <span style="width:46px;height:28px;border-radius:999px;background:#139b66;position:relative"><i style="position:absolute;top:3px;left:21px;width:22px;height:22px;border-radius:50%;background:#fff"></i></span></div>
+      </div>
+      <div><div class="sec" style="margin-bottom:8px">Preferences</div>
+        <div class="pill-row"><span class="chip on">Road</span><span class="chip">Gravel</span><span class="chip">MTB</span><span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 20l6-10 4 6 3-4 5 8z"/></svg>Avoid hills</span><span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 19C5 9 11 4 20 4c0 9-5 15-15 15zM5 19c3-4 6-7 10-9"/></svg>Quiet roads</span><span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 8h11a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h9"/></svg>Tailwind home</span></div>
+      </div>
+      <div class="card pad">
+        <div class="between" style="margin-bottom:8px"><b style="font-size:14px">Recommended</b><span class="badge green">Moderate</span></div>
+        <div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><b>45.2 km</b><small>distance</small></div><div class="stat"><b>520 m</b><small>climb</small></div><div class="stat"><b>2h 04m</b><small>time</small></div></div>
+        <div style="margin-top:10px"><svg width="100%" height="74" viewBox="0 0 430 74" preserveAspectRatio="none" style="display:block"><polygon points="0,74 0,53 43,46 86,50 129,30 172,22 215,34 258,37 301,15 344,12 387,28 430,37 430,74" fill="#176bdb22"/><polyline points="0,53 43,46 86,50 129,30 172,22 215,34 258,37 301,15 344,12 387,28 430,37" fill="none" stroke="#9fb0c2" stroke-width="2"/><polyline points="129,30 172,22" fill="none" stroke="#f28b30" stroke-width="3.4" stroke-linecap="round"/><polyline points="258,37 301,15" fill="none" stroke="#d94d4d" stroke-width="3.4" stroke-linecap="round"/></svg></div>
+        <div class="row" style="gap:8px;margin-top:10px"><button class="btn primary sm">Navigate</button><button class="btn ghost sm"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg>Save</button><button class="btn ghost sm"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>GPX</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="map"><svg width="832" height="900" viewBox="0 0 832 900" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="mapPlan" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="832" height="900" fill="#eaeee7"/>
+    <ellipse cx="599" cy="216" rx="250" ry="252" fill="#d5e6c6"/>
+    <ellipse cx="150" cy="702" rx="216" ry="234" fill="#d5e6c6"/>
+    <path d="M0 594 C 200 522, 366 756, 832 648 L 832 900 L 0 900 Z" fill="#c6dcf1" opacity=".7"/>
+    <g stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M0 324 C 250 288, 499 414, 832 342"/>
+      <path d="M483 0 C 466 360, 549 630, 516 900"/>
+    </g>
+    <g font-family="Inter" font-size="11" font-weight="600" fill="#7b8794">
+      <text x="549" y="162">Ashton Court</text><text x="116" y="450">Bedminster</text><text x="366" y="774">Long Ashton</text>
+    </g>
+    <path d="M 200 666 C 133 396, 300 144, 449 198 S 716 252, 682 504 S 416 810, 200 666 Z" stroke="#fff" stroke-width="9" fill="none"/>
+    <path d="M 200 666 C 133 396, 300 144, 449 198 S 716 252, 682 504 S 416 810, 200 666 Z" stroke="url(#mapPlan)" stroke-width="5" fill="none"/>
+    <circle cx="200" cy="666" r="7" fill="#fff" stroke="#f28b30" stroke-width="3"/>
+  </svg>
+    <div class="tools"><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 21s6-6.5 6-11a6 6 0 0 0-12 0c0 4.5 6 11 6 11z"/><circle cx="12" cy="10" r="2.5"/></svg></div><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg></div></div>
+  </div>
+</div></x-dc>
+</body>
+</html>

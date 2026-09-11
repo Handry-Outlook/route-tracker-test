@@ -1,0 +1,120 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Adventure home",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "AdventureFilters.dc.html",
+      "title": "Adventure · filters",
+      "x": 480,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "RouteDetail.dc.html",
+      "title": "Route detail",
+      "x": 960,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "MyRoutes.dc.html",
+      "title": "My routes",
+      "x": 1440,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Planner.dc.html",
+      "title": "Route planner",
+      "x": 1920,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Navigation.dc.html",
+      "title": "Navigation",
+      "x": 2400,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "NavigationDark.dc.html",
+      "title": "Navigation · dark",
+      "x": 2880,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "LiveStats.dc.html",
+      "title": "Record · live stats",
+      "x": 0,
+      "y": 990,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Feed.dc.html",
+      "title": "Activity feed",
+      "x": 480,
+      "y": 990,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "PostRide.dc.html",
+      "title": "Post-ride summary",
+      "x": 960,
+      "y": 990,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Profile.dc.html",
+      "title": "Profile",
+      "x": 1440,
+      "y": 990,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Clubs.dc.html",
+      "title": "Clubs & challenges",
+      "x": 1920,
+      "y": 990,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "Comments.dc.html",
+      "title": "Comment thread",
+      "x": 2400,
+      "y": 990,
+      "w": 390,
+      "h": 844
+    }
+  ],
+  "annotations": [
+    {
+      "id": "about",
+      "x": 0,
+      "y": -150,
+      "w": 560,
+      "text": "Ridewise next: Google Maps navigation clarity + Komoot discovery/planning + Strava performance & social.\nColours, radii and type are lifted from the app's current styles.css (blue #176bdb, orange #f28b30, navy #15324d, 16px cards, Inter). All stats, names and places are sample data. Status bar / keyboard are left to the real device."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

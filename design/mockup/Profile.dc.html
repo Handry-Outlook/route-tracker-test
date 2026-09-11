@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; background: #e9edf2; font-family: Inter, -apple-system, "SF Pro Text", system-ui, sans-serif; color: #132238; -webkit-font-smoothing: antialiased; }
+    a { color: #176bdb; } a:hover { color: #f28b30; }
+    * { box-sizing: border-box; }
+    .phone { position: relative; width: 390px; height: 844px; overflow: hidden; background: #f5f7fa; color: #132238; }
+    .safe { padding-top: 54px; }
+    h1, h2, h3, p { margin: 0; }
+    .card { background: #ffffff; border: 1px solid #dbe2ea; border-radius: 16px; box-shadow: 0 4px 14px #10233d18; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid #dbe2ea; background: #ffffff; font-size: 13px; font-weight: 600; color: #132238; white-space: nowrap; }
+    .chip.on { background: #15324d; border-color: #15324d; color: #fff; }
+    .chip.orange { background: #f28b30; border-color: #f28b30; color: #fff; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 18px; border-radius: 12px; font-weight: 700; font-size: 15px; border: 0; }
+    .btn.primary { background: #176bdb; color: #fff; }
+    .btn.cta { background: #f28b30; color: #fff; box-shadow: 0 8px 22px #f28b3055; }
+    .btn.ghost { background: #ffffff; border: 1px solid #dbe2ea; color: #132238; }
+    .iconbtn { width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: #ffffff; border: 1px solid #dbe2ea; color: #132238; box-shadow: 0 4px 14px #10233d18; }
+    .muted { color: #657186; }
+    .tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; padding: 8px 8px 20px; background: #ffffff; border-top: 1px solid #dbe2ea; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+    .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 10px; font-weight: 600; color: #657186; border-radius: 12px; }
+    .tab.on { color: #176bdb; }
+    .tab.rec { color: #f28b30; }
+    .tab.rec svg { width: 30px; height: 30px; }
+    .searchbar { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-radius: 999px; background: #ffffff; box-shadow: 0 12px 34px #10233d25; color: #657186; font-size: 15px; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .badge.blue { background: #e5efff; color: #1754a3; }
+    .badge.orange { background: #fff0e1; color: #a35400; }
+    .badge.green { background: #e3f7ee; color: #0d6b47; }
+    .badge.red { background: #fde5e5; color: #a82525; }
+    .badge.dark { background: #132238cc; color: #fff; backdrop-filter: blur(6px); }
+    .stat b { display: block; font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+    .stat small { font-size: 11px; color: #657186; font-weight: 600; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #fff; }
+    .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #ffffff; border-radius: 20px 20px 0 0; box-shadow: 0 -8px 30px #10233d30; padding: 8px 16px 16px; }
+    .handle { width: 40px; height: 5px; border-radius: 999px; background: #dbe2ea; margin: 0 auto 12px; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .hscroll { display: flex; gap: 12px; overflow: hidden; }
+    .section-title { font-size: 15px; font-weight: 800; }
+    .toggle { width: 46px; height: 28px; border-radius: 999px; background: #dbe2ea; position: relative; }
+    .toggle.on { background: #139b66; }
+    .toggle i { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+    .toggle.on i { left: 21px; }
+    .slider { position: relative; height: 32px; }
+    .slider .track { position: absolute; left: 0; right: 0; top: 14px; height: 4px; border-radius: 999px; background: #dbe2ea; }
+    .slider .fill { position: absolute; left: 0; top: 14px; height: 4px; border-radius: 999px; background: #176bdb; }
+    .slider .knob { position: absolute; top: 5px; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid #176bdb; box-shadow: 0 4px 14px #10233d18; }
+  </style>
+</helmet>
+
+<div class="phone safe" style="padding-left:16px;padding-right:16px;display:flex;flex-direction:column;gap:16px">
+  <div class="between"><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 7h10M18 7h2M4 17h4M12 17h8M4 12h14"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/><circle cx="20" cy="12" r="2"/></svg></div><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V4M8 8l4-4 4 4"/></svg></div></div>
+  <div style="text-align:center"><span class="avatar" style="width:88px;height:88px;font-size:28px;background:linear-gradient(135deg,#f28b30,#176bdb);border:4px solid #fff;box-shadow:0 4px 14px #10233d18">HA</span><h1 style="font-size:22px;font-weight:800;margin-top:10px">Handry A.</h1><p class="muted" style="font-size:13px;font-weight:600">Bristol · Road & gravel</p></div>
+  <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;text-align:center"><div class="stat"><b>248</b><small>Followers</small></div><div class="stat"><b>131</b><small>Following</small></div></div>
+  <div class="card" style="padding:14px;display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:8px;text-align:center"><div class="stat"><b style="color:#176bdb">4,812</b><small>km this year</small></div><div class="stat"><b style="color:#176bdb">61,240</b><small>m climbed</small></div><div class="stat"><b style="color:#176bdb">138</b><small>rides</small></div></div>
+  <div><div class="between" style="margin-bottom:10px"><span class="section-title">Badges</span><span class="muted" style="font-size:12px;font-weight:700">12 earned</span></div><div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:10px"><div class="card" style="padding:12px 6px;text-align:center;box-shadow:none"><span style="display:inline-flex;width:44px;height:44px;border-radius:50%;background:#f28b301a;color:#f28b30;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 14v4M8 21h8"/></svg></span><b style="display:block;font-size:12px;margin-top:6px">Century</b></div><div class="card" style="padding:12px 6px;text-align:center;box-shadow:none"><span style="display:inline-flex;width:44px;height:44px;border-radius:50%;background:#176bdb1a;color:#176bdb;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 20l6-10 4 6 3-4 5 8z"/></svg></span><b style="display:block;font-size:12px;margin-top:6px">Everester</b></div><div class="card" style="padding:12px 6px;text-align:center;box-shadow:none"><span style="display:inline-flex;width:44px;height:44px;border-radius:50%;background:#f7b5001a;color:#f7b500;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 18h16M6 14a6 6 0 0 1 12 0M12 4v2M5 8l1.5 1.5M19 8l-1.5 1.5"/></svg></span><b style="display:block;font-size:12px;margin-top:6px">Early bird</b></div><div class="card" style="padding:12px 6px;text-align:center;box-shadow:none"><span style="display:inline-flex;width:44px;height:44px;border-radius:50%;background:#8b5bd61a;color:#8b5bd6;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 18h18l-1-10-5 4-3-6-3 6-5-4z"/></svg></span><b style="display:block;font-size:12px;margin-top:6px">Segment king</b></div><div class="card" style="padding:12px 6px;text-align:center;box-shadow:none"><span style="display:inline-flex;width:44px;height:44px;border-radius:50%;background:#139b661a;color:#139b66;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 21V4h11l-2 4 2 4H5"/></svg></span><b style="display:block;font-size:12px;margin-top:6px">50 segments</b></div><div class="card" style="padding:12px 6px;text-align:center;box-shadow:none"><span style="display:inline-flex;width:44px;height:44px;border-radius:50%;background:#b453091a;color:#b45309;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 19C5 9 11 4 20 4c0 9-5 15-15 15zM5 19c3-4 6-7 10-9"/></svg></span><b style="display:block;font-size:12px;margin-top:6px">Autumn tour</b></div></div></div>
+  <nav class="tabbar"><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>Adventure</span></div><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8 17h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5"/></svg><span>Plan Route</span></div><div class="tab rec"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg><span>Record</span></div><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 21V4h11l-2 4 2 4H5"/></svg><span>Segments</span></div><div class="tab on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Profile</span></div></nav>
+</div></x-dc>
+</body>
+</html>

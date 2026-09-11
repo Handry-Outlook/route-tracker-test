@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Activity photos: only the owning rider can upload/delete their own
+    // photos. Storage rules can't read Firestore's per-activity visibility
+    // field directly, so as a pragmatic v1 this makes photo files
+    // readable by any signed-in user once uploaded — acceptable since the
+    // Firestore activity doc they're attached to is already gated the
+    // same way (public feed entries only). Revisit if a private-activity
+    // mode is added later.
+    match /activity-photos/{uid}/{activityId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

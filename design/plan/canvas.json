@@ -1,0 +1,79 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Desktop · Adventure",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "DesktopRouteDetail.dc.html",
+      "title": "Desktop · Route detail",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "DesktopPlanner.dc.html",
+      "title": "Desktop · Planner",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "LoadingStates.dc.html",
+      "title": "Loading — the jumping fix",
+      "x": 0,
+      "y": 1120,
+      "w": 980,
+      "h": 1180
+    },
+    {
+      "file": "CarouselControls.dc.html",
+      "title": "Laptop carousels",
+      "x": 1100,
+      "y": 1120,
+      "w": 980,
+      "h": 1000
+    },
+    {
+      "file": "BetterRoutes.dc.html",
+      "title": "Better routes",
+      "x": 2200,
+      "y": 1120,
+      "w": 980,
+      "h": 1180
+    },
+    {
+      "file": "Roadmap.dc.html",
+      "title": "Roadmap — pick what is next",
+      "x": 3300,
+      "y": 1120,
+      "w": 1000,
+      "h": 1460
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -190,
+      "w": 720,
+      "text": "PLAN — review before I build.\nTop row: how Ridewise should look on a laptop (the app currently reuses the phone sheet).\nBottom row: the two bugs you hit (carousels you cannot scroll, loading box that jumps), how routes get better, and a roadmap to choose from."
+    },
+    {
+      "id": "pick",
+      "x": 3300,
+      "y": 1120,
+      "w": 300,
+      "text": "Tell me which roadmap items to take and I will start there — the two \"fix first\" ones are quick."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

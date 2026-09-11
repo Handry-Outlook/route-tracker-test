@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+  html, body { height:100%; }
+  body { margin:0; background:#e9edf2; font-family:Inter,-apple-system,"SF Pro Text",system-ui,sans-serif; color:#132238; -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  a { color:#176bdb; } a:hover { color:#f28b30; }
+  h1,h2,h3,p { margin:0; }
+  .frame { position:relative; width:100%; height:100%; overflow:hidden; background:#f5f7fa; display:flex; }
+  .rail { width:88px; background:#15324d; padding:14px 6px; display:flex; flex-direction:column; gap:4px; flex:0 0 auto; }
+  .rail .brand { color:#fff; text-align:center; font-size:11px; font-weight:800; margin-bottom:10px; }
+  .rail .brand i { display:block; width:40px; height:40px; margin:0 auto 6px; border-radius:11px; background:linear-gradient(135deg,#f28b30,#176bdb); }
+  .tab { border:0; background:transparent; color:#b8c7d6; border-radius:12px; min-height:56px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-size:10px; font-weight:600; }
+  .tab.on { background:#ffffff1f; color:#fff; }
+  .tab.rec { color:#f28b30; }
+  .panel { width:460px; flex:0 0 auto; background:#fff; border-right:1px solid #dbe2ea; display:flex; flex-direction:column; }
+  .panel-head { padding:18px 20px 12px; border-bottom:1px solid #dbe2ea; }
+  .panel-body { padding:16px 20px; overflow:auto; display:flex; flex-direction:column; gap:14px; flex:1; }
+  .map { flex:1; position:relative; overflow:hidden; }
+  .card { background:#fff; border:1px solid #dbe2ea; border-radius:16px; box-shadow:0 4px 14px #10233d18; }
+  .pad { padding:14px; }
+  .row { display:flex; align-items:center; gap:10px; }
+  .between { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .muted { color:#657186; }
+  .title { font-size:22px; font-weight:800; letter-spacing:-.02em; }
+  .sub { font-size:13px; font-weight:600; color:#657186; margin-top:3px; }
+  .sec { font-size:15px; font-weight:800; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 16px; border:0; border-radius:12px; font-weight:700; font-size:14px; background:#edf2f7; color:#132238; }
+  .btn.primary { background:#176bdb; color:#fff; }
+  .btn.cta { background:#f28b30; color:#fff; }
+  .btn.sm { min-height:36px; font-size:13px; padding:0 12px; border-radius:10px; }
+  .btn.ghost { background:#fff; border:1px solid #dbe2ea; }
+  .chip { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:0 12px; border-radius:999px; border:1px solid #dbe2ea; background:#fff; font-size:13px; font-weight:600; white-space:nowrap; }
+  .chip.on { background:#15324d; border-color:#15324d; color:#fff; }
+  .badge { display:inline-flex; align-items:center; gap:5px; min-height:24px; padding:0 9px; border-radius:999px; font-size:11px; font-weight:700; }
+  .badge.blue { background:#176bdb22; color:#176bdb; }
+  .badge.green { background:#139b6622; color:#139b66; }
+  .badge.orange { background:#f28b3028; color:#a35400; }
+  .badge.red { background:#d94d4d22; color:#d94d4d; }
+  .badge.dark { background:#132238cc; color:#fff; }
+  .stat b { display:block; font-size:16px; font-weight:800; }
+  .stat small { display:block; font-size:11px; color:#657186; font-weight:600; margin-top:2px; }
+  .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+  .tile { background:#edf2f7; border-radius:12px; padding:10px 6px; text-align:center; }
+  .iconbtn { width:42px; height:42px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; background:#fff; border:1px solid #dbe2ea; box-shadow:0 4px 14px #10233d18; }
+  .tools { position:absolute; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; }
+  .rail-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .carousel { position:relative; padding:0 20px; }
+  .carousel .track { overflow:hidden; }
+  .track { display:flex; gap:12px; overflow:hidden; }
+  .arrow { position:absolute; top:50%; transform:translateY(-50%); width:36px; height:36px; border-radius:50%; background:#fff; border:1px solid #dbe2ea; box-shadow:0 6px 18px #10233d28; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .arrow.l { left:-4px; } .arrow.r { right:-4px; }
+  .sbar { height:6px; border-radius:999px; background:#dbe2ea; margin-top:10px; position:relative; }
+  .sbar i { position:absolute; left:0; top:0; height:6px; width:38%; border-radius:999px; background:#9fb0c2; }
+  .skel { background:linear-gradient(90deg,#edf2f7 25%,#e3e9f0 37%,#edf2f7 63%); border-radius:8px; }
+  .note { border-left:3px solid #f28b30; padding:2px 0 2px 12px; }
+  .kv { display:grid; grid-template-columns:132px 1fr; gap:8px 14px; font-size:13px; }
+  .kv b { font-weight:700; }
+  .step { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid #dbe2ea; }
+  .step:last-child { border-bottom:0; }
+  .num { width:26px; height:26px; border-radius:50%; background:#15324d; color:#fff; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .pill-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .col2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .col3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+</style>
+</helmet>
+
+<div style="padding:28px;background:#fff;min-height:100%">
+  <div class="title">Better routes</div>
+  <div class="sub" style="max-width:820px">Today the generator picks anchor points geometrically, asks Mapbox for a cycling route through them, then <i>scores</i> the result against OpenStreetMap afterwards. The OSM data never influences the route it builds. That is the single biggest lever on quality.</div>
+
+  <div class="col2" style="margin-top:20px">
+    <div class="card pad">
+      <div class="sec" style="margin-bottom:10px;color:#d94d4d">Today — score after the fact</div>
+      <div class="step"><span class="num" style="background:#dbe2ea;color:#657186">1</span><div style="font-size:13px;font-weight:600">Pick anchors on a circle around the start</div></div><div class="step"><span class="num" style="background:#dbe2ea;color:#657186">2</span><div style="font-size:13px;font-weight:600">Ask Mapbox for a cycling route through them</div></div><div class="step"><span class="num" style="background:#dbe2ea;color:#657186">3</span><div style="font-size:13px;font-weight:600">Fetch OSM data for the finished route</div></div><div class="step"><span class="num" style="background:#dbe2ea;color:#657186">4</span><div style="font-size:13px;font-weight:600">Show a percentage the rider cannot act on</div></div>
+      <p class="muted" style="font-size:12px;font-weight:600;margin-top:10px">A loop scoring 12% is discovered only once it has been built and shown.</p>
+    </div>
+    <div class="card pad">
+      <div class="sec" style="margin-bottom:10px;color:#139b66">Proposed — steer with the data</div>
+      <div class="step"><span class="num">1</span><div style="font-size:13px;font-weight:600">Fetch OSM cycleways, surface and quiet lanes for the search area first</div></div><div class="step"><span class="num">2</span><div style="font-size:13px;font-weight:600">Weight candidate anchors toward that network, away from primary roads</div></div><div class="step"><span class="num">3</span><div style="font-size:13px;font-weight:600">Build 6 candidates instead of 3, in parallel</div></div><div class="step"><span class="num">4</span><div style="font-size:13px;font-weight:600">Rank on infrastructure, surface, climb and repeat-road</div></div><div class="step"><span class="num">5</span><div style="font-size:13px;font-weight:600">Keep the best 3, and say why each one won</div></div>
+    </div>
+  </div>
+
+  <div class="card pad" style="margin-top:18px">
+    <div class="sec" style="margin-bottom:10px">New rider controls</div>
+    <div class="pill-row" style="margin-bottom:12px">
+      <span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 20l6-10 4 6 3-4 5 8z"/></svg>Avoid hills</span><span class="chip on"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 19C5 9 11 4 20 4c0 9-5 15-15 15zM5 19c3-4 6-7 10-9"/></svg>Quiet roads</span><span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 8h11a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h9"/></svg>Tailwind on the way home</span>
+      <span class="chip">Paved only</span><span class="chip">Allow gravel</span><span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Back before sunset</span>
+    </div>
+    <div class="kv">
+      <b>Avoid hills</b><span>Penalises candidates by metres climbed per km, using the elevation data already fetched.</span>
+      <b>Quiet roads</b><span>Down-weights <b>primary</b>/<b>secondary</b> OSM classes, up-weights <b>cycleway</b>, <b>living_street</b>, <b>track</b>.</span>
+      <b>Tailwind home</b><span>Uses the live wind bearing the app already reads, and orients the loop so the return leg runs with the wind.</span>
+      <b>Back before sunset</b><span>Caps the distance band from remaining daylight and your average speed.</span>
+    </div>
+  </div>
+
+  <div class="card pad" style="margin-top:18px">
+    <div class="sec" style="margin-bottom:8px">Why this route</div>
+    <p class="muted" style="font-size:13px;font-weight:600;line-height:1.55">Each candidate carries a one-line reason drawn from its real scores, so the choice is explainable rather than three near-identical options: <b style="color:#132238">"Most cycleway (68%), 90 m less climbing, but 4 km longer."</b></p>
+  </div>
+</div></x-dc>
+</body>
+</html>

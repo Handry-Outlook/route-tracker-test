@@ -1,0 +1,6 @@
+node_modules/
+dist/
+
+# Local configuration: API keys and project settings. See .env.example.
+.env
+.env.local

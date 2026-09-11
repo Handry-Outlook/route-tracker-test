@@ -1,0 +1,239 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+  html, body { height:100%; }
+  body { margin:0; background:#e9edf2; font-family:Inter,-apple-system,"SF Pro Text",system-ui,sans-serif; color:#132238; -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  a { color:#176bdb; } a:hover { color:#f28b30; }
+  h1,h2,h3,p { margin:0; }
+  .frame { position:relative; width:100%; height:100%; overflow:hidden; background:#f5f7fa; display:flex; }
+  .rail { width:88px; background:#15324d; padding:14px 6px; display:flex; flex-direction:column; gap:4px; flex:0 0 auto; }
+  .rail .brand { color:#fff; text-align:center; font-size:11px; font-weight:800; margin-bottom:10px; }
+  .rail .brand i { display:block; width:40px; height:40px; margin:0 auto 6px; border-radius:11px; background:linear-gradient(135deg,#f28b30,#176bdb); }
+  .tab { border:0; background:transparent; color:#b8c7d6; border-radius:12px; min-height:56px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-size:10px; font-weight:600; }
+  .tab.on { background:#ffffff1f; color:#fff; }
+  .tab.rec { color:#f28b30; }
+  .panel { width:460px; flex:0 0 auto; background:#fff; border-right:1px solid #dbe2ea; display:flex; flex-direction:column; }
+  .panel-head { padding:18px 20px 12px; border-bottom:1px solid #dbe2ea; }
+  .panel-body { padding:16px 20px; overflow:auto; display:flex; flex-direction:column; gap:14px; flex:1; }
+  .map { flex:1; position:relative; overflow:hidden; }
+  .card { background:#fff; border:1px solid #dbe2ea; border-radius:16px; box-shadow:0 4px 14px #10233d18; }
+  .pad { padding:14px; }
+  .row { display:flex; align-items:center; gap:10px; }
+  .between { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .muted { color:#657186; }
+  .title { font-size:22px; font-weight:800; letter-spacing:-.02em; }
+  .sub { font-size:13px; font-weight:600; color:#657186; margin-top:3px; }
+  .sec { font-size:15px; font-weight:800; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 16px; border:0; border-radius:12px; font-weight:700; font-size:14px; background:#edf2f7; color:#132238; }
+  .btn.primary { background:#176bdb; color:#fff; }
+  .btn.cta { background:#f28b30; color:#fff; }
+  .btn.sm { min-height:36px; font-size:13px; padding:0 12px; border-radius:10px; }
+  .btn.ghost { background:#fff; border:1px solid #dbe2ea; }
+  .chip { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:0 12px; border-radius:999px; border:1px solid #dbe2ea; background:#fff; font-size:13px; font-weight:600; white-space:nowrap; }
+  .chip.on { background:#15324d; border-color:#15324d; color:#fff; }
+  .badge { display:inline-flex; align-items:center; gap:5px; min-height:24px; padding:0 9px; border-radius:999px; font-size:11px; font-weight:700; }
+  .badge.blue { background:#176bdb22; color:#176bdb; }
+  .badge.green { background:#139b6622; color:#139b66; }
+  .badge.orange { background:#f28b3028; color:#a35400; }
+  .badge.red { background:#d94d4d22; color:#d94d4d; }
+  .badge.dark { background:#132238cc; color:#fff; }
+  .stat b { display:block; font-size:16px; font-weight:800; }
+  .stat small { display:block; font-size:11px; color:#657186; font-weight:600; margin-top:2px; }
+  .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+  .tile { background:#edf2f7; border-radius:12px; padding:10px 6px; text-align:center; }
+  .iconbtn { width:42px; height:42px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; background:#fff; border:1px solid #dbe2ea; box-shadow:0 4px 14px #10233d18; }
+  .tools { position:absolute; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; }
+  .rail-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .carousel { position:relative; padding:0 20px; }
+  .carousel .track { overflow:hidden; }
+  .track { display:flex; gap:12px; overflow:hidden; }
+  .arrow { position:absolute; top:50%; transform:translateY(-50%); width:36px; height:36px; border-radius:50%; background:#fff; border:1px solid #dbe2ea; box-shadow:0 6px 18px #10233d28; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .arrow.l { left:-4px; } .arrow.r { right:-4px; }
+  .sbar { height:6px; border-radius:999px; background:#dbe2ea; margin-top:10px; position:relative; }
+  .sbar i { position:absolute; left:0; top:0; height:6px; width:38%; border-radius:999px; background:#9fb0c2; }
+  .skel { background:linear-gradient(90deg,#edf2f7 25%,#e3e9f0 37%,#edf2f7 63%); border-radius:8px; }
+  .note { border-left:3px solid #f28b30; padding:2px 0 2px 12px; }
+  .kv { display:grid; grid-template-columns:132px 1fr; gap:8px 14px; font-size:13px; }
+  .kv b { font-weight:700; }
+  .step { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid #dbe2ea; }
+  .step:last-child { border-bottom:0; }
+  .num { width:26px; height:26px; border-radius:50%; background:#15324d; color:#fff; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .pill-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .col2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .col3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+</style>
+</helmet>
+
+<div class="frame">
+  <nav class="rail">
+  <div class="brand"><i></i>Ridewise</div>
+  <div class="tab on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>Adventure</span></div><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8 17h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5"/></svg><span>Plan</span></div><div class="tab rec"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg><span>Record</span></div><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 21V4h11l-2 4 2 4H5"/></svg><span>Segments</span></div><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Profile</span></div>
+</nav>
+  <div class="panel" style="width:520px">
+    <div class="panel-head">
+      <div class="between"><div><div class="title">Adventure</div><div class="sub">3 loops near Bristol</div></div>
+        <div class="row" style="gap:8px"><button class="btn ghost sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 7h10M18 7h2M4 17h4M12 17h8M4 12h14"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/><circle cx="20" cy="12" r="2"/></svg>Filters</button><button class="btn cta sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 7h4l8 10h4M4 17h4l2-2.5M14 9.5l2-2.5h4M18 4l3 3-3 3M18 14l3 3-3 3"/></svg>Surprise me</button></div></div>
+      <div class="row" style="margin-top:14px;min-height:46px;padding:0 14px;border-radius:999px;background:#edf2f7;border:1px solid #dbe2ea;color:#657186;font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Search routes, places, riders</div>
+    </div>
+    <div class="panel-body">
+      <div class="carousel">
+        <div class="rail-head"><span class="sec">Recommended loops</span><span class="muted" style="font-size:12px;font-weight:700">1 / 3</span></div>
+        <div class="track"><article class="card" style="width:268px;overflow:hidden;flex:0 0 auto">
+  <div style="position:relative;height:118px;background:#dfe7f0"><svg width="268" height="118" viewBox="0 0 268 118" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="dChewValleyLoop" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="268" height="118" fill="#eaeee7"/>
+    <ellipse cx="193" cy="28" rx="80" ry="33" fill="#d5e6c6"/>
+    <ellipse cx="48" cy="92" rx="70" ry="31" fill="#d5e6c6"/>
+    <path d="M0 78 C 64 68, 118 99, 268 85 L 268 118 L 0 118 Z" fill="#c6dcf1" opacity=".7"/>
+    <g stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M0 42 C 80 38, 161 54, 268 45"/>
+      <path d="M155 0 C 150 47, 177 83, 166 118"/>
+    </g>
+    <g font-family="Inter" font-size="11" font-weight="600" fill="#7b8794">
+      <text x="177" y="21">Ashton Court</text><text x="38" y="59">Bedminster</text><text x="118" y="101">Long Ashton</text>
+    </g>
+    <path d="M 64 87 C 43 52, 96 19, 145 26 S 230 33, 220 66 S 134 106, 64 87 Z" stroke="#fff" stroke-width="9" fill="none"/>
+    <path d="M 64 87 C 43 52, 96 19, 145 26 S 230 33, 220 66 S 134 106, 64 87 Z" stroke="url(#dChewValleyLoop)" stroke-width="5" fill="none"/>
+    
+  </svg>
+    <div style="position:absolute;left:10px;top:10px"><span class="badge dark">Scenic</span></div>
+    <div style="position:absolute;right:10px;top:10px;display:flex;gap:6px">
+      <span class="iconbtn" style="width:32px;height:32px;border:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></span>
+      <span class="iconbtn" style="width:32px;height:32px;border:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V4M8 8l4-4 4 4"/></svg></span></div>
+  </div>
+  <div style="padding:12px">
+    <b style="font-size:15px;display:block">Chew Valley Loop</b>
+    <span class="muted" style="font-size:12px;font-weight:600">62% on cycle infrastructure</span>
+    <div class="row" style="gap:12px;font-size:13px;font-weight:700;margin:9px 0 10px;white-space:nowrap">
+      <span class="row" style="gap:5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8 17h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5"/></svg>42 km</span>
+      <span class="row" style="gap:5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 20l6-10 4 6 3-4 5 8z"/></svg>610 m</span>
+      <span class="row" style="gap:5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>2h 15</span>
+      <span class="badge red">Hard</span>
+    </div>
+    <div class="row" style="gap:8px"><button class="btn ghost sm" style="flex:1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Show</button><button class="btn primary sm" style="flex:1">Details</button></div>
+  </div>
+</article><article class="card" style="width:268px;overflow:hidden;flex:0 0 auto">
+  <div style="position:relative;height:118px;background:#dfe7f0"><svg width="268" height="118" viewBox="0 0 268 118" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="dAshtonGravel" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="268" height="118" fill="#eaeee7"/>
+    <ellipse cx="193" cy="28" rx="80" ry="33" fill="#d5e6c6"/>
+    <ellipse cx="48" cy="92" rx="70" ry="31" fill="#d5e6c6"/>
+    <path d="M0 78 C 64 68, 118 99, 268 85 L 268 118 L 0 118 Z" fill="#c6dcf1" opacity=".7"/>
+    <g stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M0 42 C 80 38, 161 54, 268 45"/>
+      <path d="M155 0 C 150 47, 177 83, 166 118"/>
+    </g>
+    <g font-family="Inter" font-size="11" font-weight="600" fill="#7b8794">
+      <text x="177" y="21">Ashton Court</text><text x="38" y="59">Bedminster</text><text x="118" y="101">Long Ashton</text>
+    </g>
+    <path d="M 64 87 C 43 52, 96 19, 145 26 S 230 33, 220 66 S 134 106, 64 87 Z" stroke="#fff" stroke-width="9" fill="none"/>
+    <path d="M 64 87 C 43 52, 96 19, 145 26 S 230 33, 220 66 S 134 106, 64 87 Z" stroke="url(#dAshtonGravel)" stroke-width="5" fill="none"/>
+    
+  </svg>
+    <div style="position:absolute;left:10px;top:10px"><span class="badge dark">Scenic</span></div>
+    <div style="position:absolute;right:10px;top:10px;display:flex;gap:6px">
+      <span class="iconbtn" style="width:32px;height:32px;border:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></span>
+      <span class="iconbtn" style="width:32px;height:32px;border:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V4M8 8l4-4 4 4"/></svg></span></div>
+  </div>
+  <div style="padding:12px">
+    <b style="font-size:15px;display:block">Ashton Gravel</b>
+    <span class="muted" style="font-size:12px;font-weight:600">62% on cycle infrastructure</span>
+    <div class="row" style="gap:12px;font-size:13px;font-weight:700;margin:9px 0 10px;white-space:nowrap">
+      <span class="row" style="gap:5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8 17h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5"/></svg>24 km</span>
+      <span class="row" style="gap:5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 20l6-10 4 6 3-4 5 8z"/></svg>320 m</span>
+      <span class="row" style="gap:5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>1h 20</span>
+      <span class="badge orange">Moderate</span>
+    </div>
+    <div class="row" style="gap:8px"><button class="btn ghost sm" style="flex:1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Show</button><button class="btn primary sm" style="flex:1">Details</button></div>
+  </div>
+</article></div>
+        <div class="arrow l"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M15 5l-7 7 7 7"/></svg></div><div class="arrow r"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="sbar"><i></i></div>
+      </div>
+      <div class="carousel">
+        <div class="rail-head"><span class="sec">Community favourites</span></div>
+        <div class="track"><div class="card" style="width:170px;overflow:hidden;flex:0 0 auto"><div style="height:72px;position:relative;background:#dfe7f0"><svg width="170" height="72" viewBox="0 0 170 72" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="c0" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="170" height="72" fill="#eaeee7"/>
+    <ellipse cx="122" cy="17" rx="51" ry="20" fill="#d5e6c6"/>
+    <ellipse cx="31" cy="56" rx="44" ry="19" fill="#d5e6c6"/>
+    <path d="M0 48 C 41 42, 75 60, 170 52 L 170 72 L 0 72 Z" fill="#c6dcf1" opacity=".7"/>
+    <g stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M0 26 C 51 23, 102 33, 170 27"/>
+      <path d="M99 0 C 95 29, 112 50, 105 72"/>
+    </g>
+    <g font-family="Inter" font-size="11" font-weight="600" fill="#7b8794">
+      <text x="112" y="13">Ashton Court</text><text x="24" y="36">Bedminster</text><text x="75" y="62">Long Ashton</text>
+    </g>
+    <path d="M 41 53 C 27 32, 61 12, 92 16 S 146 20, 139 40 S 85 65, 41 53 Z" stroke="#fff" stroke-width="9" fill="none"/>
+    <path d="M 41 53 C 27 32, 61 12, 92 16 S 146 20, 139 40 S 85 65, 41 53 Z" stroke="url(#c0)" stroke-width="5" fill="none"/>
+    
+  </svg></div><div style="padding:9px 10px"><b style="font-size:13px;display:block">Severn Beach Flat</b><span class="muted" style="font-size:11px;font-weight:600">38 km · Moderate</span></div></div><div class="card" style="width:170px;overflow:hidden;flex:0 0 auto"><div style="height:72px;position:relative;background:#dfe7f0"><svg width="170" height="72" viewBox="0 0 170 72" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="c1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="170" height="72" fill="#eaeee7"/>
+    <ellipse cx="122" cy="17" rx="51" ry="20" fill="#d5e6c6"/>
+    <ellipse cx="31" cy="56" rx="44" ry="19" fill="#d5e6c6"/>
+    <path d="M0 48 C 41 42, 75 60, 170 52 L 170 72 L 0 72 Z" fill="#c6dcf1" opacity=".7"/>
+    <g stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M0 26 C 51 23, 102 33, 170 27"/>
+      <path d="M99 0 C 95 29, 112 50, 105 72"/>
+    </g>
+    <g font-family="Inter" font-size="11" font-weight="600" fill="#7b8794">
+      <text x="112" y="13">Ashton Court</text><text x="24" y="36">Bedminster</text><text x="75" y="62">Long Ashton</text>
+    </g>
+    <path d="M 41 53 C 27 32, 61 12, 92 16 S 146 20, 139 40 S 85 65, 41 53 Z" stroke="#fff" stroke-width="9" fill="none"/>
+    <path d="M 41 53 C 27 32, 61 12, 92 16 S 146 20, 139 40 S 85 65, 41 53 Z" stroke="url(#c1)" stroke-width="5" fill="none"/>
+    
+  </svg></div><div style="padding:9px 10px"><b style="font-size:13px;display:block">Bath Two Tunnels</b><span class="muted" style="font-size:11px;font-weight:600">38 km · Moderate</span></div></div><div class="card" style="width:170px;overflow:hidden;flex:0 0 auto"><div style="height:72px;position:relative;background:#dfe7f0"><svg width="170" height="72" viewBox="0 0 170 72" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="c2" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="170" height="72" fill="#eaeee7"/>
+    <ellipse cx="122" cy="17" rx="51" ry="20" fill="#d5e6c6"/>
+    <ellipse cx="31" cy="56" rx="44" ry="19" fill="#d5e6c6"/>
+    <path d="M0 48 C 41 42, 75 60, 170 52 L 170 72 L 0 72 Z" fill="#c6dcf1" opacity=".7"/>
+    <g stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M0 26 C 51 23, 102 33, 170 27"/>
+      <path d="M99 0 C 95 29, 112 50, 105 72"/>
+    </g>
+    <g font-family="Inter" font-size="11" font-weight="600" fill="#7b8794">
+      <text x="112" y="13">Ashton Court</text><text x="24" y="36">Bedminster</text><text x="75" y="62">Long Ashton</text>
+    </g>
+    <path d="M 41 53 C 27 32, 61 12, 92 16 S 146 20, 139 40 S 85 65, 41 53 Z" stroke="#fff" stroke-width="9" fill="none"/>
+    <path d="M 41 53 C 27 32, 61 12, 92 16 S 146 20, 139 40 S 85 65, 41 53 Z" stroke="url(#c2)" stroke-width="5" fill="none"/>
+    
+  </svg></div><div style="padding:9px 10px"><b style="font-size:13px;display:block">Dundry Climb</b><span class="muted" style="font-size:11px;font-weight:600">38 km · Moderate</span></div></div></div>
+        <div class="arrow l"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M15 5l-7 7 7 7"/></svg></div><div class="arrow r"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="sbar"><i style="width:52%"></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="map"><svg width="832" height="900" viewBox="0 0 832 900" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="mapMain" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="832" height="900" fill="#eaeee7"/>
+    <ellipse cx="599" cy="216" rx="250" ry="252" fill="#d5e6c6"/>
+    <ellipse cx="150" cy="702" rx="216" ry="234" fill="#d5e6c6"/>
+    <path d="M0 594 C 200 522, 366 756, 832 648 L 832 900 L 0 900 Z" fill="#c6dcf1" opacity=".7"/>
+    <g stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M0 324 C 250 288, 499 414, 832 342"/>
+      <path d="M483 0 C 466 360, 549 630, 516 900"/>
+    </g>
+    <g font-family="Inter" font-size="11" font-weight="600" fill="#7b8794">
+      <text x="549" y="162">Ashton Court</text><text x="116" y="450">Bedminster</text><text x="366" y="774">Long Ashton</text>
+    </g>
+    <path d="M 200 666 C 133 396, 300 144, 449 198 S 716 252, 682 504 S 416 810, 200 666 Z" stroke="#fff" stroke-width="9" fill="none"/>
+    <path d="M 200 666 C 133 396, 300 144, 449 198 S 716 252, 682 504 S 416 810, 200 666 Z" stroke="url(#mapMain)" stroke-width="5" fill="none"/>
+    <circle cx="200" cy="666" r="7" fill="#fff" stroke="#f28b30" stroke-width="3"/>
+  </svg>
+    <div class="tools"><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 21s6-6.5 6-11a6 6 0 0 0-12 0c0 4.5 6 11 6 11z"/><circle cx="12" cy="10" r="2.5"/></svg></div><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V4M8 8l4-4 4 4"/></svg></div><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg></div></div>
+  </div>
+</div></x-dc>
+</body>
+</html>

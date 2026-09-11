@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; background: #e9edf2; font-family: Inter, -apple-system, "SF Pro Text", system-ui, sans-serif; color: #132238; -webkit-font-smoothing: antialiased; }
+    a { color: #176bdb; } a:hover { color: #f28b30; }
+    * { box-sizing: border-box; }
+    .phone { position: relative; width: 390px; height: 844px; overflow: hidden; background: #f5f7fa; color: #132238; }
+    .safe { padding-top: 54px; }
+    h1, h2, h3, p { margin: 0; }
+    .card { background: #ffffff; border: 1px solid #dbe2ea; border-radius: 16px; box-shadow: 0 4px 14px #10233d18; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid #dbe2ea; background: #ffffff; font-size: 13px; font-weight: 600; color: #132238; white-space: nowrap; }
+    .chip.on { background: #15324d; border-color: #15324d; color: #fff; }
+    .chip.orange { background: #f28b30; border-color: #f28b30; color: #fff; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 18px; border-radius: 12px; font-weight: 700; font-size: 15px; border: 0; }
+    .btn.primary { background: #176bdb; color: #fff; }
+    .btn.cta { background: #f28b30; color: #fff; box-shadow: 0 8px 22px #f28b3055; }
+    .btn.ghost { background: #ffffff; border: 1px solid #dbe2ea; color: #132238; }
+    .iconbtn { width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: #ffffff; border: 1px solid #dbe2ea; color: #132238; box-shadow: 0 4px 14px #10233d18; }
+    .muted { color: #657186; }
+    .tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; padding: 8px 8px 20px; background: #ffffff; border-top: 1px solid #dbe2ea; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+    .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 10px; font-weight: 600; color: #657186; border-radius: 12px; }
+    .tab.on { color: #176bdb; }
+    .tab.rec { color: #f28b30; }
+    .tab.rec svg { width: 30px; height: 30px; }
+    .searchbar { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-radius: 999px; background: #ffffff; box-shadow: 0 12px 34px #10233d25; color: #657186; font-size: 15px; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .badge.blue { background: #e5efff; color: #1754a3; }
+    .badge.orange { background: #fff0e1; color: #a35400; }
+    .badge.green { background: #e3f7ee; color: #0d6b47; }
+    .badge.red { background: #fde5e5; color: #a82525; }
+    .badge.dark { background: #132238cc; color: #fff; backdrop-filter: blur(6px); }
+    .stat b { display: block; font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+    .stat small { font-size: 11px; color: #657186; font-weight: 600; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #fff; }
+    .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #ffffff; border-radius: 20px 20px 0 0; box-shadow: 0 -8px 30px #10233d30; padding: 8px 16px 16px; }
+    .handle { width: 40px; height: 5px; border-radius: 999px; background: #dbe2ea; margin: 0 auto 12px; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .hscroll { display: flex; gap: 12px; overflow: hidden; }
+    .section-title { font-size: 15px; font-weight: 800; }
+    .toggle { width: 46px; height: 28px; border-radius: 999px; background: #dbe2ea; position: relative; }
+    .toggle.on { background: #139b66; }
+    .toggle i { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+    .toggle.on i { left: 21px; }
+    .slider { position: relative; height: 32px; }
+    .slider .track { position: absolute; left: 0; right: 0; top: 14px; height: 4px; border-radius: 999px; background: #dbe2ea; }
+    .slider .fill { position: absolute; left: 0; top: 14px; height: 4px; border-radius: 999px; background: #176bdb; }
+    .slider .knob { position: absolute; top: 5px; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid #176bdb; box-shadow: 0 4px 14px #10233d18; }
+  </style>
+</helmet>
+
+<div class="phone" style="background:#ffffff">
+  <div style="position:relative;height:300px">
+    <svg width="390" height="300" viewBox="0 0 390 300" style="display:block;border-radius:0px" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="swarm390" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f9d8a8"/><stop offset="1" stop-color="#f4a76a"/></linearGradient></defs><rect width="390" height="300" fill="url(#swarm390)"/><path d="M0 186 C 78 135, 136.5 210, 214.50000000000003 150 S 331.5 105, 390 165 L 390 300 L 0 300z" fill="#2f5d4a" opacity=".55"/><path d="M0 234 C 97.5 186, 195 270, 273 216 S 351 180, 390 225 L 390 300 L 0 300z" fill="#1f4a3a" opacity=".8"/></svg>
+    <div style="position:absolute;left:16px;top:54px" class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M15 5l-7 7 7 7"/></svg></div>
+    <div style="position:absolute;right:16px;top:54px;display:flex;gap:8px"><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></div><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V4M8 8l4-4 4 4"/></svg></div></div>
+    <div style="position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;gap:6px"><span style="width:18px;height:6px;border-radius:999px;background:#fff;opacity:1"></span><span style="width:6px;height:6px;border-radius:999px;background:#fff;opacity:0.55"></span><span style="width:6px;height:6px;border-radius:999px;background:#fff;opacity:0.55"></span><span style="width:6px;height:6px;border-radius:999px;background:#fff;opacity:0.55"></span></div>
+    <span class="badge dark" style="position:absolute;left:16px;bottom:34px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>12 rider photos</span>
+  </div>
+  <div style="padding:18px 16px 0;display:flex;flex-direction:column;gap:16px">
+    <div>
+      <div class="row" style="gap:6px;margin-bottom:8px"><span class="badge blue">Scenic</span><span class="badge orange"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 19C5 9 11 4 20 4c0 9-5 15-15 15zM5 19c3-4 6-7 10-9"/></svg>Best in autumn</span><span class="badge orange"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 18h16M6 14a6 6 0 0 1 12 0M12 4v2M5 8l1.5 1.5M19 8l-1.5 1.5"/></svg>Sunrise pick</span></div>
+      <h1 style="font-size:24px;font-weight:800;letter-spacing:-0.02em">Chew Valley Loop</h1>
+      <p class="muted" style="font-size:13px;font-weight:600;margin-top:4px"><span style="display:inline-flex;gap:1px;color:#f7b500"><span style="opacity:1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" fill="currentColor" stroke="none"/></svg></span><span style="opacity:1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" fill="currentColor" stroke="none"/></svg></span><span style="opacity:1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" fill="currentColor" stroke="none"/></svg></span><span style="opacity:1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" fill="currentColor" stroke="none"/></svg></span><span style="opacity:1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" fill="currentColor" stroke="none"/></svg></span></span> 4.7 (312) · ridden 1,284 times</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:8px"><div class="stat" style="background:#f5f7fa;border-radius:12px;padding:10px 6px;text-align:center"><b>42.3 km</b><small>Distance</small></div><div class="stat" style="background:#f5f7fa;border-radius:12px;padding:10px 6px;text-align:center"><b>610 m</b><small>Elevation</small></div><div class="stat" style="background:#f5f7fa;border-radius:12px;padding:10px 6px;text-align:center"><b>2h 15m</b><small>Est. time</small></div><div class="stat" style="background:#f5f7fa;border-radius:12px;padding:10px 6px;text-align:center"><b>Road</b><small>Surface</small></div></div>
+    <div><div class="between" style="margin-bottom:6px"><span class="section-title">Elevation</span><span class="row muted" style="font-size:11px;font-weight:700;gap:10px"><span class="row" style="gap:4px"><i style="width:10px;height:3px;background:#139b66;border-radius:2px"></i>3%</span><span class="row" style="gap:4px"><i style="width:10px;height:3px;background:#f28b30;border-radius:2px"></i>6%</span><span class="row" style="gap:4px"><i style="width:10px;height:3px;background:#d94d4d;border-radius:2px"></i>9%+</span></span></div><svg width="358" height="88" viewBox="0 0 358 88" xmlns="http://www.w3.org/2000/svg" style="display:block"><defs><linearGradient id="ef" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#176bdb" stop-opacity=".25"/><stop offset="1" stop-color="#176bdb" stop-opacity="0"/></linearGradient></defs><polygon points="0,88 0,70 30,62 60,66 90,40 120,30 150,44 180,48 210,22 240,14 270,34 300,52 330,58 358,64 358,88" fill="url(#ef)"/><polyline points="0,70 30,62 60,66 90,40 120,30 150,44 180,48 210,22 240,14 270,34 300,52 330,58 358,64" fill="none" stroke="#9fb0c2" stroke-width="2"/><polyline points="60,66 90,40 120,30" fill="none" stroke="#139b66" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="180,48 210,22 240,14" fill="none" stroke="#d94d4d" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="120,30 150,44 180,48" fill="none" stroke="#f28b30" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div>
+      <p class="section-title" style="margin-bottom:8px">Highlights along the way</p>
+      <div style="display:flex;flex-direction:column;gap:8px"><div class="row" style="gap:12px"><span style="width:36px;height:36px;border-radius:10px;background:#176bdb18;color:#176bdb;display:inline-flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div><b style="font-size:14px;display:block">Blagdon Lake viewpoint</b><span class="muted" style="font-size:12px;font-weight:600">km 14 · photo spot</span></div></div><div class="row" style="gap:12px"><span style="width:36px;height:36px;border-radius:10px;background:#15324d18;color:#15324d;display:inline-flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 21h18M5 21V10M10 21V10M14 21V10M19 21V10M3 10l9-6 9 6z"/></svg></span><div><b style="font-size:14px;display:block">Stanton Drew stone circles</b><span class="muted" style="font-size:12px;font-weight:600">km 28 · historic site</span></div></div><div class="row" style="gap:12px"><span style="width:36px;height:36px;border-radius:10px;background:#f28b3018;color:#f28b30;display:inline-flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 8h11v6a5 5 0 0 1-10 0zM16 9h2a2 2 0 0 1 0 4h-2M4 20h13"/></svg></span><div><b style="font-size:14px;display:block">Salt & Malt Café</b><span class="muted" style="font-size:12px;font-weight:600">km 33 · rest stop · 4.6 ★</span></div></div></div>
+    </div>
+  </div>
+  <div style="position:absolute;left:16px;right:16px;bottom:24px;display:flex;gap:10px"><div class="iconbtn" style="width:52px;height:52px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M7 18a4 4 0 0 1-.5-8A6 6 0 0 1 18 9a4 4 0 0 1 0 9h-1M12 12v8M9 17l3 3 3-3"/></svg></div><div class="btn cta" style="flex:1;height:52px;font-size:16px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>Start adventure</div></div>
+</div></x-dc>
+</body>
+</html>

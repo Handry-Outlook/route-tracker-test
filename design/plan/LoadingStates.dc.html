@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+  html, body { height:100%; }
+  body { margin:0; background:#e9edf2; font-family:Inter,-apple-system,"SF Pro Text",system-ui,sans-serif; color:#132238; -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  a { color:#176bdb; } a:hover { color:#f28b30; }
+  h1,h2,h3,p { margin:0; }
+  .frame { position:relative; width:100%; height:100%; overflow:hidden; background:#f5f7fa; display:flex; }
+  .rail { width:88px; background:#15324d; padding:14px 6px; display:flex; flex-direction:column; gap:4px; flex:0 0 auto; }
+  .rail .brand { color:#fff; text-align:center; font-size:11px; font-weight:800; margin-bottom:10px; }
+  .rail .brand i { display:block; width:40px; height:40px; margin:0 auto 6px; border-radius:11px; background:linear-gradient(135deg,#f28b30,#176bdb); }
+  .tab { border:0; background:transparent; color:#b8c7d6; border-radius:12px; min-height:56px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-size:10px; font-weight:600; }
+  .tab.on { background:#ffffff1f; color:#fff; }
+  .tab.rec { color:#f28b30; }
+  .panel { width:460px; flex:0 0 auto; background:#fff; border-right:1px solid #dbe2ea; display:flex; flex-direction:column; }
+  .panel-head { padding:18px 20px 12px; border-bottom:1px solid #dbe2ea; }
+  .panel-body { padding:16px 20px; overflow:auto; display:flex; flex-direction:column; gap:14px; flex:1; }
+  .map { flex:1; position:relative; overflow:hidden; }
+  .card { background:#fff; border:1px solid #dbe2ea; border-radius:16px; box-shadow:0 4px 14px #10233d18; }
+  .pad { padding:14px; }
+  .row { display:flex; align-items:center; gap:10px; }
+  .between { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .muted { color:#657186; }
+  .title { font-size:22px; font-weight:800; letter-spacing:-.02em; }
+  .sub { font-size:13px; font-weight:600; color:#657186; margin-top:3px; }
+  .sec { font-size:15px; font-weight:800; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 16px; border:0; border-radius:12px; font-weight:700; font-size:14px; background:#edf2f7; color:#132238; }
+  .btn.primary { background:#176bdb; color:#fff; }
+  .btn.cta { background:#f28b30; color:#fff; }
+  .btn.sm { min-height:36px; font-size:13px; padding:0 12px; border-radius:10px; }
+  .btn.ghost { background:#fff; border:1px solid #dbe2ea; }
+  .chip { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:0 12px; border-radius:999px; border:1px solid #dbe2ea; background:#fff; font-size:13px; font-weight:600; white-space:nowrap; }
+  .chip.on { background:#15324d; border-color:#15324d; color:#fff; }
+  .badge { display:inline-flex; align-items:center; gap:5px; min-height:24px; padding:0 9px; border-radius:999px; font-size:11px; font-weight:700; }
+  .badge.blue { background:#176bdb22; color:#176bdb; }
+  .badge.green { background:#139b6622; color:#139b66; }
+  .badge.orange { background:#f28b3028; color:#a35400; }
+  .badge.red { background:#d94d4d22; color:#d94d4d; }
+  .badge.dark { background:#132238cc; color:#fff; }
+  .stat b { display:block; font-size:16px; font-weight:800; }
+  .stat small { display:block; font-size:11px; color:#657186; font-weight:600; margin-top:2px; }
+  .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+  .tile { background:#edf2f7; border-radius:12px; padding:10px 6px; text-align:center; }
+  .iconbtn { width:42px; height:42px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; background:#fff; border:1px solid #dbe2ea; box-shadow:0 4px 14px #10233d18; }
+  .tools { position:absolute; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; }
+  .rail-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .carousel { position:relative; padding:0 20px; }
+  .carousel .track { overflow:hidden; }
+  .track { display:flex; gap:12px; overflow:hidden; }
+  .arrow { position:absolute; top:50%; transform:translateY(-50%); width:36px; height:36px; border-radius:50%; background:#fff; border:1px solid #dbe2ea; box-shadow:0 6px 18px #10233d28; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .arrow.l { left:-4px; } .arrow.r { right:-4px; }
+  .sbar { height:6px; border-radius:999px; background:#dbe2ea; margin-top:10px; position:relative; }
+  .sbar i { position:absolute; left:0; top:0; height:6px; width:38%; border-radius:999px; background:#9fb0c2; }
+  .skel { background:linear-gradient(90deg,#edf2f7 25%,#e3e9f0 37%,#edf2f7 63%); border-radius:8px; }
+  .note { border-left:3px solid #f28b30; padding:2px 0 2px 12px; }
+  .kv { display:grid; grid-template-columns:132px 1fr; gap:8px 14px; font-size:13px; }
+  .kv b { font-weight:700; }
+  .step { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid #dbe2ea; }
+  .step:last-child { border-bottom:0; }
+  .num { width:26px; height:26px; border-radius:50%; background:#15324d; color:#fff; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .pill-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .col2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .col3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+</style>
+</helmet>
+
+<div style="padding:28px;background:#fff;min-height:100%">
+  <div class="title">Route calculation — stable loading</div>
+  <div class="sub" style="max-width:760px">The current indicator is centred on the map, but the <b>.compact</b> variant re-anchors it to the bottom, and generation calls it with compact alternating between stages. It teleports mid-run. Fix: one element, one position, progress that only ever moves forward.</div>
+
+  <div class="col2" style="margin-top:22px">
+    <div>
+      <div class="sec" style="margin-bottom:10px;color:#d94d4d"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 6l12 12M18 6L6 18"/></svg> Today — jumps between two anchors</div>
+      <div class="card" style="position:relative;height:280px;overflow:hidden;background:#eaeee7">
+        <svg width="430" height="280" viewBox="0 0 430 280" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="lbad" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="430" height="280" fill="#eaeee7"/>
+    <ellipse cx="310" cy="67" rx="129" ry="78" fill="#d5e6c6"/>
+    <ellipse cx="77" cy="218" rx="112" ry="73" fill="#d5e6c6"/>
+    <path d="M0 185 C 103 162, 189 235, 430 202 L 430 280 L 0 280 Z" fill="#c6dcf1" opacity=".7"/>
+    <g stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M0 101 C 129 90, 258 129, 430 106"/>
+      <path d="M249 0 C 241 112, 284 196, 267 280"/>
+    </g>
+    <g font-family="Inter" font-size="11" font-weight="600" fill="#7b8794">
+      <text x="284" y="50">Ashton Court</text><text x="60" y="140">Bedminster</text><text x="189" y="241">Long Ashton</text>
+    </g>
+    <path d="M 103 207 C 69 123, 155 45, 232 62 S 370 78, 353 157 S 215 252, 103 207 Z" stroke="#fff" stroke-width="9" fill="none"/>
+    <path d="M 103 207 C 69 123, 155 45, 232 62 S 370 78, 353 157 S 215 252, 103 207 Z" stroke="url(#lbad)" stroke-width="5" fill="none"/>
+    
+  </svg>
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#15324d;color:#fff;border-radius:14px;padding:12px 15px;font-size:12px;font-weight:600">Finding rivers and greenways…</div>
+        <div style="position:absolute;left:14px;right:14px;bottom:14px;background:#15324d;color:#fff;border-radius:14px;padding:11px 14px;font-size:12px;font-weight:600;opacity:.45">Shortest route ready · finding distinct returns…</div>
+        <svg style="position:absolute;left:50%;top:50%;width:200px;height:120px;margin-left:-40px" viewBox="0 0 200 120"><path d="M20 10 C 90 20, 120 80, 60 100" stroke="#d94d4d" stroke-width="2.5" fill="none" stroke-dasharray="5 4"/><path d="M60 100 l 8 -12 M60 100 l 13 3" stroke="#d94d4d" stroke-width="2.5" fill="none"/></svg>
+      </div>
+      <p class="muted" style="font-size:12px;font-weight:600;margin-top:8px">Two anchors, alternating per stage — reads as a glitch.</p>
+    </div>
+    <div>
+      <div class="sec" style="margin-bottom:10px;color:#139b66"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 12l4 4L19 7"/></svg> Proposed — anchored progress + skeletons</div>
+      <div class="card" style="position:relative;height:280px;overflow:hidden;background:#eaeee7">
+        <svg width="430" height="280" viewBox="0 0 430 280" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="lgood" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="430" height="280" fill="#eaeee7"/>
+    <ellipse cx="310" cy="67" rx="129" ry="78" fill="#d5e6c6"/>
+    <ellipse cx="77" cy="218" rx="112" ry="73" fill="#d5e6c6"/>
+    <path d="M0 185 C 103 162, 189 235, 430 202 L 430 280 L 0 280 Z" fill="#c6dcf1" opacity=".7"/>
+    <g stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M0 101 C 129 90, 258 129, 430 106"/>
+      <path d="M249 0 C 241 112, 284 196, 267 280"/>
+    </g>
+    <g font-family="Inter" font-size="11" font-weight="600" fill="#7b8794">
+      <text x="284" y="50">Ashton Court</text><text x="60" y="140">Bedminster</text><text x="189" y="241">Long Ashton</text>
+    </g>
+    <path d="M 103 207 C 69 123, 155 45, 232 62 S 370 78, 353 157 S 215 252, 103 207 Z" stroke="#fff" stroke-width="9" fill="none"/>
+    <path d="M 103 207 C 69 123, 155 45, 232 62 S 370 78, 353 157 S 215 252, 103 207 Z" stroke="url(#lgood)" stroke-width="5" fill="none"/>
+    
+  </svg>
+        <div style="position:absolute;left:14px;right:14px;top:14px;background:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 8px 24px #10233d28">
+          <div class="between" style="margin-bottom:8px"><b style="font-size:13px">Building your loop</b><span class="muted" style="font-size:12px;font-weight:700">Step 2 of 4</span></div>
+          <div style="height:6px;border-radius:999px;background:#dbe2ea;position:relative"><i style="position:absolute;left:0;top:0;height:6px;width:52%;border-radius:999px;background:linear-gradient(90deg,#f28b30,#176bdb)"></i></div>
+          <div class="muted" style="font-size:12px;font-weight:600;margin-top:8px">Scoring cycle infrastructure from OpenStreetMap</div>
+        </div>
+      </div>
+      <p class="muted" style="font-size:12px;font-weight:600;margin-top:8px">One fixed anchor at the top of the sheet. Never re-positions.</p>
+    </div>
+  </div>
+
+  <div class="col2" style="margin-top:24px">
+    <div>
+      <div class="sec" style="margin-bottom:10px">Results area — skeleton cards, not an empty gap</div>
+      <div class="card pad" style="display:flex;gap:12px;align-items:center">
+  <div class="skel" style="width:44px;height:44px;border-radius:10px"></div>
+  <div style="flex:1"><div class="skel" style="height:12px;width:52%"></div><div class="skel" style="height:10px;width:34%;margin-top:8px"></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px"><div class="skel" style="height:34px"></div><div class="skel" style="height:34px"></div><div class="skel" style="height:34px"></div></div>
+    <div class="skel" style="height:52px;margin-top:10px"></div></div>
+</div>
+    </div>
+    <div>
+      <div class="sec" style="margin-bottom:10px">Stage labels (forward-only)</div>
+      <div class="card pad">
+        <div class="step"><span class="num" style=""><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 12l4 4L19 7"/></svg></span><div><b style="font-size:13px;display:block">Finding places worth riding to</b><span class="muted" style="font-size:12px;font-weight:600">Mapbox place search</span></div></div><div class="step"><span class="num" style=""><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 12l4 4L19 7"/></svg></span><div><b style="font-size:13px;display:block">Connecting candidate loops</b><span class="muted" style="font-size:12px;font-weight:600">Directions API, 3 candidates</span></div></div><div class="step"><span class="num" style="background:#dbe2ea;color:#657186">3</span><div><b style="font-size:13px;display:block">Scoring cycle infrastructure</b><span class="muted" style="font-size:12px;font-weight:600">Overpass — falls back to estimate</span></div></div><div class="step"><span class="num" style="background:#dbe2ea;color:#657186">4</span><div><b style="font-size:13px;display:block">Adding elevation and wind</b><span class="muted" style="font-size:12px;font-weight:600">Open-Meteo</span></div></div>
+        <p class="muted" style="font-size:12px;font-weight:600;margin-top:10px">A step never un-completes; if a stage fails the app says so and carries on with the fallback.</p>
+      </div>
+    </div>
+  </div>
+</div></x-dc>
+</body>
+</html>

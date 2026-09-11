@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+  html, body { height:100%; }
+  body { margin:0; background:#e9edf2; font-family:Inter,-apple-system,"SF Pro Text",system-ui,sans-serif; color:#132238; -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  a { color:#176bdb; } a:hover { color:#f28b30; }
+  h1,h2,h3,p { margin:0; }
+  .frame { position:relative; width:100%; height:100%; overflow:hidden; background:#f5f7fa; display:flex; }
+  .rail { width:88px; background:#15324d; padding:14px 6px; display:flex; flex-direction:column; gap:4px; flex:0 0 auto; }
+  .rail .brand { color:#fff; text-align:center; font-size:11px; font-weight:800; margin-bottom:10px; }
+  .rail .brand i { display:block; width:40px; height:40px; margin:0 auto 6px; border-radius:11px; background:linear-gradient(135deg,#f28b30,#176bdb); }
+  .tab { border:0; background:transparent; color:#b8c7d6; border-radius:12px; min-height:56px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-size:10px; font-weight:600; }
+  .tab.on { background:#ffffff1f; color:#fff; }
+  .tab.rec { color:#f28b30; }
+  .panel { width:460px; flex:0 0 auto; background:#fff; border-right:1px solid #dbe2ea; display:flex; flex-direction:column; }
+  .panel-head { padding:18px 20px 12px; border-bottom:1px solid #dbe2ea; }
+  .panel-body { padding:16px 20px; overflow:auto; display:flex; flex-direction:column; gap:14px; flex:1; }
+  .map { flex:1; position:relative; overflow:hidden; }
+  .card { background:#fff; border:1px solid #dbe2ea; border-radius:16px; box-shadow:0 4px 14px #10233d18; }
+  .pad { padding:14px; }
+  .row { display:flex; align-items:center; gap:10px; }
+  .between { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .muted { color:#657186; }
+  .title { font-size:22px; font-weight:800; letter-spacing:-.02em; }
+  .sub { font-size:13px; font-weight:600; color:#657186; margin-top:3px; }
+  .sec { font-size:15px; font-weight:800; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 16px; border:0; border-radius:12px; font-weight:700; font-size:14px; background:#edf2f7; color:#132238; }
+  .btn.primary { background:#176bdb; color:#fff; }
+  .btn.cta { background:#f28b30; color:#fff; }
+  .btn.sm { min-height:36px; font-size:13px; padding:0 12px; border-radius:10px; }
+  .btn.ghost { background:#fff; border:1px solid #dbe2ea; }
+  .chip { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:0 12px; border-radius:999px; border:1px solid #dbe2ea; background:#fff; font-size:13px; font-weight:600; white-space:nowrap; }
+  .chip.on { background:#15324d; border-color:#15324d; color:#fff; }
+  .badge { display:inline-flex; align-items:center; gap:5px; min-height:24px; padding:0 9px; border-radius:999px; font-size:11px; font-weight:700; }
+  .badge.blue { background:#176bdb22; color:#176bdb; }
+  .badge.green { background:#139b6622; color:#139b66; }
+  .badge.orange { background:#f28b3028; color:#a35400; }
+  .badge.red { background:#d94d4d22; color:#d94d4d; }
+  .badge.dark { background:#132238cc; color:#fff; }
+  .stat b { display:block; font-size:16px; font-weight:800; }
+  .stat small { display:block; font-size:11px; color:#657186; font-weight:600; margin-top:2px; }
+  .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+  .tile { background:#edf2f7; border-radius:12px; padding:10px 6px; text-align:center; }
+  .iconbtn { width:42px; height:42px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; background:#fff; border:1px solid #dbe2ea; box-shadow:0 4px 14px #10233d18; }
+  .tools { position:absolute; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; }
+  .rail-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .carousel { position:relative; padding:0 20px; }
+  .carousel .track { overflow:hidden; }
+  .track { display:flex; gap:12px; overflow:hidden; }
+  .arrow { position:absolute; top:50%; transform:translateY(-50%); width:36px; height:36px; border-radius:50%; background:#fff; border:1px solid #dbe2ea; box-shadow:0 6px 18px #10233d28; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .arrow.l { left:-4px; } .arrow.r { right:-4px; }
+  .sbar { height:6px; border-radius:999px; background:#dbe2ea; margin-top:10px; position:relative; }
+  .sbar i { position:absolute; left:0; top:0; height:6px; width:38%; border-radius:999px; background:#9fb0c2; }
+  .skel { background:linear-gradient(90deg,#edf2f7 25%,#e3e9f0 37%,#edf2f7 63%); border-radius:8px; }
+  .note { border-left:3px solid #f28b30; padding:2px 0 2px 12px; }
+  .kv { display:grid; grid-template-columns:132px 1fr; gap:8px 14px; font-size:13px; }
+  .kv b { font-weight:700; }
+  .step { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid #dbe2ea; }
+  .step:last-child { border-bottom:0; }
+  .num { width:26px; height:26px; border-radius:50%; background:#15324d; color:#fff; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .pill-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .col2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .col3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+</style>
+</helmet>
+
+<div class="frame">
+  <nav class="rail">
+  <div class="brand"><i></i>Ridewise</div>
+  <div class="tab on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>Adventure</span></div><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8 17h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5"/></svg><span>Plan</span></div><div class="tab rec"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg><span>Record</span></div><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M5 21V4h11l-2 4 2 4H5"/></svg><span>Segments</span></div><div class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Profile</span></div>
+</nav>
+  <div class="panel" style="width:520px">
+    <div class="panel-head">
+      <div class="row"><div class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M15 5l-7 7 7 7"/></svg></div>
+        <div style="flex:1"><div class="title" style="font-size:20px">Chew Valley Loop</div><div class="sub">42.3 km · Hard</div></div>
+        <div class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></div><div class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 15V4M8 8l4-4 4 4"/></svg></div></div>
+    </div>
+    <div class="panel-body">
+      <div class="pill-row"><span class="badge red">Hard</span><span class="badge green">Mostly paved</span><span class="badge blue">Scenic route</span></div>
+      <div class="stats">
+        <div class="stat tile"><b>42.3 km</b><small>distance</small></div><div class="stat tile"><b>610 m</b><small>elevation</small></div><div class="stat tile"><b>2h 15m</b><small>est. time</small></div><div class="stat tile"><b>62%</b><small>OSM cycle infra</small></div>
+      </div>
+      <div><div class="between" style="margin-bottom:6px"><span class="sec">Elevation</span><span class="muted" style="font-size:11px;font-weight:700">&lt;4% · 4-8% · 8%+</span></div><svg width="100%" height="96" viewBox="0 0 460 96" preserveAspectRatio="none" style="display:block"><polygon points="0,96 0,69 46,60 92,65 138,38 184,29 230,44 276,48 322,19 368,15 414,36 460,48 460,96" fill="#176bdb22"/><polyline points="0,69 46,60 92,65 138,38 184,29 230,44 276,48 322,19 368,15 414,36 460,48" fill="none" stroke="#9fb0c2" stroke-width="2"/><polyline points="138,38 184,29" fill="none" stroke="#f28b30" stroke-width="3.4" stroke-linecap="round"/><polyline points="276,48 322,19" fill="none" stroke="#d94d4d" stroke-width="3.4" stroke-linecap="round"/></svg></div>
+      <div><div class="sec" style="margin-bottom:8px">Highlights</div>
+        <div class="row" style="padding:7px 0"><span class="iconbtn" style="width:34px;height:34px;box-shadow:none;background:#176bdb18;border:0;color:#176bdb"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 21s6-6.5 6-11a6 6 0 0 0-12 0c0 4.5 6 11 6 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span><div><b style="font-size:14px;display:block">Blagdon Lake viewpoint</b><span class="muted" style="font-size:12px;font-weight:600">km 14 · viewpoint</span></div></div><div class="row" style="padding:7px 0"><span class="iconbtn" style="width:34px;height:34px;box-shadow:none;background:#176bdb18;border:0;color:#176bdb"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 21s6-6.5 6-11a6 6 0 0 0-12 0c0 4.5 6 11 6 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span><div><b style="font-size:14px;display:block">Stanton Drew stones</b><span class="muted" style="font-size:12px;font-weight:600">km 28 · historic</span></div></div><div class="row" style="padding:7px 0"><span class="iconbtn" style="width:34px;height:34px;box-shadow:none;background:#176bdb18;border:0;color:#176bdb"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 21s6-6.5 6-11a6 6 0 0 0-12 0c0 4.5 6 11 6 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span><div><b style="font-size:14px;display:block">Salt & Malt café</b><span class="muted" style="font-size:12px;font-weight:600">km 33 · rest stop</span></div></div>
+      </div>
+      <div class="row" style="gap:10px;margin-top:auto;padding-top:10px"><div class="iconbtn" style="width:48px;height:48px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M7 18a4 4 0 0 1-.5-8A6 6 0 0 1 18 9a4 4 0 0 1 0 9h-1M12 12v8M9 17l3 3 3-3"/></svg></div><button class="btn cta" style="flex:1;min-height:48px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>Start navigation</button></div>
+    </div>
+  </div>
+  <div class="map"><svg width="832" height="900" viewBox="0 0 832 900" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="mapDetail" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="832" height="900" fill="#eaeee7"/>
+    <ellipse cx="599" cy="216" rx="250" ry="252" fill="#d5e6c6"/>
+    <ellipse cx="150" cy="702" rx="216" ry="234" fill="#d5e6c6"/>
+    <path d="M0 594 C 200 522, 366 756, 832 648 L 832 900 L 0 900 Z" fill="#c6dcf1" opacity=".7"/>
+    <g stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M0 324 C 250 288, 499 414, 832 342"/>
+      <path d="M483 0 C 466 360, 549 630, 516 900"/>
+    </g>
+    <g font-family="Inter" font-size="11" font-weight="600" fill="#7b8794">
+      <text x="549" y="162">Ashton Court</text><text x="116" y="450">Bedminster</text><text x="366" y="774">Long Ashton</text>
+    </g>
+    <path d="M 200 666 C 133 396, 300 144, 449 198 S 716 252, 682 504 S 416 810, 200 666 Z" stroke="#fff" stroke-width="9" fill="none"/>
+    <path d="M 200 666 C 133 396, 300 144, 449 198 S 716 252, 682 504 S 416 810, 200 666 Z" stroke="url(#mapDetail)" stroke-width="5" fill="none"/>
+    <circle cx="200" cy="666" r="7" fill="#fff" stroke="#f28b30" stroke-width="3"/>
+  </svg>
+    <div style="position:absolute;left:16px;right:16px;bottom:16px" class="card pad">
+      <div class="between" style="margin-bottom:6px"><span class="sec">Elevation profile</span><span class="muted" style="font-size:12px;font-weight:700">hover the chart to trace the route</span></div>
+      <svg width="100%" height="92" viewBox="0 0 800 92" preserveAspectRatio="none" style="display:block"><polygon points="0,92 0,66 80,57 160,63 240,37 320,28 400,42 480,46 560,18 640,15 720,35 800,46 800,92" fill="#176bdb22"/><polyline points="0,66 80,57 160,63 240,37 320,28 400,42 480,46 560,18 640,15 720,35 800,46" fill="none" stroke="#9fb0c2" stroke-width="2"/><polyline points="240,37 320,28" fill="none" stroke="#f28b30" stroke-width="3.4" stroke-linecap="round"/><polyline points="480,46 560,18" fill="none" stroke="#d94d4d" stroke-width="3.4" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+</div></x-dc>
+</body>
+</html>

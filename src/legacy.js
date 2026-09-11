@@ -1,5 +1,5 @@
 import{MAPBOX_TOKEN,firebaseConfig}from'./config.js';import{fetchWindAtLocation,fetchRouteForecast,fetchHourlyForecast,cardinalDirection}from'./weather-api.js';import{createBottomSheet}from'./ui/components/bottomSheet.js';import{feedSignInPromptHtml,findPeopleHtml,personResultHtml,feedEmptyHtml,activityCardHtml,commentsPanelHtml}from'./ui/pages/feed.js';import{ensurePublicProfile,updateRiderMeasurements,searchProfilesByName}from'./social/firestoreClient.js';import{followUser,unfollowUser,isFollowing,listFollowingUids}from'./social/follows.js';import{publishActivityToFeed,fetchFeed,toggleKudos,hasGivenKudos,addComment,listComments}from'./social/activities.js';import{enableCompass,getCompassHeading,isCompassAvailable}from'./nav/compass.js';import{icon as uiIcon}from'./ui/icons.js';import*as routeProgress from'./ui/components/routeProgress.js';import{enhanceAll as enhanceCarousels}from'./ui/components/carousel.js';import*as sensors from'./nav/sensors.js';import*as pageAdventure from'./ui/pages/adventure.js';import*as pagePlan from'./ui/pages/plan.js';import*as pageRecord from'./ui/pages/record.js';import*as pageSegments from'./ui/pages/segments.js';import*as pageProfile from'./ui/pages/profile.js';import*as pageRouteDetail from'./ui/pages/routeDetail.js';import{fetchOverpassArea,scoreRouteAgainstOverpass,poisFromOverpass}from'./routing/overpass.js';import*as quality from'./routing/quality.js';import*as cues from'./routing/cues.js';import*as offline from'./routing/offline.js';import{startLiveFriends,stopLiveFriends}from'./social/liveFriends.js';import*as ratings from'./social/ratings.js';import*as segments from'./social/segments.js';
-const $=(s,r=document)=>r.querySelector(s),panel=$('#panel'),S={page:'explore',mode:'point',waypoints:[],names:[],routes:[],route:null,selected:null,markers:[],nodes:[],layers:[],poiMarkers:[],geocoders:{},weather:null,weatherOn:false,wind:{speed:15,dir:240},windGrid:null,windGridKey:'',windLoading:false,record:null,watch:null,user:null,navState:null,styleIndex:0,pendingActivity:null,activityView:null,activitySort:'date-desc',lastVoiceKey:'',lastRerouteAt:0,wakeLock:null,wakeLockWanted:false,audioNavigation:localStorage.getItem('audioNavigation')!=='off',audioUnlocked:false,headingSamples:[],smoothedHeading:null,headingUnstable:false,manualExploreUntil:0,wrongWaySince:null,userMarker:null,visualHeading:null,routeUndo:[],previewRun:0,liveJourney:null,liveUnsub:null,cloud:null,sharedJourneyState:null,cycleLayerOn:false,hourlyWeather:[],adventureWaypoints:[],contextPressTimer:null,editingSavedId:null,accountRoutes:[],accountActivities:[],accountSyncing:false,navCamera:{lastAt:0,zoom:16.2,state:'normal',postTurnUntil:0,lastStep:-1},sharedRouteLoading:false,sharedRouteLoaded:false,sharedRiderMarker:null,viewerMarker:null,sharedJourneyId:null,sharedJourneyFitted:false,viewerWatch:null};
+const $=(s,r=document)=>r.querySelector(s),panel=$('#panel'),S={page:'explore',mode:'point',waypoints:[],names:[],routes:[],route:null,selected:null,markers:[],nodes:[],layers:[],poiMarkers:[],geocoders:{},weather:null,weatherOn:false,wind:{speed:15,dir:240},windGrid:null,windGridKey:'',windLoading:false,record:null,watch:null,user:null,navState:null,styleIndex:0,pendingActivity:null,activityView:null,activitySort:'date-desc',lastVoiceKey:'',lastRerouteAt:0,wakeLock:null,wakeLockWanted:false,audioNavigation:localStorage.getItem('audioNavigation')!=='off',audioUnlocked:false,headingSamples:[],smoothedHeading:null,headingUnstable:false,manualExploreUntil:0,wrongWaySince:null,userMarker:null,visualHeading:null,routeUndo:[],previewRun:0,liveJourney:null,liveUnsub:null,cloud:null,sharedJourneyState:null,cycleLayerOn:false,hourlyWeather:[],adventureWaypoints:[],contextPressTimer:null,editingSavedId:null,accountRoutes:[],accountActivities:[],accountSyncing:false,navCamera:{lastAt:0,lastReframeAt:0,zoom:16.2,pitch:49,state:'normal',postTurnUntil:0,lastStep:-1},sharedRouteLoading:false,sharedRouteLoaded:false,sharedRiderMarker:null,viewerMarker:null,sharedJourneyId:null,sharedJourneyFitted:false,viewerWatch:null};
 const mobile=()=>matchMedia('(max-width: 760px), (max-height: 480px) and (pointer: coarse)').matches,toast=t=>{const e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1900)},store={get:(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k))||d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))},gain=a=>a.reduce((g,v,i)=>g+(i&&v>a[i-1]?v-a[i-1]:0),0),fmt=n=>Number(n||0).toFixed(1);
 mapboxgl.accessToken=MAPBOX_TOKEN;const map=new mapboxgl.Map({container:'map',style:'mapbox://styles/mapbox/outdoors-v12',center:[-2.5879,51.4545],zoom:11,preserveDrawingBuffer:true});map.addControl(new mapboxgl.NavigationControl(),'top-right');
 /* voice_instructions/banner_instructions return text written to be read aloud
@@ -625,7 +625,102 @@ function updateEffortZones(r,hr){const host=$('#hr-zones');if(!host)return;const
 function updatePowerZones(r){const host=$('#hr-zones');if(!host)return;const ftp=Math.max(80,(profileData().weight||70)*2.4),last=r?.samples?.at(-1)?.estimatedPower||0,ratio=last/ftp,zone=ratio<.55?0:ratio<.75?1:ratio<.9?2:ratio<1.05?3:4,colors=['#657186','#139b66','#f28b30','#d94d4d','#8b0000'];if(host.children.length!==5)host.innerHTML=colors.map(c=>`<span style="background:${c}"></span>`).join('');[...host.children].forEach((el,i)=>el.classList.toggle('on',i===zone))}
 function displaySpeed(r){return r.paused?r.avgSpeed:(r.speed*3.6)}function formatClock(ms){const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),sec=s%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`:`${m}:${String(sec).padStart(2,'0')}`}
 function navigationCameraTarget(pos,heading,speedMps=0){const nav=S.navState,steps=nav?.steps||[],index=Math.max(0,nav?.index||0),next=steps[index],nextLocation=next?.maneuver?.location,turnDistance=nextLocation?turf.distance(pos,nextLocation,{units:'meters'}):Infinity,nearby=steps.slice(index,index+5).filter(step=>step.maneuver?.location&&turf.distance(pos,step.maneuver.location,{units:'meters'})<=320).length,type=String(next?.maneuver?.type||'').toLowerCase(),modifier=String(next?.maneuver?.modifier||'').toLowerCase(),complex=/roundabout|rotary|fork|merge|off ramp|on ramp|arrive/.test(type)||/sharp|uturn/.test(modifier)||nearby>=3;let state='normal',zoom=16.15,pitch=49;if(complex||turnDistance<90){state='complex';zoom=17.35;pitch=59}else if(turnDistance<220){state='approach';zoom=16.85;pitch=56}else if(turnDistance<550){state='prepare';zoom=16.35;pitch=52}else if(turnDistance>1800){state='cruise';zoom=15.15;pitch=42}else if(turnDistance>900){state='open';zoom=15.55;pitch=46}const speedKmh=Math.max(0,speedMps*3.6);if(speedKmh>30)zoom-=.28;else if(speedKmh<12&&(state==='complex'||state==='approach'))zoom+=.16;if(S.navCamera.postTurnUntil>Date.now()){state='post-turn';zoom=Math.max(16.7,zoom);pitch=Math.max(54,pitch)}const bearing=Number.isFinite(heading)?heading:nextLocation?turf.bearing(pos,nextLocation):map.getBearing();return{state,zoom:Math.max(14.8,Math.min(17.65,zoom)),pitch,bearing,turnDistance,stepIndex:index}}
-function updateAdaptiveNavigationCamera(pos,heading,speedMps=0,force=false){if(!S.navState||Date.now()<S.manualExploreUntil)return;const now=Date.now(),target=navigationCameraTarget(pos,heading,speedMps),camera=S.navCamera;if(target.stepIndex!==camera.lastStep&&camera.lastStep>=0)camera.postTurnUntil=now+4500;camera.lastStep=target.stepIndex;if(!force&&now-camera.lastAt<1200)return;if(!force&&Math.abs(target.zoom-camera.zoom)<.14&&target.state===camera.state&&now-camera.lastAt<2600)return;camera.lastAt=now;camera.zoom=target.zoom;camera.state=target.state;map.easeTo({center:pos,zoom:target.zoom,pitch:target.pitch,bearing:target.bearing,duration:force?650:780,essential:true})}
+/* How long a follow-ease runs. Roughly one GPS fix, so the map glides
+   continuously instead of stepping and then sitting still. */
+const NAV_FOLLOW_MS=900;
+
+/* The chrome eats the top and bottom of the map during turn-by-turn, so the
+   part the rider can actually see is the band between the guidance banner and
+   the ride bar. Centring on the whole container puts them lower in that band
+   than intended and costs forward visibility. */
+function navigationCameraPadding(){
+  const wrap=$('#map-wrap');
+  if(!wrap)return{top:0,bottom:0,left:0,right:0};
+  const box=wrap.getBoundingClientRect();
+  const visible=el=>{
+    if(!el||el.hidden)return 0;
+    const cs=getComputedStyle(el);
+    if(cs.display==='none'||cs.visibility==='hidden')return 0;
+    const r=el.getBoundingClientRect();
+    return r.height>0?r.height:0;
+  };
+  const top=Math.min(box.height*0.3,visible($('#nav-guidance'))+20);
+  const bottom=Math.min(box.height*0.45,visible($('#quick-nav'))+20);
+  return{top:Math.round(top),bottom:Math.round(bottom),left:0,right:0};
+}
+
+/* Aim at where the rider is GOING, not where they were.
+
+   The camera used to centre on the last fix, so every ease finished behind the
+   rider and the next one started from further behind still. Projecting forward
+   along the heading by roughly the follow latency means the map leads them.
+   Because the map is heading-up during navigation, moving the centre forward
+   also places the rider low on screen with the road ahead in view — the same
+   effect a fixed screen offset would give, except it scales itself with speed
+   instead of being tuned for one. */
+function navigationCameraLead(pos,heading,speedMps){
+  const speed=Math.max(0,speedMps||0);
+  if(!Number.isFinite(heading)||speed<1.5)return pos;
+  const seconds=Math.min(7,1.4+speed*0.35);
+  const km=(speed*seconds)/1000;
+  try{return turf.destination(pos,km,heading,{units:'kilometers'}).geometry.coordinates}
+  catch{return pos}
+}
+
+/* True when the rider is outside, or nearly outside, the visible band. Any
+   throttle has to yield to this: losing sight of your own position is the one
+   failure the camera must never allow. */
+function riderOffScreen(pos,padding){
+  try{
+    const wrap=$('#map-wrap');
+    if(!wrap)return false;
+    const box=wrap.getBoundingClientRect();
+    const p=map.project(pos);
+    const margin=40;
+    return p.x<margin||p.y<padding.top+margin||
+           p.x>box.width-margin||p.y>box.height-padding.bottom-margin;
+  }catch{return false}
+}
+
+function updateAdaptiveNavigationCamera(pos,heading,speedMps=0,force=false){
+  if(!S.navState||Date.now()<S.manualExploreUntil)return;
+  const now=Date.now();
+  const target=navigationCameraTarget(pos,heading,speedMps);
+  const camera=S.navCamera;
+  if(target.stepIndex!==camera.lastStep&&camera.lastStep>=0)camera.postTurnUntil=now+4500;
+  camera.lastStep=target.stepIndex;
+
+  const padding=navigationCameraPadding();
+  const lost=riderOffScreen(pos,padding);
+
+  /* Following and re-framing are different jobs and used to share one throttle:
+     at a steady cruise, with no zoom change and the same state, the map held
+     still for 2600ms and then took 780ms to glide. At 30 km/h that is over 20
+     metres before the camera even starts, which is how a rider outruns their
+     own map. The centre now tracks every fix; only the zoom and pitch changes,
+     which are what actually look busy, stay rate-limited. */
+  const reframeDue=force||lost||
+    (Math.abs(target.zoom-camera.zoom)>=.14&&now-camera.lastReframeAt>=1200)||
+    (target.state!==camera.state&&now-camera.lastReframeAt>=1200);
+  if(reframeDue){
+    camera.lastReframeAt=now;
+    camera.zoom=target.zoom;
+    camera.pitch=target.pitch;
+    camera.state=target.state;
+  }
+
+  camera.lastAt=now;
+  map.easeTo({
+    center:navigationCameraLead(pos,heading,speedMps),
+    zoom:camera.zoom??target.zoom,
+    pitch:camera.pitch??target.pitch,
+    bearing:target.bearing,
+    padding,
+    // A recentre after losing the rider should be immediate, not a long glide.
+    duration:force?650:(lost?260:NAV_FOLLOW_MS),
+    essential:true,
+  });
+}
 /* Cumulative along-route distance of each step's maneuver. A step's `distance`
    is the length ridden along it and its maneuver sits at its START, so the
    maneuver for step i is at the sum of the distances of steps 0..i-1. Cached

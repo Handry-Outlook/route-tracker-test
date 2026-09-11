@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; background: #e9edf2; font-family: Inter, -apple-system, "SF Pro Text", system-ui, sans-serif; color: #132238; -webkit-font-smoothing: antialiased; }
+    a { color: #176bdb; } a:hover { color: #f28b30; }
+    * { box-sizing: border-box; }
+    .phone { position: relative; width: 390px; height: 844px; overflow: hidden; background: #f5f7fa; color: #132238; }
+    .safe { padding-top: 54px; }
+    h1, h2, h3, p { margin: 0; }
+    .card { background: #ffffff; border: 1px solid #dbe2ea; border-radius: 16px; box-shadow: 0 4px 14px #10233d18; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid #dbe2ea; background: #ffffff; font-size: 13px; font-weight: 600; color: #132238; white-space: nowrap; }
+    .chip.on { background: #15324d; border-color: #15324d; color: #fff; }
+    .chip.orange { background: #f28b30; border-color: #f28b30; color: #fff; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 18px; border-radius: 12px; font-weight: 700; font-size: 15px; border: 0; }
+    .btn.primary { background: #176bdb; color: #fff; }
+    .btn.cta { background: #f28b30; color: #fff; box-shadow: 0 8px 22px #f28b3055; }
+    .btn.ghost { background: #ffffff; border: 1px solid #dbe2ea; color: #132238; }
+    .iconbtn { width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: #ffffff; border: 1px solid #dbe2ea; color: #132238; box-shadow: 0 4px 14px #10233d18; }
+    .muted { color: #657186; }
+    .tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; padding: 8px 8px 20px; background: #ffffff; border-top: 1px solid #dbe2ea; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+    .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 10px; font-weight: 600; color: #657186; border-radius: 12px; }
+    .tab.on { color: #176bdb; }
+    .tab.rec { color: #f28b30; }
+    .tab.rec svg { width: 30px; height: 30px; }
+    .searchbar { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-radius: 999px; background: #ffffff; box-shadow: 0 12px 34px #10233d25; color: #657186; font-size: 15px; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .badge.blue { background: #e5efff; color: #1754a3; }
+    .badge.orange { background: #fff0e1; color: #a35400; }
+    .badge.green { background: #e3f7ee; color: #0d6b47; }
+    .badge.red { background: #fde5e5; color: #a82525; }
+    .badge.dark { background: #132238cc; color: #fff; backdrop-filter: blur(6px); }
+    .stat b { display: block; font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+    .stat small { font-size: 11px; color: #657186; font-weight: 600; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #fff; }
+    .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #ffffff; border-radius: 20px 20px 0 0; box-shadow: 0 -8px 30px #10233d30; padding: 8px 16px 16px; }
+    .handle { width: 40px; height: 5px; border-radius: 999px; background: #dbe2ea; margin: 0 auto 12px; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .hscroll { display: flex; gap: 12px; overflow: hidden; }
+    .section-title { font-size: 15px; font-weight: 800; }
+    .toggle { width: 46px; height: 28px; border-radius: 999px; background: #dbe2ea; position: relative; }
+    .toggle.on { background: #139b66; }
+    .toggle i { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+    .toggle.on i { left: 21px; }
+    .slider { position: relative; height: 32px; }
+    .slider .track { position: absolute; left: 0; right: 0; top: 14px; height: 4px; border-radius: 999px; background: #dbe2ea; }
+    .slider .fill { position: absolute; left: 0; top: 14px; height: 4px; border-radius: 999px; background: #176bdb; }
+    .slider .knob { position: absolute; top: 5px; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid #176bdb; box-shadow: 0 4px 14px #10233d18; }
+  </style>
+</helmet>
+
+<div class="phone safe" style="padding-left:16px;padding-right:16px;display:flex;flex-direction:column;gap:14px;background:#ffffff">
+  <div class="between"><div class="iconbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 6l12 12M18 6L6 18"/></svg></div><b style="font-size:15px">Ride complete</b><span style="width:44px"></span></div>
+  <div style="position:relative;height:190px;border-radius:16px;overflow:hidden;box-shadow:0 4px 14px #10233d18"><svg width="358" height="190" viewBox="0 0 358 190" xmlns="http://www.w3.org/2000/svg" style="display:block"><defs><linearGradient id="prg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#f28b30"/><stop offset="1" stop-color="#176bdb"/></linearGradient></defs>
+    <rect width="358" height="190" fill="#eaeee7"/>
+    <ellipse cx="279.2" cy="34.2" rx="121.7" ry="64.6" fill="#d5e6c6"/>
+    <ellipse cx="43.0" cy="163.4" rx="107.4" ry="57.0" fill="#d5e6c6"/>
+    <path d="M 0 114.0 C 89.5 98.8, 161.1 148.2, 358 125.4 L 358 190 L 0 190 Z" fill="#c6dcf1" opacity=".55"/>
+    <g stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round"><path d="M0 64.6 C 125.3 57.0, 214.8 83.6, 358 68.4"/><path d="M222.0 0 C 214.8 76.0, 250.6 133.0, 236.3 190"/></g>
+    <path d="M 78.8 57.0 C 157.5 19.0, 257.8 30.4, 286.4 72.2 S 315.0 125.4, 214.8 152.0 S 107.4 140.6, 57.3 102.6 S 64.4 72.2, 78.8 57.0 Z" stroke="#ffffff" stroke-width="7" fill="none" stroke-linejoin="round"/>
+    <path d="M 78.8 57.0 C 157.5 19.0, 257.8 30.4, 286.4 72.2 S 315.0 125.4, 214.8 152.0 S 107.4 140.6, 57.3 102.6 S 64.4 72.2, 78.8 57.0 Z" stroke="url(#prg)" stroke-width="3.5" fill="none" stroke-linejoin="round"/>
+    <circle cx="78.8" cy="57.0" r="5" fill="#fff" stroke="#f28b30" stroke-width="2.5"/>
+  </svg><span class="badge dark" style="position:absolute;left:10px;bottom:10px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Sat 6 Sep · 07:12–08:36</span></div>
+  <div><input value="Sunrise laps of Ashton Court" style="width:100%;height:46px;border:1px solid #dbe2ea;border-radius:12px;padding:0 12px;font:inherit;font-weight:700;font-size:16px;color:#132238"></div>
+  <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:8px"><div class="stat" style="background:#f5f7fa;border-radius:12px;padding:10px 6px;text-align:center"><b>32.1</b><small>km</small></div><div class="stat" style="background:#f5f7fa;border-radius:12px;padding:10px 6px;text-align:center"><b>410</b><small>m gain</small></div><div class="stat" style="background:#f5f7fa;border-radius:12px;padding:10px 6px;text-align:center"><b>1:24</b><small>moving</small></div><div class="stat" style="background:#f5f7fa;border-radius:12px;padding:10px 6px;text-align:center"><b>22.9</b><small>avg km/h</small></div></div>
+  <div><p class="section-title" style="margin-bottom:8px">Achievements</p><div style="display:flex;gap:8px"><div class="card" style="flex:1;padding:10px;text-align:center;box-shadow:none"><span style="display:inline-flex;width:38px;height:38px;border-radius:50%;background:#f28b301a;color:#f28b30;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 14v4M8 21h8"/></svg></span><b style="display:block;font-size:12px;margin-top:6px">New PR</b><span class="muted" style="font-size:10px;font-weight:600">Ashton Hill Climb</span></div><div class="card" style="flex:1;padding:10px;text-align:center;box-shadow:none"><span style="display:inline-flex;width:38px;height:38px;border-radius:50%;background:#8b5bd61a;color:#8b5bd6;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 18h18l-1-10-5 4-3-6-3 6-5-4z"/></svg></span><b style="display:block;font-size:12px;margin-top:6px">Segment king</b><span class="muted" style="font-size:10px;font-weight:600">Clifton Sprint</span></div><div class="card" style="flex:1;padding:10px;text-align:center;box-shadow:none"><span style="display:inline-flex;width:38px;height:38px;border-radius:50%;background:#176bdb1a;color:#176bdb;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg></span><b style="display:block;font-size:12px;margin-top:6px">Longest ride</b><span class="muted" style="font-size:10px;font-weight:600">This month</span></div></div></div>
+  <div><p class="section-title" style="margin-bottom:8px">Photos</p><div style="display:flex;gap:8px"><svg width="84" height="84" viewBox="0 0 84 84" style="display:block;border-radius:12px" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="swarm84" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f9d8a8"/><stop offset="1" stop-color="#f4a76a"/></linearGradient></defs><rect width="84" height="84" fill="url(#swarm84)"/><path d="M0 52.08 C 16.8 37.800000000000004, 29.4 58.8, 46.2 42 S 71.39999999999999 29.4, 84 46.2 L 84 84 L 0 84z" fill="#2f5d4a" opacity=".55"/><path d="M0 65.52 C 21 52.08, 42 75.60000000000001, 58.8 60.48 S 75.60000000000001 50.4, 84 63 L 84 84 L 0 84z" fill="#1f4a3a" opacity=".8"/></svg><svg width="84" height="84" viewBox="0 0 84 84" style="display:block;border-radius:12px" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="scool84" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfe3f5"/><stop offset="1" stop-color="#7fb3e6"/></linearGradient></defs><rect width="84" height="84" fill="url(#scool84)"/><path d="M0 52.08 C 16.8 37.800000000000004, 29.4 58.8, 46.2 42 S 71.39999999999999 29.4, 84 46.2 L 84 84 L 0 84z" fill="#2f5d4a" opacity=".55"/><path d="M0 65.52 C 21 52.08, 42 75.60000000000001, 58.8 60.48 S 75.60000000000001 50.4, 84 63 L 84 84 L 0 84z" fill="#1f4a3a" opacity=".8"/></svg><div style="width:84px;height:84px;border-radius:12px;border:2px dashed #dbe2ea;display:flex;align-items:center;justify-content:center;color:#657186"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><path d="M12 5v14M5 12h14"/></svg></div></div></div>
+  <div class="between card" style="padding:12px 14px;box-shadow:none"><span class="row" style="gap:8px;font-size:14px;font-weight:700"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Share to feed</span><div class="toggle on"><i></i></div></div>
+  <div style="margin-top:auto;margin-bottom:24px;display:flex;gap:10px"><div class="btn ghost" style="flex:1">Discard</div><div class="btn cta" style="flex:2">Save ride</div></div>
+</div></x-dc>
+</body>
+</html>
