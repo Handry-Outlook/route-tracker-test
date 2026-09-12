@@ -57,7 +57,7 @@ function routeResultHtml(route, i, selected) {
         ${routeThumb(route.geometry?.coordinates, 44, 44, { radius: 10 })}
         <div>
           <b style="font-size:14px">${i === 0 ? 'Recommended' : `Option ${i + 1}`}</b>
-          <div class="muted" style="font-size:11px;font-weight:600">${Number.isFinite(infra) ? `${infra}% cycle infrastructure` : 'Scoring…'}${route.cycleScorePending ? ' · refining' : ''}</div>
+          <div class="muted" style="font-size:11px;font-weight:600">${route.cycleScorePending && !Number.isFinite(route.osmCycleScore) ? 'Checking cycle infrastructure…' : Number.isFinite(infra) ? `${infra}% cycle infrastructure` : 'Cycle infrastructure unknown'}</div>
         </div>
       </div>
       <span class="badge ${diff.tone}">${diff.label}</span>
@@ -69,7 +69,7 @@ function routeResultHtml(route, i, selected) {
     </div>
     <div style="margin-top:10px">
       <div class="between" style="margin-bottom:4px"><span class="label">Elevation</span>${gradientLegend()}</div>
-      ${elevationChart(route.elev, 340, 78, { distanceKm: km })}
+      ${elevationChart(route.elev, 340, 78, { distanceKm: km, pending: !route.elev?.length && !route.elevUnavailable })}
     </div>
     <div class="actions">
       <button class="btn primary sm" data-nav="${i}">${icon('navArrow', 16)}Navigate</button>
@@ -81,24 +81,141 @@ function routeResultHtml(route, i, selected) {
   </article>`;
 }
 
+/* ------------------------------ stop list -------------------------------
+
+   The planner used to show the same stops three ways at once — a Start field,
+   an A/B reorder list, and separate waypoint fields that only existed after
+   pressing "Add waypoint" — plus a Finish field. A stop added on the map landed
+   in none of them. Now every stop is one row: its letter (matching the pin on
+   the map), its own search field, and reorder / remove / locate controls. The
+   first row is the start and the last is the finish; there is nothing else. */
+
+function stops() {
+  const S = state();
+  if (!Array.isArray(S.waypoints)) S.waypoints = [];
+  if (!Array.isArray(S.names)) S.names = [];
+  while (S.waypoints.length < 2) S.waypoints.push(null);
+  while (S.names.length < S.waypoints.length) S.names.push('');
+  return S.waypoints;
+}
+
+function stopsHtml() {
+  const list = stops();
+  const n = list.length;
+  const rows = list.map((_, i) => {
+    const role = i === 0 ? 'start' : i === n - 1 ? 'finish' : 'via';
+    const label = role === 'start' ? 'Start' : role === 'finish' ? 'Finish' : `Stop ${i}`;
+    const action = role === 'start' || (role === 'finish' && n === 2)
+      ? `<button class="iconbtn plain stop-action" data-here="${i}" title="Use my location" aria-label="Use my location for ${label}">${icon('pin', 18)}</button>`
+      : `<button class="iconbtn plain stop-action" data-remove-stop="${i}" title="Remove" aria-label="Remove ${label}">${icon('x', 16)}</button>`;
+    return `<div class="stop-row" data-stop="${i}">
+      <button class="stop-grip" data-grip="${i}" aria-label="Reorder ${label}" ${n < 3 ? 'disabled' : ''}>${icon('drag', 16)}</button>
+      <span class="stop-badge ${role}" aria-hidden="true">${APP.stopLetter(i)}</span>
+      <div class="stop-field" id="stop-${i}" aria-label="${label}"></div>
+      ${action}
+    </div>`;
+  }).join('');
+  return `<div class="stops" id="stops">${rows}</div>
+    <div class="stops-foot">
+      <button class="btn light sm" id="addStop">${icon('plus', 16)}Add stop</button>
+      <span class="muted">or tap and hold the map</span>
+    </div>`;
+}
+
+function wireStops() {
+  const S = state();
+  const { $ } = APP;
+  const list = stops();
+  const n = list.length;
+
+  list.forEach((_, i) => {
+    const id = `#stop-${i}`;
+    APP.geo(id, i);
+    const g = S.geocoders[id];
+    const role = i === 0 ? 'Start' : i === n - 1 ? 'Finish' : `Stop ${i}`;
+    g?.setPlaceholder?.(i === 0 ? 'Start — search or use your location' : i === n - 1 ? 'Finish — search or tap the map' : `${role} — search or tap the map`);
+    const name = S.names[i];
+    if (name) g?.setInput(name);
+  });
+
+  const host = $('#stops');
+  const replan = () => { if (S.waypoints.length >= 2 && S.waypoints.every(Array.isArray)) APP.pointRoutes(false); };
+
+  host.onclick = async (e) => {
+    const here = e.target.closest('[data-here]');
+    const remove = e.target.closest('[data-remove-stop]');
+    if (here) {
+      await APP.setHere(+here.dataset.here);
+      render();
+      return;
+    }
+    if (remove) {
+      const i = +remove.dataset.removeStop;
+      if (S.waypoints.length <= 2) return;
+      S.waypoints.splice(i, 1);
+      S.names.splice(i, 1);
+      APP.markers();
+      render();
+      replan();
+    }
+  };
+
+  $('#addStop').onclick = () => {
+    // New empty stop just before the finish, focused so the rider can type.
+    const at = Math.max(1, S.waypoints.length - 1);
+    S.waypoints.splice(at, 0, null);
+    S.names.splice(at, 0, '');
+    render();
+    requestAnimationFrame(() => APP.$(`#stop-${at} input`)?.focus());
+  };
+
+  /* Reorder with a pointer drag on the grip. HTML5 drag-and-drop, which the old
+     list used, never fires for touch, so reordering did not work on phones. */
+  if (n < 3) return;
+  host.querySelectorAll('[data-grip]').forEach((grip) => {
+    grip.onpointerdown = (e) => {
+      e.preventDefault();
+      const from = +grip.dataset.grip;
+      const rows = [...host.querySelectorAll('.stop-row')];
+      const dragged = rows[from];
+      grip.setPointerCapture?.(e.pointerId);
+      dragged.classList.add('dragging');
+      let to = from;
+      const move = (ev) => {
+        const y = ev.clientY;
+        to = rows.reduce((best, row, idx) => {
+          const r = row.getBoundingClientRect();
+          return y > r.top + r.height / 2 ? idx : best;
+        }, 0);
+        rows.forEach((row, idx) => row.classList.toggle('drop-above', idx === to && to !== from));
+      };
+      const up = () => {
+        grip.removeEventListener('pointermove', move);
+        grip.removeEventListener('pointerup', up);
+        grip.removeEventListener('pointercancel', up);
+        rows.forEach((row) => row.classList.remove('dragging', 'drop-above'));
+        if (to === from) return;
+        const [p] = S.waypoints.splice(from, 1);
+        const [name] = S.names.splice(from, 1);
+        S.waypoints.splice(to, 0, p);
+        S.names.splice(to, 0, name);
+        APP.markers();
+        render();
+        replan();
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', up);
+      grip.addEventListener('pointercancel', up);
+    };
+  });
+}
+
 function plannerHtml() {
   const S = state();
   const routes = Array.isArray(S.routes) ? S.routes : [];
   const finishIndex = Math.max(1, (S.waypoints?.length || 2) - 1);
   return `
-  <div class="card pad flat">
-    <div class="field">
-      <label>Start</label>
-      <div class="location-row"><div id="g0"></div><button class="iconbtn" id="useHereStart" title="Use my location">${icon('pin', 20)}</button></div>
-    </div>
-    <div id="waypointList"></div>
-    <div id="waypointFields"></div>
-    <button class="btn light sm" id="addWaypoint">${icon('plus', 16)}Add waypoint</button>
-    <div class="field" style="margin-top:12px">
-      <label>Finish</label>
-      <div class="location-row"><div id="gFinish"></div><button class="iconbtn" id="useHereFinish" title="Use my location">${icon('pin', 20)}</button></div>
-    </div>
-  </div>
+  <div class="card pad flat">${stopsHtml()}</div>
 
   <div class="card pad flat">
     <div class="between">
@@ -136,17 +253,7 @@ function wirePlanner() {
   const S = state();
   const { $ } = APP;
 
-  APP.geo('#g0', 0);
-  APP.geo('#gFinish', Math.max(1, (S.waypoints?.length || 2) - 1));
-  if (S.names?.[0]) S.geocoders['#g0']?.setInput(S.names[0]);
-  const fi = Math.max(1, (S.waypoints?.length || 2) - 1);
-  if (S.names?.[fi]) S.geocoders['#gFinish']?.setInput(S.names[fi]);
-  APP.renderWaypointFields();
-
-  renderWaypointOrder();
-  $('#useHereStart').onclick = () => APP.setHere(0);
-  $('#useHereFinish').onclick = () => APP.setHere(Math.max(1, (S.waypoints?.length || 2) - 1));
-  $('#addWaypoint').onclick = () => APP.addPointToPointWaypoint();
+  wireStops();
 
   $('#roundTrip').onclick = (e) => {
     S.planRoundTrip = !S.planRoundTrip;
@@ -252,62 +359,6 @@ function wireResults() {
   };
 }
 
-/**
- * A/B/C list of the set waypoints, draggable to reorder (roadmap item 9).
- * Reordering rewrites S.waypoints/S.names and recalculates immediately.
- */
-function renderWaypointOrder() {
-  const S = state();
-  const host = APP.$('#waypointList');
-  if (!host) return;
-  const pts = (S.waypoints || []).map((coord, i) => ({ coord, name: S.names?.[i] || '', i })).filter((p) => Array.isArray(p.coord));
-  if (pts.length < 2) { host.innerHTML = ''; return; }
-  const letter = (i) => String.fromCharCode(65 + i);
-  const tone = (i) => (i === 0 ? 'var(--accent)' : i === pts.length - 1 ? 'var(--blue)' : 'var(--navy)');
-  host.innerHTML = `<div class="card flat" style="padding:4px 12px;margin-bottom:10px">
-    ${pts.map((p, i) => `<div class="item waypoint-row" draggable="true" data-wp="${p.i}" data-pos="${i}" style="gap:10px;padding:9px 0;cursor:grab">
-      <span class="muted">${icon('drag', 18)}</span>
-      <span style="width:26px;height:26px;border-radius:50%;background:${tone(i)};color:#fff;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">${letter(i)}</span>
-      <span style="flex:1;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${APP.escapeHtml(p.name || 'Dropped pin')}</span>
-      ${pts.length > 2 ? `<button class="iconbtn plain" data-wp-remove="${p.i}" title="Remove">${icon('x', 16)}</button>` : ''}
-    </div>`).join('')}
-  </div>`;
-
-  let dragFrom = null;
-  host.querySelectorAll('[data-wp]').forEach((row) => {
-    row.ondragstart = (e) => { dragFrom = +row.dataset.pos; row.style.opacity = '.5'; e.dataTransfer.effectAllowed = 'move'; };
-    row.ondragend = () => { row.style.opacity = ''; };
-    row.ondragover = (e) => { e.preventDefault(); row.style.borderTop = '2px solid var(--blue)'; };
-    row.ondragleave = () => { row.style.borderTop = ''; };
-    row.ondrop = (e) => {
-      e.preventDefault();
-      row.style.borderTop = '';
-      const to = +row.dataset.pos;
-      if (dragFrom === null || dragFrom === to) return;
-      const wp = [...S.waypoints], nm = [...(S.names || [])];
-      const [movedWp] = wp.splice(dragFrom, 1);
-      const [movedNm] = nm.splice(dragFrom, 1);
-      wp.splice(to, 0, movedWp);
-      nm.splice(to, 0, movedNm);
-      S.waypoints = wp; S.names = nm;
-      dragFrom = null;
-      render();
-      if (S.waypoints.length > 1 && S.waypoints.every(Boolean)) APP.pointRoutes(false);
-    };
-  });
-  host.querySelectorAll('[data-wp-remove]').forEach((b) => {
-    b.onclick = () => {
-      const i = +b.dataset.wpRemove;
-      S.waypoints.splice(i, 1);
-      (S.names || []).splice(i, 1);
-      render();
-      if (S.waypoints.length > 1 && S.waypoints.every(Boolean)) APP.pointRoutes(false);
-    };
-  });
-}
-
-/* ------------------------------ library ------------------------------ */
-
 function collectionsOf(items) {
   const set = new Set();
   items.forEach((x) => { if (x.collection) set.add(x.collection); });
@@ -330,11 +381,14 @@ function savedCardHtml(item, i) {
       <span>${fmtKm(km)} · ${fmtM(route.ascent || 0)}${item.mode === 'loop' ? ' · loop' : ''}</span>
       <div class="between">
         <span class="badge ${diff.tone}">${diff.label}</span>
-        <div class="row" style="gap:4px">
-          <button class="iconbtn plain" data-open="${i}" title="Open">${icon('route', 18)}</button>
-          <button class="iconbtn plain" data-share-saved="${i}" title="Share">${icon('share', 18)}</button>
-          <button class="iconbtn plain" data-del="${i}" title="Delete">${icon('x', 18)}</button>
+        <div class="row" style="gap:2px">
+          <button class="iconbtn plain" data-share-saved="${i}" title="Share" aria-label="Share ${APP.escapeHtml(item.name || 'route')}">${icon('share', 18)}</button>
+          <button class="iconbtn plain danger" data-del="${i}" title="Delete" aria-label="Delete ${APP.escapeHtml(item.name || 'route')}">${icon('trash', 18)}</button>
         </div>
+      </div>
+      <div class="row" style="gap:8px;margin-top:10px">
+        <button class="btn primary sm" data-ride="${i}" style="flex:1">${icon('navArrow', 16)}Ride</button>
+        <button class="btn light sm" data-edit="${i}" style="flex:1">${icon('edit', 16)}Edit</button>
       </div>
     </div>
   </article>`;
@@ -389,11 +443,13 @@ function wireLibrary() {
   const grid = $('#savedGrid');
   if (grid) grid.onclick = async (e) => {
     const saved = S.accountRoutes || [];
-    const open = e.target.closest('[data-open]');
+    const ride = e.target.closest('[data-ride]');
+    const edit = e.target.closest('[data-edit]');
     const share = e.target.closest('[data-share-saved]');
     const del = e.target.closest('[data-del]');
     const card = e.target.closest('[data-saved]');
-    if (open) { e.stopPropagation(); APP.loadSavedRoute(saved[+open.dataset.open], true); return; }
+    if (ride) { e.stopPropagation(); APP.loadSavedRoute(saved[+ride.dataset.ride], false); await APP.startNavigation(); return; }
+    if (edit) { e.stopPropagation(); APP.loadSavedRoute(saved[+edit.dataset.edit], true); return; }
     if (share) { e.stopPropagation(); APP.shareSavedRouteByIndex(+share.dataset.shareSaved); return; }
     if (del) {
       e.stopPropagation();
@@ -403,7 +459,8 @@ function wireLibrary() {
       render();
       return;
     }
-    if (card) APP.loadSavedRoute(saved[+card.dataset.saved], true);
+    // Tapping the card itself previews the route, ready to ride — not edit mode.
+    if (card) APP.loadSavedRoute(saved[+card.dataset.saved], false);
   };
 }
 

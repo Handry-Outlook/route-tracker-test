@@ -44,9 +44,62 @@ async function fetchWindAtLocation(lat, lon, timestamp = null) {
     return null;
   }
 }
+var forecastCache = /* @__PURE__ */ new Map();
+var FORECAST_TTL_MS = 20 * 60 * 1e3;
+async function cachedJson(url) {
+  const hit = forecastCache.get(url);
+  if (hit && Date.now() - hit.at < FORECAST_TTL_MS) return hit.data;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Open-Meteo ${response.status}`);
+  const data = await response.json();
+  forecastCache.set(url, { at: Date.now(), data });
+  if (forecastCache.size > 60) forecastCache.delete(forecastCache.keys().next().value);
+  return data;
+}
 async function fetchRouteForecast(points) {
-  const results = await Promise.all(points.slice(0, 12).map((p) => fetchWindAtLocation(p.lat, p.lon, p.time)));
-  return results.filter(Boolean);
+  const pts = (points || []).map((p) => ({ ...p, lat: +p.lat, lon: +p.lon }));
+  if (!pts.length) return [];
+  if (X_WEATHER_ID && X_WEATHER_SECRET) {
+    const results = await Promise.all(pts.map((p) => fetchWindAtLocation(p.lat, p.lon, p.time)));
+    return results;
+  }
+  const lat = pts.map((p) => p.lat.toFixed(2)).join(",");
+  const lon = pts.map((p) => p.lon.toFixed(2)).join(",");
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&forecast_days=3&timeformat=unixtime&timezone=UTC`;
+  let data;
+  try {
+    data = await cachedJson(url);
+  } catch (error) {
+    console.warn("Route forecast unavailable", error);
+    return pts.map(() => null);
+  }
+  const list = Array.isArray(data) ? data : [data];
+  return pts.map((p, i) => {
+    const h = list[i]?.hourly;
+    if (!h?.time?.length) return null;
+    const target = Math.floor((p.time instanceof Date ? p.time.getTime() : Number.isFinite(p.time) ? p.time * 1e3 : Date.now()) / 1e3);
+    let k = 0, best = Infinity;
+    for (let j = 0; j < h.time.length; j++) {
+      const d = Math.abs(h.time[j] - target);
+      if (d < best) {
+        best = d;
+        k = j;
+      }
+    }
+    return {
+      time: h.time[k],
+      speed: h.wind_speed_10m[k],
+      bearing: h.wind_direction_10m[k],
+      gust: h.wind_gusts_10m[k],
+      temp: h.temperature_2m[k],
+      feelsLike: h.apparent_temperature[k],
+      humidity: h.relative_humidity_2m[k],
+      desc: weatherCodeDescription(h.weather_code[k]),
+      icon: weatherCodeIcon(h.weather_code[k], new Date(h.time[k] * 1e3).getHours()),
+      code: h.weather_code[k],
+      source: "Open-Meteo"
+    };
+  });
 }
 async function fetchHourlyForecast(lat, lon, hours = 72) {
   if (X_WEATHER_ID && X_WEATHER_SECRET) {
@@ -599,7 +652,9 @@ var ICONS = {
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   more: '<circle cx="6" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="18" cy="12" r="1.5" fill="currentColor"/>',
   pin: '<path d="M12 21s6-6.5 6-11a6 6 0 0 0-12 0c0 4.5 6 11 6 11z"/><circle cx="12" cy="10" r="2.5"/>',
-  send: '<path d="M4 4l16 8-16 8 3-8z"/>'
+  send: '<path d="M4 4l16 8-16 8 3-8z"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'
 };
 function icon(name, size = 20, extraAttrs = "") {
   const path = ICONS[name];
@@ -999,10 +1054,10 @@ function routeThumb(coords, w = 64, h = 64, { radius = 12, bg = "#eef2f6", showS
     ${showStart ? `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="3.2" fill="#fff" stroke="${ORANGE}" stroke-width="2"/>` : ""}
   </svg>`;
 }
-function elevationChart(elev, w = 358, h = 92, { distanceKm = 0, dark = false } = {}) {
+function elevationChart(elev, w = 358, h = 92, { distanceKm = 0, dark = false, pending = false } = {}) {
   const vals = (elev || []).filter(Number.isFinite);
   if (vals.length < 2) {
-    return `<div style="height:${h}px;display:grid;place-items:center;border-radius:12px;background:var(--surface-muted);color:var(--muted);font-size:11px;font-weight:600">Elevation unavailable</div>`;
+    return `<div style="height:${h}px;display:grid;place-items:center;border-radius:12px;background:var(--surface-muted);color:var(--muted);font-size:11px;font-weight:600">${pending ? "Loading elevation\u2026" : "Elevation unavailable right now"}</div>`;
   }
   const id = nextId("ev");
   const lo = Math.min(...vals), hi = Math.max(...vals);
@@ -1567,7 +1622,7 @@ function routeResultHtml(route, i, selected) {
         ${routeThumb(route.geometry?.coordinates, 44, 44, { radius: 10 })}
         <div>
           <b style="font-size:14px">${i === 0 ? "Recommended" : `Option ${i + 1}`}</b>
-          <div class="muted" style="font-size:11px;font-weight:600">${Number.isFinite(infra) ? `${infra}% cycle infrastructure` : "Scoring\u2026"}${route.cycleScorePending ? " \xB7 refining" : ""}</div>
+          <div class="muted" style="font-size:11px;font-weight:600">${route.cycleScorePending && !Number.isFinite(route.osmCycleScore) ? "Checking cycle infrastructure\u2026" : Number.isFinite(infra) ? `${infra}% cycle infrastructure` : "Cycle infrastructure unknown"}</div>
         </div>
       </div>
       <span class="badge ${diff.tone}">${diff.label}</span>
@@ -1579,7 +1634,7 @@ function routeResultHtml(route, i, selected) {
     </div>
     <div style="margin-top:10px">
       <div class="between" style="margin-bottom:4px"><span class="label">Elevation</span>${gradientLegend()}</div>
-      ${elevationChart(route.elev, 340, 78, { distanceKm: km })}
+      ${elevationChart(route.elev, 340, 78, { distanceKm: km, pending: !route.elev?.length && !route.elevUnavailable })}
     </div>
     <div class="actions">
       <button class="btn primary sm" data-nav="${i}">${icon("navArrow", 16)}Navigate</button>
@@ -1590,24 +1645,121 @@ function routeResultHtml(route, i, selected) {
     </div>
   </article>`;
 }
+function stops() {
+  const S2 = state3();
+  if (!Array.isArray(S2.waypoints)) S2.waypoints = [];
+  if (!Array.isArray(S2.names)) S2.names = [];
+  while (S2.waypoints.length < 2) S2.waypoints.push(null);
+  while (S2.names.length < S2.waypoints.length) S2.names.push("");
+  return S2.waypoints;
+}
+function stopsHtml() {
+  const list = stops();
+  const n = list.length;
+  const rows = list.map((_, i) => {
+    const role = i === 0 ? "start" : i === n - 1 ? "finish" : "via";
+    const label = role === "start" ? "Start" : role === "finish" ? "Finish" : `Stop ${i}`;
+    const action = role === "start" || role === "finish" && n === 2 ? `<button class="iconbtn plain stop-action" data-here="${i}" title="Use my location" aria-label="Use my location for ${label}">${icon("pin", 18)}</button>` : `<button class="iconbtn plain stop-action" data-remove-stop="${i}" title="Remove" aria-label="Remove ${label}">${icon("x", 16)}</button>`;
+    return `<div class="stop-row" data-stop="${i}">
+      <button class="stop-grip" data-grip="${i}" aria-label="Reorder ${label}" ${n < 3 ? "disabled" : ""}>${icon("drag", 16)}</button>
+      <span class="stop-badge ${role}" aria-hidden="true">${APP.stopLetter(i)}</span>
+      <div class="stop-field" id="stop-${i}" aria-label="${label}"></div>
+      ${action}
+    </div>`;
+  }).join("");
+  return `<div class="stops" id="stops">${rows}</div>
+    <div class="stops-foot">
+      <button class="btn light sm" id="addStop">${icon("plus", 16)}Add stop</button>
+      <span class="muted">or tap and hold the map</span>
+    </div>`;
+}
+function wireStops() {
+  const S2 = state3();
+  const { $: $2 } = APP;
+  const list = stops();
+  const n = list.length;
+  list.forEach((_, i) => {
+    const id = `#stop-${i}`;
+    APP.geo(id, i);
+    const g = S2.geocoders[id];
+    const role = i === 0 ? "Start" : i === n - 1 ? "Finish" : `Stop ${i}`;
+    g?.setPlaceholder?.(i === 0 ? "Start \u2014 search or use your location" : i === n - 1 ? "Finish \u2014 search or tap the map" : `${role} \u2014 search or tap the map`);
+    const name = S2.names[i];
+    if (name) g?.setInput(name);
+  });
+  const host = $2("#stops");
+  const replan = () => {
+    if (S2.waypoints.length >= 2 && S2.waypoints.every(Array.isArray)) APP.pointRoutes(false);
+  };
+  host.onclick = async (e) => {
+    const here = e.target.closest("[data-here]");
+    const remove = e.target.closest("[data-remove-stop]");
+    if (here) {
+      await APP.setHere(+here.dataset.here);
+      render2();
+      return;
+    }
+    if (remove) {
+      const i = +remove.dataset.removeStop;
+      if (S2.waypoints.length <= 2) return;
+      S2.waypoints.splice(i, 1);
+      S2.names.splice(i, 1);
+      APP.markers();
+      render2();
+      replan();
+    }
+  };
+  $2("#addStop").onclick = () => {
+    const at = Math.max(1, S2.waypoints.length - 1);
+    S2.waypoints.splice(at, 0, null);
+    S2.names.splice(at, 0, "");
+    render2();
+    requestAnimationFrame(() => APP.$(`#stop-${at} input`)?.focus());
+  };
+  if (n < 3) return;
+  host.querySelectorAll("[data-grip]").forEach((grip) => {
+    grip.onpointerdown = (e) => {
+      e.preventDefault();
+      const from = +grip.dataset.grip;
+      const rows = [...host.querySelectorAll(".stop-row")];
+      const dragged = rows[from];
+      grip.setPointerCapture?.(e.pointerId);
+      dragged.classList.add("dragging");
+      let to = from;
+      const move = (ev) => {
+        const y = ev.clientY;
+        to = rows.reduce((best, row, idx) => {
+          const r = row.getBoundingClientRect();
+          return y > r.top + r.height / 2 ? idx : best;
+        }, 0);
+        rows.forEach((row, idx) => row.classList.toggle("drop-above", idx === to && to !== from));
+      };
+      const up = () => {
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", up);
+        grip.removeEventListener("pointercancel", up);
+        rows.forEach((row) => row.classList.remove("dragging", "drop-above"));
+        if (to === from) return;
+        const [p] = S2.waypoints.splice(from, 1);
+        const [name] = S2.names.splice(from, 1);
+        S2.waypoints.splice(to, 0, p);
+        S2.names.splice(to, 0, name);
+        APP.markers();
+        render2();
+        replan();
+      };
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", up);
+      grip.addEventListener("pointercancel", up);
+    };
+  });
+}
 function plannerHtml() {
   const S2 = state3();
   const routes2 = Array.isArray(S2.routes) ? S2.routes : [];
   const finishIndex = Math.max(1, (S2.waypoints?.length || 2) - 1);
   return `
-  <div class="card pad flat">
-    <div class="field">
-      <label>Start</label>
-      <div class="location-row"><div id="g0"></div><button class="iconbtn" id="useHereStart" title="Use my location">${icon("pin", 20)}</button></div>
-    </div>
-    <div id="waypointList"></div>
-    <div id="waypointFields"></div>
-    <button class="btn light sm" id="addWaypoint">${icon("plus", 16)}Add waypoint</button>
-    <div class="field" style="margin-top:12px">
-      <label>Finish</label>
-      <div class="location-row"><div id="gFinish"></div><button class="iconbtn" id="useHereFinish" title="Use my location">${icon("pin", 20)}</button></div>
-    </div>
-  </div>
+  <div class="card pad flat">${stopsHtml()}</div>
 
   <div class="card pad flat">
     <div class="between">
@@ -1643,16 +1795,7 @@ function plannerHtml() {
 function wirePlanner() {
   const S2 = state3();
   const { $: $2 } = APP;
-  APP.geo("#g0", 0);
-  APP.geo("#gFinish", Math.max(1, (S2.waypoints?.length || 2) - 1));
-  if (S2.names?.[0]) S2.geocoders["#g0"]?.setInput(S2.names[0]);
-  const fi = Math.max(1, (S2.waypoints?.length || 2) - 1);
-  if (S2.names?.[fi]) S2.geocoders["#gFinish"]?.setInput(S2.names[fi]);
-  APP.renderWaypointFields();
-  renderWaypointOrder();
-  $2("#useHereStart").onclick = () => APP.setHere(0);
-  $2("#useHereFinish").onclick = () => APP.setHere(Math.max(1, (S2.waypoints?.length || 2) - 1));
-  $2("#addWaypoint").onclick = () => APP.addPointToPointWaypoint();
+  wireStops();
   $2("#roundTrip").onclick = (e) => {
     S2.planRoundTrip = !S2.planRoundTrip;
     if (!S2.planRoundTrip && S2.pointPlan) {
@@ -1777,69 +1920,6 @@ function wireResults() {
     }
   };
 }
-function renderWaypointOrder() {
-  const S2 = state3();
-  const host = APP.$("#waypointList");
-  if (!host) return;
-  const pts = (S2.waypoints || []).map((coord, i) => ({ coord, name: S2.names?.[i] || "", i })).filter((p) => Array.isArray(p.coord));
-  if (pts.length < 2) {
-    host.innerHTML = "";
-    return;
-  }
-  const letter = (i) => String.fromCharCode(65 + i);
-  const tone = (i) => i === 0 ? "var(--accent)" : i === pts.length - 1 ? "var(--blue)" : "var(--navy)";
-  host.innerHTML = `<div class="card flat" style="padding:4px 12px;margin-bottom:10px">
-    ${pts.map((p, i) => `<div class="item waypoint-row" draggable="true" data-wp="${p.i}" data-pos="${i}" style="gap:10px;padding:9px 0;cursor:grab">
-      <span class="muted">${icon("drag", 18)}</span>
-      <span style="width:26px;height:26px;border-radius:50%;background:${tone(i)};color:#fff;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">${letter(i)}</span>
-      <span style="flex:1;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${APP.escapeHtml(p.name || "Dropped pin")}</span>
-      ${pts.length > 2 ? `<button class="iconbtn plain" data-wp-remove="${p.i}" title="Remove">${icon("x", 16)}</button>` : ""}
-    </div>`).join("")}
-  </div>`;
-  let dragFrom = null;
-  host.querySelectorAll("[data-wp]").forEach((row) => {
-    row.ondragstart = (e) => {
-      dragFrom = +row.dataset.pos;
-      row.style.opacity = ".5";
-      e.dataTransfer.effectAllowed = "move";
-    };
-    row.ondragend = () => {
-      row.style.opacity = "";
-    };
-    row.ondragover = (e) => {
-      e.preventDefault();
-      row.style.borderTop = "2px solid var(--blue)";
-    };
-    row.ondragleave = () => {
-      row.style.borderTop = "";
-    };
-    row.ondrop = (e) => {
-      e.preventDefault();
-      row.style.borderTop = "";
-      const to = +row.dataset.pos;
-      if (dragFrom === null || dragFrom === to) return;
-      const wp = [...S2.waypoints], nm = [...S2.names || []];
-      const [movedWp] = wp.splice(dragFrom, 1);
-      const [movedNm] = nm.splice(dragFrom, 1);
-      wp.splice(to, 0, movedWp);
-      nm.splice(to, 0, movedNm);
-      S2.waypoints = wp;
-      S2.names = nm;
-      dragFrom = null;
-      render2();
-      if (S2.waypoints.length > 1 && S2.waypoints.every(Boolean)) APP.pointRoutes(false);
-    };
-  });
-  host.querySelectorAll("[data-wp-remove]").forEach((b) => {
-    b.onclick = () => {
-      const i = +b.dataset.wpRemove;
-      S2.waypoints.splice(i, 1);
-      (S2.names || []).splice(i, 1);
-      render2();
-      if (S2.waypoints.length > 1 && S2.waypoints.every(Boolean)) APP.pointRoutes(false);
-    };
-  });
-}
 function collectionsOf(items) {
   const set = /* @__PURE__ */ new Set();
   items.forEach((x) => {
@@ -1863,11 +1943,14 @@ function savedCardHtml(item, i) {
       <span>${fmtKm(km)} \xB7 ${fmtM(route.ascent || 0)}${item.mode === "loop" ? " \xB7 loop" : ""}</span>
       <div class="between">
         <span class="badge ${diff.tone}">${diff.label}</span>
-        <div class="row" style="gap:4px">
-          <button class="iconbtn plain" data-open="${i}" title="Open">${icon("route", 18)}</button>
-          <button class="iconbtn plain" data-share-saved="${i}" title="Share">${icon("share", 18)}</button>
-          <button class="iconbtn plain" data-del="${i}" title="Delete">${icon("x", 18)}</button>
+        <div class="row" style="gap:2px">
+          <button class="iconbtn plain" data-share-saved="${i}" title="Share" aria-label="Share ${APP.escapeHtml(item.name || "route")}">${icon("share", 18)}</button>
+          <button class="iconbtn plain danger" data-del="${i}" title="Delete" aria-label="Delete ${APP.escapeHtml(item.name || "route")}">${icon("trash", 18)}</button>
         </div>
+      </div>
+      <div class="row" style="gap:8px;margin-top:10px">
+        <button class="btn primary sm" data-ride="${i}" style="flex:1">${icon("navArrow", 16)}Ride</button>
+        <button class="btn light sm" data-edit="${i}" style="flex:1">${icon("edit", 16)}Edit</button>
       </div>
     </div>
   </article>`;
@@ -1918,13 +2001,20 @@ function wireLibrary() {
   const grid = $2("#savedGrid");
   if (grid) grid.onclick = async (e) => {
     const saved = S2.accountRoutes || [];
-    const open2 = e.target.closest("[data-open]");
+    const ride = e.target.closest("[data-ride]");
+    const edit = e.target.closest("[data-edit]");
     const share = e.target.closest("[data-share-saved]");
     const del = e.target.closest("[data-del]");
     const card = e.target.closest("[data-saved]");
-    if (open2) {
+    if (ride) {
       e.stopPropagation();
-      APP.loadSavedRoute(saved[+open2.dataset.open], true);
+      APP.loadSavedRoute(saved[+ride.dataset.ride], false);
+      await APP.startNavigation();
+      return;
+    }
+    if (edit) {
+      e.stopPropagation();
+      APP.loadSavedRoute(saved[+edit.dataset.edit], true);
       return;
     }
     if (share) {
@@ -1940,7 +2030,7 @@ function wireLibrary() {
       render2();
       return;
     }
-    if (card) APP.loadSavedRoute(saved[+card.dataset.saved], true);
+    if (card) APP.loadSavedRoute(saved[+card.dataset.saved], false);
   };
 }
 function refreshResults() {
@@ -3644,7 +3734,7 @@ async function render6() {
 
     <section>
       <div class="between" style="margin-bottom:6px"><span class="section-title">Elevation</span>${gradientLegend()}</div>
-      ${elevationChart(route.elev, 340, 92, { distanceKm: km })}
+      ${elevationChart(route.elev, 340, 92, { distanceKm: km, pending: !route.elev?.length && !route.elevUnavailable })}
     </section>
 
     ${hasWind ? `<section><div class="between" style="margin-bottom:6px"><span class="section-title">Wind along the route</span><span class="muted" style="font-size:11px;font-weight:700">tailwind + / headwind \u2212</span></div><canvas id="routeWindChart" class="chart"></canvas></section>` : ""}
@@ -4161,9 +4251,9 @@ function whyThisRoute(route, others) {
   const bits = [];
   const infra = Number.isFinite(route.osmCycleScore) ? route.osmCycleScore : route.cycleScore;
   const km = (route.distance || 0) / 1e3;
-  if (Number.isFinite(infra) && rest.length) {
-    const best = Math.max(...rest.map((r) => (Number.isFinite(r.osmCycleScore) ? r.osmCycleScore : r.cycleScore) ?? 0));
-    if (infra >= best) bits.push(`most cycle infrastructure (${infra}%)`);
+  if (Number.isFinite(infra) && infra > 0 && !route.cycleScorePending && rest.length) {
+    const others2 = rest.map((r) => Number.isFinite(r.osmCycleScore) ? r.osmCycleScore : r.cycleScore).filter(Number.isFinite);
+    if (others2.length === rest.length && infra > Math.max(...others2)) bits.push(`most cycle infrastructure (${infra}%)`);
   }
   if (Number.isFinite(route.ascent) && rest.length) {
     const climbs = rest.map((r) => r.ascent).filter(Number.isFinite);
@@ -4183,7 +4273,17 @@ function whyThisRoute(route, others) {
       else if (shortest - km > 3) bits.push(`${(shortest - km).toFixed(1)} km shorter`);
     }
   }
-  if (Number.isFinite(route.retrace) && route.retrace < 0.08) bits.push("almost no repeated road");
+  const bt = route.backtrack;
+  const len = (m) => m >= 1e3 ? `${(m / 1e3).toFixed(1)} km` : `${Math.round(m)} m`;
+  if (bt && bt.longestDetourM > 100) {
+    bits.unshift(`turns back on itself for ${len(bt.longestDetourM)}`);
+  } else if (bt && bt.longestBacktrackM === 0 && bt.overlapM === 0) {
+    bits.push("no road ridden twice");
+  } else if (bt && bt.sharedBacktrackM >= 500) {
+    bits.push(`${len(bt.sharedBacktrackM)} on road ridden earlier`);
+  } else if (bt) {
+    bits.push("almost no repeated road");
+  }
   if (route.prefNotes?.length) bits.push(...route.prefNotes);
   if (!bits.length) return null;
   const s = bits.slice(0, 3).join(", ");
@@ -4576,6 +4676,323 @@ function starsHtml(avg, size = 14) {
   return `<span class="stars">${Array.from({ length: 5 }, (_, i) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" style="opacity:${i < full ? 1 : 0.25}">${star}</svg>`).join("")}</span>`;
 }
 
+// src/routing/retrace.js
+var EARTH_RADIUS_M = 63710088e-1;
+function projector(coords) {
+  let lng = 0, lat = 0;
+  for (const [x, y] of coords) {
+    lng += x;
+    lat += y;
+  }
+  lng /= coords.length;
+  lat /= coords.length;
+  const ky = Math.PI / 180 * EARTH_RADIUS_M;
+  const kx = Math.cos(lat * Math.PI / 180) * ky;
+  return {
+    to: ([x, y]) => [(x - lng) * kx, (y - lat) * ky],
+    from: ([x, y]) => [x / kx + lng, y / ky + lat]
+  };
+}
+function resample(points, spacing) {
+  const out = [{ p: points[0], d: 0 }];
+  let carried = 0, along = 0;
+  for (let i = 1; i < points.length; i++) {
+    const [ax, ay] = points[i - 1], [bx, by] = points[i];
+    const len = Math.hypot(bx - ax, by - ay);
+    if (!(len > 0)) continue;
+    let t = spacing - carried;
+    while (t <= len) {
+      out.push({ p: [ax + (bx - ax) * t / len, ay + (by - ay) * t / len], d: along + t });
+      t += spacing;
+    }
+    carried = len - (t - spacing);
+    along += len;
+  }
+  const last = points[points.length - 1];
+  if (Math.hypot(last[0] - out[out.length - 1].p[0], last[1] - out[out.length - 1].p[1]) > spacing * 0.3) {
+    out.push({ p: last, d: along });
+  }
+  return out;
+}
+function pointToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+function measureRetrace(coords, options = {}) {
+  const {
+    spacingM = 25,
+    matchM = 22,
+    homeZoneM = 400,
+    // How far back along the route a match must be. Road just ridden in the
+    // same direction is always nearby, so repeats need a real gap; a match in
+    // the OPPOSITE direction that close is the U-turn itself, so it needs very
+    // little — otherwise any spur shorter than the gap goes unseen.
+    minGapSamples = 6,
+    minGapOppositeSamples = 2,
+    // A U-turn doubles back at close to 180°. At 135° a merely sharp corner
+    // matched the road just before it and read as a back-track.
+    oppositeDeg = 150,
+    // A back-track whose first metres match road ridden within this distance is
+    // a turn-round detour rather than a road shared with a much later stretch.
+    detourGapM = 200,
+    sameDeg = 45
+  } = options;
+  const empty = { totalM: 0, backtrackM: 0, overlapM: 0, ratio: 0, longestBacktrackM: 0, spans: [] };
+  if (!Array.isArray(coords) || coords.length < 3) return empty;
+  const proj = projector(coords);
+  const samples = resample(coords.map(proj.to), spacingM);
+  const n = samples.length;
+  if (n < minGapOppositeSamples + 3) return { ...empty, totalM: samples[n - 1]?.d || 0 };
+  const cell = matchM * 1.5;
+  const grid = /* @__PURE__ */ new Map();
+  const key = (cx, cy) => `${cx},${cy}`;
+  const heading = new Array(n - 1);
+  for (let k = 0; k < n - 1; k++) {
+    const [ax, ay] = samples[k].p, [bx, by] = samples[k + 1].p;
+    heading[k] = Math.atan2(by - ay, bx - ax);
+    const x0 = Math.floor(Math.min(ax, bx) / cell), x1 = Math.floor(Math.max(ax, bx) / cell);
+    const y0 = Math.floor(Math.min(ay, by) / cell), y1 = Math.floor(Math.max(ay, by) / cell);
+    for (let cx = x0; cx <= x1; cx++) {
+      for (let cy = y0; cy <= y1; cy++) {
+        const id = key(cx, cy);
+        let list = grid.get(id);
+        if (!list) grid.set(id, list = []);
+        list.push(k);
+      }
+    }
+  }
+  const home = samples[0].p;
+  const opposite = oppositeDeg * Math.PI / 180;
+  const same = sameDeg * Math.PI / 180;
+  const kind = new Array(n).fill(0);
+  const gapM = new Float64Array(n);
+  for (let i = 1; i < n - 1; i++) {
+    const [px, py] = samples[i].p;
+    if (Math.hypot(px - home[0], py - home[1]) < homeZoneM) continue;
+    const here = Math.atan2(samples[i + 1].p[1] - samples[i - 1].p[1], samples[i + 1].p[0] - samples[i - 1].p[0]);
+    const cx = Math.floor(px / cell), cy = Math.floor(py / cell);
+    let found = 0;
+    for (let ox = -1; ox <= 1 && found < 2; ox++) {
+      for (let oy = -1; oy <= 1 && found < 2; oy++) {
+        const list = grid.get(key(cx + ox, cy + oy));
+        if (!list) continue;
+        for (const k of list) {
+          if (k >= i - minGapOppositeSamples) continue;
+          const [ax, ay] = samples[k].p, [bx, by] = samples[k + 1].p;
+          if (pointToSegment(px, py, ax, ay, bx, by) > matchM) continue;
+          let diff = Math.abs(here - heading[k]);
+          if (diff > Math.PI) diff = 2 * Math.PI - diff;
+          if (diff >= opposite) {
+            found = 2;
+            gapM[i] = samples[i].d - samples[k].d;
+            break;
+          }
+          if (diff <= same && k < i - minGapSamples) found = Math.max(found, 1);
+        }
+      }
+    }
+    kind[i] = found;
+  }
+  let backtrackM = 0, overlapM = 0, longest = 0;
+  const spans = [];
+  for (let i = 1; i < n; i++) {
+    const step2 = samples[i].d - samples[i - 1].d;
+    if (kind[i] === 1) overlapM += step2;
+    if (kind[i] !== 2) continue;
+    backtrackM += step2;
+    const last = spans[spans.length - 1];
+    if (last && last.endIndex === i - 1) {
+      last.endIndex = i;
+      last.lengthM += step2;
+    } else {
+      spans.push({ startIndex: i, endIndex: i, lengthM: step2, startM: samples[i].d, firstGapM: gapM[i] });
+    }
+  }
+  for (let i = spans.length - 1; i >= 0; i--) {
+    if (spans[i].endIndex === spans[i].startIndex) {
+      backtrackM -= spans[i].lengthM;
+      spans.splice(i, 1);
+    }
+  }
+  let longestDetour = 0, sharedM = 0;
+  for (const s of spans) {
+    longest = Math.max(longest, s.lengthM);
+    s.apex = proj.from(samples[Math.max(0, s.startIndex - 1)].p);
+    s.detour = s.firstGapM <= detourGapM;
+    if (s.detour) longestDetour = Math.max(longestDetour, s.lengthM);
+    else sharedM += s.lengthM;
+  }
+  const totalM = samples[n - 1].d;
+  return {
+    totalM,
+    backtrackM,
+    overlapM,
+    ratio: totalM > 0 ? (backtrackM + overlapM) / totalM : 0,
+    longestBacktrackM: longest,
+    longestDetourM: longestDetour,
+    sharedBacktrackM: sharedM,
+    sharedRatio: totalM > 0 ? sharedM / totalM : 0,
+    spans: spans.map(({ startM, lengthM, apex, detour }) => ({ startM, lengthM, apex, detour }))
+  };
+}
+var MAX_DETOUR_M = 100;
+var MAX_SHARED_RATIO = 0.12;
+function isCleanLoop(measure) {
+  return !!measure && measure.longestDetourM <= MAX_DETOUR_M && measure.sharedRatio <= MAX_SHARED_RATIO;
+}
+
+// src/routing/elevation.js
+var OPEN_METEO_MAX_POINTS = 100;
+var DEM_MAX_ZOOM = 14;
+var DEM_MIN_ZOOM = 10;
+var DEM_MAX_TILES = 32;
+var DEM_CACHE_TILES = 40;
+var DEM_CONCURRENCY = 6;
+var openMeteoBlockedUntil = 0;
+var demCache = /* @__PURE__ */ new Map();
+async function fromOpenMeteo(points, signal) {
+  if (points.length > OPEN_METEO_MAX_POINTS) throw new Error("Too many points for Open-Meteo");
+  if (Date.now() < openMeteoBlockedUntil) throw new Error("Open-Meteo quota spent");
+  const lat = points.map((p) => +p[1].toFixed(5)).join(",");
+  const lng = points.map((p) => +p[0].toFixed(5)).join(",");
+  const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lng}`, { signal });
+  if (!res.ok) {
+    if (res.status === 429) {
+      const body = await res.json().catch(() => ({}));
+      openMeteoBlockedUntil = Date.now() + (/daily/i.test(body?.reason || "") ? 36e5 : 6e4);
+    }
+    throw new Error(`Open-Meteo ${res.status}`);
+  }
+  const elevation = (await res.json())?.elevation;
+  if (!Array.isArray(elevation) || elevation.length !== points.length || !elevation.every(Number.isFinite)) {
+    throw new Error("Open-Meteo returned an incomplete profile");
+  }
+  return elevation;
+}
+function tileCoords(lng, lat, z) {
+  const n = 2 ** z, rad = lat * Math.PI / 180;
+  return {
+    x: (lng + 180) / 360 * n,
+    y: (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * n
+  };
+}
+async function decodeTile(blob) {
+  const bitmap = await createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+  const size = bitmap.width;
+  const canvas = typeof OffscreenCanvas === "function" ? new OffscreenCanvas(size, size) : Object.assign(document.createElement("canvas"), { width: size, height: size });
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close?.();
+  return { size, data: ctx.getImageData(0, 0, size, size).data };
+}
+function demTile(z, x, y, token, signal) {
+  const key = `${z}/${x}/${y}`;
+  if (demCache.has(key)) {
+    const hit = demCache.get(key);
+    demCache.delete(key);
+    demCache.set(key, hit);
+    return hit;
+  }
+  const job = fetch(`https://api.mapbox.com/v4/mapbox.mapbox-terrain-dem-v1/${key}.pngraw?access_token=${token}`, { signal }).then((res) => {
+    if (!res.ok) throw new Error(`Mapbox terrain ${res.status}`);
+    return res.blob();
+  }).then(decodeTile);
+  job.catch(() => demCache.delete(key));
+  demCache.set(key, job);
+  while (demCache.size > DEM_CACHE_TILES) demCache.delete(demCache.keys().next().value);
+  return job;
+}
+function heightAt(tile, px, py) {
+  const { size, data } = tile;
+  const read2 = (x, y) => {
+    const i = (Math.min(size - 1, Math.max(0, y)) * size + Math.min(size - 1, Math.max(0, x))) * 4;
+    return -1e4 + (data[i] * 65536 + data[i + 1] * 256 + data[i + 2]) * 0.1;
+  };
+  const x0 = Math.floor(px - 0.5), y0 = Math.floor(py - 0.5), fx = px - 0.5 - x0, fy = py - 0.5 - y0;
+  const top = read2(x0, y0) * (1 - fx) + read2(x0 + 1, y0) * fx;
+  const bottom = read2(x0, y0 + 1) * (1 - fx) + read2(x0 + 1, y0 + 1) * fx;
+  return top * (1 - fy) + bottom * fy;
+}
+async function fromMapboxTerrain(points, token, signal) {
+  if (!token) throw new Error("No Mapbox token");
+  if (typeof createImageBitmap !== "function") throw new Error("Terrain decoding unsupported");
+  let z = DEM_MAX_ZOOM, placed;
+  for (; z >= DEM_MIN_ZOOM; z--) {
+    placed = points.map((p) => {
+      const t = tileCoords(p[0], p[1], z), tx2 = Math.floor(t.x), ty = Math.floor(t.y);
+      return { key: `${tx2}/${ty}`, tx: tx2, ty, fx: t.x - tx2, fy: t.y - ty };
+    });
+    if (new Set(placed.map((p) => p.key)).size <= DEM_MAX_TILES || z === DEM_MIN_ZOOM) break;
+  }
+  const keys = [...new Set(placed.map((p) => p.key))];
+  const tiles = /* @__PURE__ */ new Map();
+  for (let i = 0; i < keys.length; i += DEM_CONCURRENCY) {
+    await Promise.all(keys.slice(i, i + DEM_CONCURRENCY).map(async (key) => {
+      const [tx2, ty] = key.split("/").map(Number);
+      tiles.set(key, await demTile(z, tx2, ty, token, signal).catch(() => null));
+    }));
+  }
+  const heights = placed.map((p) => {
+    const tile = tiles.get(p.key);
+    return tile ? heightAt(tile, p.fx * tile.size, p.fy * tile.size) : null;
+  });
+  const missing = heights.filter((h) => !Number.isFinite(h)).length;
+  if (missing > heights.length * 0.2) throw new Error("Mapbox terrain tiles unavailable");
+  return fillGaps(heights);
+}
+function fillGaps(values) {
+  const out = values.slice();
+  for (let i = 0; i < out.length; i++) {
+    if (Number.isFinite(out[i])) continue;
+    let a = i - 1;
+    while (a >= 0 && !Number.isFinite(out[a])) a--;
+    let b = i + 1;
+    while (b < out.length && !Number.isFinite(values[b])) b++;
+    const left = a >= 0 ? out[a] : null, right = b < out.length ? values[b] : null;
+    out[i] = left === null ? right : right === null ? left : left + (right - left) * (i - a) / (b - a);
+  }
+  return out.map((v) => Math.round(v * 10) / 10);
+}
+async function fetchElevations(points, { token, signal } = {}) {
+  if (!Array.isArray(points) || points.length < 2) throw new Error("Need at least two points");
+  const errors = [];
+  if (points.length <= OPEN_METEO_MAX_POINTS) {
+    try {
+      return { elev: await fromOpenMeteo(points, signal), source: "open-meteo" };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      errors.push(error.message);
+    }
+  }
+  try {
+    return { elev: await fromMapboxTerrain(points, token, signal), source: "mapbox-terrain" };
+  } catch (error) {
+    errors.push(error.message);
+  }
+  throw new Error(`Elevation unavailable (${errors.join("; ")})`);
+}
+function elevationSamplePoints(coords, turf2, maxPoints = OPEN_METEO_MAX_POINTS) {
+  if (!Array.isArray(coords) || coords.length < 2) return [];
+  const cum = [0];
+  for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + turf2.distance(coords[i - 1], coords[i], { units: "meters" }));
+  const total = cum.at(-1);
+  if (!(total > 0)) return [coords[0], coords.at(-1)];
+  const count = Math.max(10, Math.min(maxPoints, Math.round(total / 25) + 1));
+  const out = [];
+  let seg = 1;
+  for (let k = 0; k < count; k++) {
+    const d = total * k / (count - 1);
+    while (seg < coords.length - 1 && cum[seg] < d) seg++;
+    const a = coords[seg - 1], b = coords[seg], span = cum[seg] - cum[seg - 1];
+    const t = span > 0 ? Math.min(1, Math.max(0, (d - cum[seg - 1]) / span)) : 0;
+    out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+  }
+  return out;
+}
+
 // src/social/segments.js
 var segments_exports = {};
 __export(segments_exports, {
@@ -4738,7 +5155,22 @@ var toast = (t) => {
   e.classList.add("show");
   setTimeout(() => e.classList.remove("show"), 1900);
 };
-var gain = (a) => a.reduce((g, v, i) => g + (i && v > a[i - 1] ? v - a[i - 1] : 0), 0);
+var gain = (a) => {
+  let g = 0, ref = null;
+  const H = 5;
+  for (const v of a || []) {
+    if (!Number.isFinite(v)) continue;
+    if (ref === null) {
+      ref = v;
+      continue;
+    }
+    if (v > ref + H) {
+      g += v - ref;
+      ref = v;
+    } else if (v < ref - H) ref = v;
+  }
+  return g;
+};
 var fmt = (n) => Number(n || 0).toFixed(1);
 mapboxgl.accessToken = MAPBOX_TOKEN;
 var map = new mapboxgl.Map({ container: "map", style: "mapbox://styles/mapbox/outdoors-v12", center: [-2.5879, 51.4545], zoom: 11, preserveDrawingBuffer: true });
@@ -4764,10 +5196,20 @@ addEventListener("keydown", (e) => {
   undoRouteEdit();
   toast("Route edit undone");
 });
+$("#edit-copy").onclick = async () => {
+  if (S.selected === null) return;
+  await saveRouteByIndex(S.selected, { asCopy: true });
+  updateEditBanner();
+};
 $("#edit-done").onclick = async () => {
+  if (S.openSavedId && !S.editingSavedId && S.routeDirty) {
+    await updateOpenSavedRoute();
+    return;
+  }
   if (S.editingSavedId) {
     S.editingSavedId = null;
     S.routeUndo = [];
+    S.routeDirty = false;
     S.nodes.forEach((m) => m.remove());
     S.nodes = [];
     updateUndoButton();
@@ -4811,7 +5253,7 @@ function open(p) {
   if (mobile()) {
     if (S.navState && isMapPage) sheet.setState("closed");
     else if (isMapPage) sheet.setState(S.routeDetailOpen ? "full" : "half");
-    else sheet.setState("full");
+    else sheet.setState(p === "plan" ? "half" : "full");
   }
   setTimeout(() => map.resize(), 30);
 }
@@ -4846,7 +5288,7 @@ function render7(force = false) {
 }
 function refreshPage(full) {
   if (!full && S.page === "plan" && document.querySelector("#planResults") && refreshResults && refreshResults()) return;
-  render7();
+  render7(!!full);
 }
 function addPointToPointWaypoint() {
   S.waypoints.splice(S.waypoints.length - 1, 0, null);
@@ -4953,7 +5395,7 @@ function geo(id, i, loop = false) {
       S.names = [e.result.place_name, e.result.place_name];
     }
     markers2();
-    if (!loop && S.waypoints[0] && S.waypoints[1]) pointRoutes(false);
+    if (!loop && S.waypoints.length >= 2 && S.waypoints.every(Array.isArray)) pointRoutes(false);
   });
 }
 async function setHere(i, loop = false) {
@@ -4966,11 +5408,10 @@ async function setHere(i, loop = false) {
     S.waypoints = [p, p];
     S.names = [name, name];
   }
-  S.geocoders[loop ? "#ga" : i ? "#g1" : "#g0"]?.setInput(name);
   markers2();
   map.flyTo({ center: p, zoom: 14 });
-  toast(loop ? `Adventure starts and finishes at ${name}` : `${i ? "Finish" : "Start"} set to ${name}`);
-  if (!loop && S.waypoints[0] && S.waypoints[1]) pointRoutes(false);
+  toast(loop ? `Adventure starts and finishes at ${name}` : `${i === 0 ? "Start" : i === S.waypoints.length - 1 ? "Finish" : `Stop ${stopLetter(i)}`} set to ${name}`);
+  if (!loop && S.waypoints.length >= 2 && S.waypoints.every(Array.isArray)) pointRoutes(false);
 }
 async function getRecognisableLocationName(p) {
   const [lng, lat] = p, token = `access_token=${MAPBOX_TOKEN}`;
@@ -4982,11 +5423,20 @@ async function getRecognisableLocationName(p) {
       if (exact) return place ? `${exact}, ${place}` : exact;
     }
     const fallback = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=neighborhood,locality,place&limit=1&${token}`).then((r) => r.json());
-    return fallback.features?.[0]?.place_name || "Current location";
+    const area = fallback.features?.[0];
+    if (area) return area.text || area.place_name;
+    return coordinateLabel(p);
   } catch (e) {
     console.warn("Address lookup failed", e);
-    return "Current location";
+    return coordinateLabel(p);
   }
+}
+function coordinateLabel(p) {
+  return Array.isArray(p) ? `${(+p[1]).toFixed(4)}, ${(+p[0]).toFixed(4)}` : "Unnamed place";
+}
+var PLACEHOLDER_NAMES = /^(current location|dropped pin|start|finish|finding address.*|route edit|)$/i;
+function isPlaceholderName(name) {
+  return PLACEHOLDER_NAMES.test(String(name || "").trim());
 }
 async function pointRoutes(append) {
   if (!append) S.editingSavedId = null;
@@ -5053,12 +5503,45 @@ function closeAdventureGeometry(route, start2) {
   }
   return route;
 }
+function makeLineWalker(coords) {
+  const n = coords.length, cum = new Float64Array(n);
+  for (let i = 1; i < n; i++) cum[i] = cum[i - 1] + turf.distance(coords[i - 1], coords[i]);
+  const total = n ? cum[n - 1] : 0;
+  return {
+    total,
+    at(d) {
+      if (n === 0) return null;
+      if (d >= total) return coords[n - 1];
+      if (d <= 0) return coords[0];
+      let lo = 0, hi = n - 1;
+      while (lo < hi) {
+        const mid = lo + hi >> 1;
+        if (cum[mid] >= d) hi = mid;
+        else lo = mid + 1;
+      }
+      const i = lo, overshot = d - cum[i];
+      if (!overshot) return coords[i];
+      const direction = turf.bearing(coords[i], coords[i - 1]) - 180;
+      return turf.destination(coords[i], overshot, direction).geometry.coordinates;
+    }
+  };
+}
 function corridorLoopQuality(route) {
+  const g = route?.geometry?.coordinates;
+  if (g && route._corridorFor === g) return route._corridor;
+  const result = corridorLoopQualityCompute(route);
+  if (g) {
+    route._corridorFor = g;
+    route._corridor = result;
+  }
+  return result;
+}
+function corridorLoopQualityCompute(route) {
   const coords = route?.geometry?.coordinates || [];
   if (coords.length < 4) return { valid: false, retrace: 1, parallelKm: 0, narrow: false };
-  const line2 = turf.lineString(coords), length = Math.max(0.1, turf.length(line2)), spacing = Math.max(0.16, length / 150), samples = [];
+  const line2 = turf.lineString(coords), walk = makeLineWalker(coords), length = Math.max(0.1, walk.total), spacing = Math.max(0.16, length / 150), samples = [];
   for (let d = 0; d <= length; d += spacing) {
-    const point = turf.along(line2, d).geometry.coordinates, next = turf.along(line2, Math.min(length, d + Math.max(0.06, spacing * 0.45))).geometry.coordinates;
+    const point = walk.at(d), next = walk.at(Math.min(length, d + Math.max(0.06, spacing * 0.45)));
     samples.push({ d, point, bearing: turf.bearing(point, next) });
   }
   let same = 0, parallel = 0, longest = 0, run = 0;
@@ -5085,8 +5568,62 @@ function corridorLoopQuality(route) {
   const bbox = turf.bbox(line2), w = turf.distance([bbox[0], bbox[1]], [bbox[2], bbox[1]]), h = turf.distance([bbox[0], bbox[1]], [bbox[0], bbox[3]]), narrow = Math.min(w, h) < Math.max(1.2, length * 0.08), retrace = Math.min(1, same / length);
   return { valid: retrace <= 0.21 && longest <= 0.8, retrace, parallelKm: parallel, narrow, longestSameKm: longest };
 }
+async function fetchLoopRoutes(plan, timeoutMs, required = []) {
+  let points = plan.points;
+  const attempts = [];
+  const isRequired = (p) => (required || []).some((q) => {
+    try {
+      return turf.distance(p, q, { units: "meters" }) < 30;
+    } catch {
+      return false;
+    }
+  });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const route = (await fastDirections(points, timeoutMs, false).catch(() => []))[0];
+    if (!route) break;
+    route.backtrack = measureRetrace(route.geometry?.coordinates);
+    route._requestPoints = points;
+    attempts.push(route);
+    if (isCleanLoop(route.backtrack)) break;
+    const culprits = /* @__PURE__ */ new Set();
+    for (const span of route.backtrack.spans) {
+      if (!span.detour || span.lengthM <= MAX_DETOUR_M) continue;
+      let pick = -1, nearest = 350;
+      points.forEach((p, k) => {
+        if (k === 0 || k === points.length - 1 || isRequired(p)) return;
+        const m = turf.distance(p, span.apex, { units: "meters" });
+        if (m < nearest) {
+          nearest = m;
+          pick = k;
+        }
+      });
+      if (pick >= 0) culprits.add(pick);
+    }
+    if (!culprits.size) break;
+    const next = points.filter((_, k) => !culprits.has(k));
+    if (next.length < 3) break;
+    points = next;
+  }
+  return attempts.sort((a, b) => a.backtrack.longestDetourM - b.backtrack.longestDetourM || a.backtrack.sharedRatio - b.backtrack.sharedRatio);
+}
+function loopMeasure(route) {
+  route.backtrack = route.backtrack || measureRetrace(route.geometry?.coordinates);
+  return route.backtrack;
+}
+function cleanLoopCount(list) {
+  return (list || []).filter((r) => isCleanLoop(loopMeasure(r))).length;
+}
+function preferCleanLoops(list) {
+  const all = list || [];
+  const clean = all.filter((r) => isCleanLoop(loopMeasure(r)));
+  const rest = all.filter((r) => !isCleanLoop(loopMeasure(r))).sort((a, b) => a.backtrack.longestDetourM - b.backtrack.longestDetourM || a.backtrack.sharedRatio - b.backtrack.sharedRatio);
+  return [...clean, ...rest];
+}
 function quickAdventureAcceptance(route, start2, requiredCount = 0) {
   if (!validateAdventureLoop(route, start2).valid || hasMotorway(route)) return { valid: false };
+  const backtrack = route.backtrack || measureRetrace(route.geometry?.coordinates);
+  route.backtrack = backtrack;
+  route.cleanLoop = isCleanLoop(backtrack);
   const q = quickAdventureQuality(route.geometry.coordinates, Math.max(0.1, (route.distance || 0) / 1e3)), corridor = corridorLoopQuality(route), maxRetrace = requiredCount ? 0.34 : 0.21, maxDeadEnd = requiredCount ? 1.2 : 0.8;
   return { ...q, retrace: Math.min(q.retrace, corridor.retrace), parallelDistinctKm: corridor.parallelKm, narrowLoop: corridor.narrow, valid: requiredCount > 0 || corridor.valid && q.deadEndKm <= maxDeadEnd };
 }
@@ -5100,12 +5637,12 @@ async function forceOneMoreAdventureRoute(start2, required, minKm, maxKm, effect
   }
   for (const plan of attempts) {
     if (token !== adventureBuildToken) return null;
-    const routes2 = await fastDirections(plan.points, 5600, false).catch(() => []);
+    const routes2 = await fetchLoopRoutes(plan, 5600, required).catch(() => []);
     for (const raw of routes2) {
       if (!validateAdventureLoop(raw, start2).valid || hasMotorway(raw)) continue;
       const route = closeAdventureGeometry(raw, start2), quick = quickAdventureQuality(route.geometry.coordinates, Math.max(0.1, (route.distance || 0) / 1e3)), candidate = scoreAdventureCandidateFast(route, plan.target, minKm, Math.max(effectiveMax, maxKm * 1.35), minimumReturn, { waypointEfficient: required.length > 0 }, quick);
       if (!candidate?.route) continue;
-      route._requestPoints = plan.points;
+      route._requestPoints = route._requestPoints || plan.points;
       route.adventureProfile = plan.profile;
       route.adventureCompromise = "Unfiltered extra";
       route.qualityLabel = "Extra route \xB7 quality filters relaxed";
@@ -5133,7 +5670,7 @@ async function adventureWaypointRoutes({ token, start: start2, required, minKm, 
   });
   if (!append && candidates.length < 3) {
     showRouteLoading("Shortest route ready \xB7 finding distinct returns\u2026", true);
-    const variations = buildWaypointVariationPlans(start2, required, baselineKm), results = await Promise.all(variations.map((plan) => fastDirections(plan.points, 6500, false).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
+    const variations = buildWaypointVariationPlans(start2, required, baselineKm), results = await Promise.all(variations.map((plan) => fetchLoopRoutes(plan, 6500, required).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
     if (token !== adventureBuildToken) return;
     for (const { plan, routes: routes3 } of results) {
       for (const route of collectWaypointCandidates(routes3, plan.points, start2, required, minKm, maxKm, effectiveMax, minimumReturn, plan.label)) {
@@ -5145,7 +5682,7 @@ async function adventureWaypointRoutes({ token, start: start2, required, minKm, 
     }
   }
   if (append) {
-    const variations = buildWaypointVariationPlans(start2, required, baselineKm, S.routes.length), results = await Promise.all(variations.map((plan) => fastDirections(plan.points, 6200, false).catch(() => [])));
+    const variations = buildWaypointVariationPlans(start2, required, baselineKm, S.routes.length), results = await Promise.all(variations.map((plan) => fetchLoopRoutes(plan, 6200, required).catch(() => [])));
     for (let i = 0; i < results.length; i++) for (const route of collectWaypointCandidates(results[i], variations[i].points, start2, required, minKm, maxKm, effectiveMax, minimumReturn, variations[i].label)) {
       route.waypointBaselineKm = baselineKm;
       route.waypointExcessKm = Math.max(0, (route.distance || 0) / 1e3 - baselineKm);
@@ -5227,20 +5764,29 @@ async function adventureRoutes(append = false) {
   routeStep("connect");
   const plans = profiles.map((profile, i) => buildCorridorLoopPlan(start2, required, destinations, minKm, maxKm, profile, i + S.routes.length));
   showRouteLoading(append ? "Connecting one full route\u2026" : "Connecting 3 destination-led loops\u2026", false);
-  const results = await Promise.all(plans.map((plan) => fastDirections(plan.points, 6500, false).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
+  const results = await Promise.all(plans.map((plan) => fetchLoopRoutes(plan, 6500, required).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
   if (token !== adventureBuildToken) {
     hideRouteLoading();
     return;
   }
   let candidates = rankDistinctAdventureCandidates(results, start2, required, minKm, maxKm, effectiveMax, minimumReturn);
-  if (!append && candidates.length < 3) {
-    showRouteLoading(`${candidates.length || "No"} distinct routes ready \xB7 searching different directions\u2026`, true);
-    const retryPlans = [...profiles.map((profile, i) => buildCorridorLoopPlan(start2, required, destinations, minKm, maxKm, profile, i + profiles.length + S.routes.length, true)), ...buildNarrowCorridorPlans(start2, required, minKm, maxKm, S.routes.length)], retryResults = await Promise.all(retryPlans.map((plan) => fastDirections(plan.points, 6500, false).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
+  if (!append && cleanLoopCount(candidates) < 3) {
+    showRouteLoading(`${cleanLoopCount(candidates) || "No"} clean loop${cleanLoopCount(candidates) === 1 ? "" : "s"} yet \xB7 searching different directions\u2026`, true);
+    const retryPlans = [...profiles.map((profile, i) => buildCorridorLoopPlan(start2, required, destinations, minKm, maxKm, profile, i + profiles.length + S.routes.length, true)), ...buildNarrowCorridorPlans(start2, required, minKm, maxKm, S.routes.length)], retryResults = await Promise.all(retryPlans.map((plan) => fetchLoopRoutes(plan, 6500, required).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
     candidates = mergeDistinctAdventureCandidates(candidates, rankDistinctAdventureCandidates(retryResults, start2, required, minKm, maxKm, effectiveMax, minimumReturn));
   }
   if (token !== adventureBuildToken) {
     hideRouteLoading();
     return;
+  }
+  if (!append && cleanLoopCount(candidates) < 3 && !required.length) {
+    showRouteLoading(`${cleanLoopCount(candidates)} clean loop${cleanLoopCount(candidates) === 1 ? "" : "s"} \xB7 trying rounder loops\u2026`, true);
+    const roundResults = await Promise.all(buildRoundLoopPlans(start2, minKm, maxKm, S.routes.length + 1).map((plan) => fetchLoopRoutes(plan, 6500, required).then((routes3) => ({ plan, routes: routes3 })).catch(() => ({ plan, routes: [] }))));
+    if (token !== adventureBuildToken) {
+      hideRouteLoading();
+      return;
+    }
+    candidates = mergeDistinctAdventureCandidates(candidates, rankDistinctAdventureCandidates(roundResults, start2, required, minKm, maxKm, effectiveMax, minimumReturn));
   }
   if (!append && candidates.length < 3) {
     showRouteLoading(`${candidates.length} route${candidates.length === 1 ? "" : "s"} \xB7 filling remaining options\u2026`, true);
@@ -5265,6 +5811,7 @@ async function adventureRoutes(append = false) {
     toast(append ? "Mapbox could not return any closed cycling route" : "No safe closed route found. Try a wider range.");
     return;
   }
+  candidates = preferCleanLoops(candidates);
   const routes2 = append ? [...S.routes, candidates[0]] : candidates.slice(0, 3);
   setCachedAdventureRoutes(cacheKey2, routes2);
   publishAdventureRoutes(routes2, false);
@@ -5334,6 +5881,20 @@ function buildCorridorLoopPlan(start2, required, destinations, minKm, maxKm, pro
   }
   return { profile, target, points: [start2, ...ring, start2], places: chosen };
 }
+function buildRoundLoopPlans(start2, minKm, maxKm, seed = 0) {
+  const plans = [], count = 6, anchors = 5;
+  for (let k = 0; k < count; k++) {
+    const target = minKm + (maxKm - minKm) * (0.32 + 0.18 * (k % 3));
+    const radius = Math.max(0.8, target / (2 * Math.PI * 1.3));
+    const heading = (seed * 47 + k * (360 / count) + 17) % 360;
+    const centre = turf.destination(start2, radius, heading).geometry.coordinates;
+    const home = (heading + 180) % 360;
+    const ring = [];
+    for (let a = 1; a <= anchors; a++) ring.push(turf.destination(centre, radius, home + a * (360 / (anchors + 1))).geometry.coordinates);
+    plans.push({ profile: ["balanced", "scenic", "established"][k % 3], target, points: [start2, ...ring, start2], places: [] });
+  }
+  return plans;
+}
 function buildNarrowCorridorPlans(start2, required, minKm, maxKm, seed = 0) {
   return [0, 90, 180, 270].map((bearing, i) => {
     const target = minKm + (maxKm - minKm) * (0.34 + i * 0.14), outward = Math.max(2, target * 0.2), side = Math.max(0.7, Math.min(2.8, target * 0.038)), far = turf.destination(start2, outward, bearing + seed * 31).geometry.coordinates, left = turf.destination(far, side, bearing - 90).geometry.coordinates, right = turf.destination(far, side, bearing + 90).geometry.coordinates, nearLeft = turf.destination(start2, side, bearing - 90).geometry.coordinates, nearRight = turf.destination(start2, side, bearing + 90).geometry.coordinates;
@@ -5355,17 +5916,20 @@ function relaxedAvailabilityAcceptance(route, start2, requiredCount = 0) {
   return { ...q, retrace: Math.min(q.retrace, corridor.retrace), parallelDistinctKm: corridor.parallelKm, narrowLoop: corridor.narrow, valid };
 }
 async function collectAvailabilityFallbacks(plans, start2, required, minKm, maxKm, effectiveMax, minimumReturn, existing, token) {
-  const results = await Promise.all(plans.map((plan) => fastDirections(plan.points, 6200, false).then((routes2) => ({ plan, routes: routes2 })).catch(() => ({ plan, routes: [] })))), out = [];
-  if (token !== adventureBuildToken) return out;
+  const results = await Promise.all(plans.map((plan) => fetchLoopRoutes(plan, 6200, required).then((routes2) => ({ plan, routes: routes2 })).catch(() => ({ plan, routes: [] })))), out = [];
+  if (token !== adventureBuildToken)
+    out.sort((a, b) => (a.backtrack?.longestDetourM || 0) - (b.backtrack?.longestDetourM || 0) || (a.backtrack?.sharedRatio || 0) - (b.backtrack?.sharedRatio || 0));
+  return out;
   for (const { plan, routes: routes2 } of results) {
     for (const raw of routes2.slice(0, 2)) {
       const quick = relaxedAvailabilityAcceptance(raw, start2, required.length);
       if (!quick.valid) continue;
       const route = closeAdventureGeometry(raw, start2), candidate = scoreAdventureCandidateFast(route, plan.target, minKm, effectiveMax, minimumReturn, { waypointEfficient: required.length > 0 }, quick);
       if (!candidate?.route) continue;
-      route._requestPoints = plan.points;
+      route._requestPoints = route._requestPoints || plan.points;
       route.adventureProfile = plan.profile;
       route.adventureCompromise = "Best available";
+      route.backtrack = route.backtrack || measureRetrace(route.geometry?.coordinates);
       route.qualityLabel = `${route.narrowLoop ? "Corridor loop \xB7 " : ""}Best available \xB7 ${adventureProfileTitle(plan.profile)}`;
       route.rangeStatus = (route.distance || 0) / 1e3 <= maxKm ? "Within selected range" : `${Math.max(0, (route.distance || 0) / 1e3 - maxKm).toFixed(1)} km over maximum`;
       if (![...existing, ...out].some((current2) => routeOverlapRatio(current2, route) > 0.78)) out.push(route);
@@ -5379,9 +5943,11 @@ function rankDistinctAdventureCandidates(results, start2, required, minKm, maxKm
     for (const route of collectAdventureCandidatesQuick(plan, routes2, start2, required, minKm, maxKm, effectiveMax, minimumReturn)) {
       route.adventurePlaces = plan.places;
       route.adventureProfile = plan.profile;
+      if (route.backtrack) route.retrace = route.backtrack.ratio;
       route.qualityLabel = `${route.narrowLoop ? "Corridor loop \xB7 " : ""}${adventureProfileTitle(plan.profile)} route${plan.places.length ? ` \xB7 ${plan.places.slice(0, 2).map((p) => p.name).join(" + ")}` : ""}`;
       route.routeInterestScore = plan.places.reduce((n, p) => n + p.score, 0);
-      if (!hasAnonymousSpur(route, plan.places, required) && !out.some((existing) => routeOverlapRatio(existing, route) > 0.55)) out.push(route);
+      route.anonymousSpur = hasAnonymousSpur(route, plan.places, required);
+      if (!out.some((existing) => routeOverlapRatio(existing, route) > 0.55)) out.push(route);
     }
   }
   return out.sort((a, b) => (b.routeInterestScore || 0) - (a.routeInterestScore || 0) || (a.retrace || 0) - (b.retrace || 0) || compareAdventureCandidates(a, b, minKm, maxKm));
@@ -5411,7 +5977,10 @@ function routesAreDistinctStrict(routes2) {
 }
 function hasAnonymousSpur(route, places, required) {
   if (required.length || !route?.geometry?.coordinates?.length) return false;
-  const coords = route.geometry.coordinates, line2 = turf.lineString(coords), length = turf.length(line2), placesNear = places.some((place) => (turf.nearestPointOnLine(line2, turf.point(place.coord)).properties.dist || Infinity) < 0.3);
+  const coords = route.geometry.coordinates, line2 = turf.lineString(coords), length = turf.length(line2), placesNear = places.some((place) => {
+    const d = turf.nearestPointOnLine(line2, turf.point(place.coord)).properties.dist;
+    return Number.isFinite(d) && d < 0.3;
+  });
   return (route.deadEndKm || 0) > 0.45 && !placesNear;
 }
 function adventureProfileTitle(profile) {
@@ -5424,7 +5993,7 @@ function collectAdventureCandidatesQuick(plan, routes2, start2, required, minKm,
     if (!quick.valid) continue;
     const route = closeAdventureGeometry(raw, start2), candidate = scoreAdventureCandidateFast(route, plan.target, minKm, effectiveMax, minimumReturn, { waypointEfficient: required.length > 0 }, quick);
     if (!candidate?.route) continue;
-    route._requestPoints = plan.points;
+    route._requestPoints = route._requestPoints || plan.points;
     route.adventureProfile = plan.profile;
     route.qualityLabel = `${plan.profile[0].toUpperCase() + plan.profile.slice(1)} loop`;
     route.rangeStatus = (route.distance || 0) / 1e3 > maxKm ? `${((route.distance || 0) / 1e3 - maxKm).toFixed(1)} km over maximum` : "Within selected range";
@@ -5535,7 +6104,12 @@ function publishAdventureRoutes(routes2, append = false) {
     refineCycleScoreWithOverpass(r);
   });
   S.routes = append ? [...S.routes, ...routes2] : routes2;
-  S.routes = append ? S.routes : S.routes.sort((a, b) => (b.loopQuality || 0) - (a.loopQuality || 0));
+  S.routes = append ? S.routes : S.routes.sort((a, b) => {
+    const ca = isCleanLoop(loopMeasure(a)), cb = isCleanLoop(loopMeasure(b));
+    if (ca !== cb) return cb ? 1 : -1;
+    if (!ca) return a.backtrack.longestDetourM - b.backtrack.longestDetourM || (b.loopQuality || 0) - (a.loopQuality || 0);
+    return (b.loopQuality || 0) - (a.loopQuality || 0);
+  });
   S.routes.forEach((r, i) => r.name = `Adventure ${i + 1}`);
   S.selected = null;
   S.route = null;
@@ -5554,12 +6128,22 @@ async function enrichAdventureCards(routes2, token) {
     await new Promise((resolve) => setTimeout(resolve, 60));
   }
 }
+var quickQualityMemo = /* @__PURE__ */ new WeakMap();
 function quickAdventureQuality(coords, targetKm) {
+  if (coords && typeof coords === "object") {
+    const hit = quickQualityMemo.get(coords);
+    if (hit && hit.targetKm === targetKm) return hit.result;
+  }
+  const result = quickAdventureQualityCompute(coords, targetKm);
+  if (coords && typeof coords === "object") quickQualityMemo.set(coords, { targetKm, result });
+  return result;
+}
+function quickAdventureQualityCompute(coords, targetKm) {
   if (!coords?.length) return { closed: false, retrace: 1, overlapKm: Infinity, compactness: 0, deadEndKm: Infinity, score: -999 };
-  const line2 = turf.lineString(coords), length = turf.length(line2), closed = turf.distance(coords[0], coords.at(-1)) < 0.15, bbox = turf.bbox(line2), diag = turf.distance([bbox[0], bbox[1]], [bbox[2], bbox[3]]), compactness = Math.min(1, diag / Math.max(1, length) * 2.2), step2 = Math.max(0.18, length / 180), seen = /* @__PURE__ */ new Map();
+  const line2 = turf.lineString(coords), walk = makeLineWalker(coords), length = walk.total, closed = turf.distance(coords[0], coords.at(-1)) < 0.15, bbox = turf.bbox(line2), diag = turf.distance([bbox[0], bbox[1]], [bbox[2], bbox[3]]), compactness = Math.min(1, diag / Math.max(1, length) * 2.2), step2 = Math.max(0.18, length / 180), seen = /* @__PURE__ */ new Map();
   let repeated = 0, maxRun = 0, run = 0, index = 0;
   for (let d = 0; d <= length; d += step2, index++) {
-    const p = turf.along(line2, d).geometry.coordinates, key = `${Math.round(p[0] * 900)},${Math.round(p[1] * 900)}`, previous = seen.get(key);
+    const p = walk.at(d), key = `${Math.round(p[0] * 900)},${Math.round(p[1] * 900)}`, previous = seen.get(key);
     if (previous !== void 0 && index - previous > 3) {
       repeated += step2;
       run += step2;
@@ -5626,26 +6210,51 @@ async function accept(rs, append) {
   updateQuickNav();
   if (!S.routeDetailOpen) refreshPage();
 }
+async function loadRouteElevation(r) {
+  const coords = r?.geometry?.coordinates;
+  if (!Array.isArray(coords) || coords.length < 2) return false;
+  try {
+    const { elev, source } = await fetchElevations(elevationSamplePoints(coords, turf), { token: MAPBOX_TOKEN });
+    r.elev = elev;
+    r.ascent = gain(elev);
+    r.elevSource = source;
+    r.elevUnavailable = false;
+    r._elevFor = coords;
+    return true;
+  } catch (error) {
+    console.warn("Route elevation unavailable", error);
+    if (!(Array.isArray(r.elev) && r.elev.length >= 3)) {
+      r.elev = [];
+      r.ascent = null;
+      r.elevUnavailable = true;
+    }
+    return false;
+  }
+}
 async function enrich(r) {
   routeStep("enrich");
   prepareImmediateRouteMetrics(r);
-  const points = sample(r.geometry.coordinates, 24);
+  await loadRouteElevation(r);
   try {
-    const d = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${points.map((x) => x[1])}&longitude=${points.map((x) => x[0])}`).then((r2) => r2.json());
-    r.elev = d.elevation || [];
-    r.ascent = gain(r.elev);
-  } catch {
-    r.elev = [];
-    r.ascent = 0;
-  }
-  try {
-    const now = Date.now(), forecastPoints = points.slice(0, 12).map((p, i) => ({ lat: p[1], lon: p[0], time: new Date(now + (r.duration || 3600) * 1e3 * i / 11) })), weather2 = await fetchRouteForecast(forecastPoints);
-    r.wind = weather2.map((w, i) => {
-      const a = points[Math.min(i, points.length - 2)], b = points[Math.min(i + 1, points.length - 1)], routeBearing = turf.bearing(a, b), windTo = (w.bearing + 180) % 360, component = w.speed * 3.6 * Math.cos((windTo - routeBearing) * Math.PI / 180);
-      return Math.round(component * 10) / 10;
+    const now = Date.now(), line2 = turf.lineString(r.geometry.coordinates), total = turf.length(line2), N = 12, span = Math.max(0.05, total / 200);
+    const forecastPoints = Array.from({ length: N }, (_, i) => {
+      const f = N === 1 ? 0 : i / (N - 1), d = total * f;
+      const here = turf.along(line2, d).geometry.coordinates;
+      const back = turf.along(line2, Math.max(0, d - span)).geometry.coordinates;
+      const ahead = turf.along(line2, Math.min(total, d + span)).geometry.coordinates;
+      return { lat: here[1], lon: here[0], time: new Date(now + (r.duration || 3600) * 1e3 * f), heading: turf.bearing(back, ahead) };
     });
-    r.windSource = weather2[0]?.source || "live weather";
-  } catch {
+    const weather2 = await fetchRouteForecast(forecastPoints);
+    const components = forecastPoints.map((p, i) => {
+      const w = weather2[i];
+      if (!w || !Number.isFinite(w.speed) || !Number.isFinite(w.bearing)) return null;
+      const windTo = (w.bearing + 180) % 360;
+      return Math.round(w.speed * 3.6 * Math.cos((windTo - p.heading) * Math.PI / 180) * 10) / 10;
+    });
+    r.wind = components.every(Number.isFinite) ? components : [];
+    r.windSource = weather2.find(Boolean)?.source || "unavailable";
+  } catch (error) {
+    console.warn("Route wind unavailable", error);
     r.wind = [];
     r.windSource = "unavailable";
   }
@@ -5824,7 +6433,7 @@ function cards() {
     x.innerHTML = '<div class="empty">Routes will appear here.</div>';
     return;
   }
-  x.innerHTML = S.routes.map((r, i) => `<div class="card route ${S.selected === i ? "selected" : ""}" data-i="${i}" style="--route-color:${colors[i % colors.length]};border-left:7px solid ${colors[i % colors.length]}"><div class="row"><b>${i ? "Option " + (i + 1) : "Recommended"}</b><div class="card-icon-actions">${S.editingSavedId && i === S.selected ? `<button data-update-saved="${i}" title="Update saved route">\u2713</button>` : ""}<button data-save-route="${i}" title="Save route as a copy">\u25A3</button><button data-share-route="${i}" title="Share route">\u2197</button><button data-preview-route="${i}" title="Animate route preview">\u25B6</button></div></div><span class="pill ${r.recommended === false ? "route-compromise" : ""}">${r.qualityLabel ? `${r.qualityLabel} \xB7 ` : ""}${Number.isFinite(r.cycleScore) ? r.cycleScore : 0}% cycle-route cues${r.cycleScorePending ? " \xB7 refining\u2026" : ""}${r.rangeStatus ? ` \xB7 ${r.rangeStatus}` : ""}${r.waypointEfficient ? " \xB7 repeated access accepted to minimise distance" : Number.isFinite(r.retrace) ? ` \xB7 ${Math.round((1 - r.retrace) * 100)}% non-repeated` : ""}${Number.isFinite(r.surfaceUnpavedShare) && r.surfaceUnpavedShare > 0.05 ? ` \xB7 ${Math.round(r.surfaceUnpavedShare * 100)}% unpaved` : ""}</span><div class="stats"><div class="stat"><b>${fmt(r.distance / 1e3)}</b><small>km</small></div><div class="stat"><b>${Math.round(r.duration / 60)}</b><small>min</small></div><div class="stat"><b>${Number.isFinite(r.ascent) ? Math.round(r.ascent) : "\u2026"}</b><small>${Number.isFinite(r.ascent) ? "climb m" : "climb loading"}</small></div><div class="stat"><b>${Number.isFinite(r.osmCycleScore) ? r.osmCycleScore : Number.isFinite(r.cycleScore) ? r.cycleScore : 0}%</b><small>${Number.isFinite(r.osmCycleScore) ? "OSM cycle infra" : "cycle-route estimate"}</small></div></div><div class="profiles"><div><div class="label">Elevation (m)</div>${r.elev?.length ? `<canvas class="chart" data-e="${i}"></canvas>` : '<div class="profile-pending"><span class="mini-spinner"></span>Loading elevation</div>'}</div><div><div class="label">Tailwind + / headwind \u2212 (km/h)</div>${r.wind?.length ? `<canvas class="chart" data-w="${i}"></canvas>` : '<div class="profile-pending"><span class="mini-spinner"></span>Loading live wind</div>'}</div></div>${S.mode === "loop" ? `<button class="btn green card-navigate" data-nav-route="${i}">Navigate adventure route</button>` : ""}</div>`).join("");
+  x.innerHTML = S.routes.map((r, i) => `<div class="card route ${S.selected === i ? "selected" : ""}" data-i="${i}" style="--route-color:${colors[i % colors.length]};border-left:7px solid ${colors[i % colors.length]}"><div class="row"><b>${i ? "Option " + (i + 1) : "Recommended"}</b><div class="card-icon-actions">${S.editingSavedId && i === S.selected ? `<button data-update-saved="${i}" title="Update saved route">\u2713</button>` : ""}<button data-save-route="${i}" title="Save route as a copy">\u25A3</button><button data-share-route="${i}" title="Share route">\u2197</button><button data-preview-route="${i}" title="Animate route preview">\u25B6</button></div></div><span class="pill ${r.recommended === false ? "route-compromise" : ""}">${r.qualityLabel ? `${r.qualityLabel} \xB7 ` : ""}${Number.isFinite(r.cycleScore) ? r.cycleScore : 0}% cycle-route cues${r.cycleScorePending ? " \xB7 refining\u2026" : ""}${r.rangeStatus ? ` \xB7 ${r.rangeStatus}` : ""}${r.waypointEfficient ? " \xB7 repeated access accepted to minimise distance" : Number.isFinite(r.retrace) ? ` \xB7 ${Math.round((1 - r.retrace) * 100)}% non-repeated` : ""}${Number.isFinite(r.surfaceUnpavedShare) && r.surfaceUnpavedShare > 0.05 ? ` \xB7 ${Math.round(r.surfaceUnpavedShare * 100)}% unpaved` : ""}</span><div class="stats"><div class="stat"><b>${fmt(r.distance / 1e3)}</b><small>km</small></div><div class="stat"><b>${Math.round(r.duration / 60)}</b><small>min</small></div><div class="stat"><b>${Number.isFinite(r.ascent) ? Math.round(r.ascent) : r.elevUnavailable ? "\u2014" : "\u2026"}</b><small>${Number.isFinite(r.ascent) ? "climb m" : r.elevUnavailable ? "climb unknown" : "climb loading"}</small></div><div class="stat"><b>${Number.isFinite(r.osmCycleScore) ? r.osmCycleScore : Number.isFinite(r.cycleScore) ? r.cycleScore : 0}%</b><small>${Number.isFinite(r.osmCycleScore) ? "OSM cycle infra" : "cycle-route estimate"}</small></div></div><div class="profiles"><div><div class="label">Elevation (m)</div>${r.elev?.length ? `<canvas class="chart" data-e="${i}"></canvas>` : r.elevUnavailable ? '<div class="profile-pending">Elevation unavailable right now</div>' : '<div class="profile-pending"><span class="mini-spinner"></span>Loading elevation</div>'}</div><div><div class="label">Tailwind + / headwind \u2212 (km/h)</div>${r.wind?.length ? `<canvas class="chart" data-w="${i}"></canvas>` : r.windSource === "unavailable" ? '<div class="profile-pending">Wind forecast unavailable right now</div>' : '<div class="profile-pending"><span class="mini-spinner"></span>Loading live wind</div>'}</div></div>${S.mode === "loop" ? `<button class="btn green card-navigate" data-nav-route="${i}">Navigate adventure route</button>` : ""}</div>`).join("");
   x.onclick = (e) => {
     const updateSaved = e.target.closest("[data-update-saved]"), save = e.target.closest("[data-save-route]"), share = e.target.closest("[data-share-route]"), preview = e.target.closest("[data-preview-route]"), nav = e.target.closest("[data-nav-route]"), card = e.target.closest("[data-i]");
     if (updateSaved) {
@@ -5867,10 +6476,12 @@ function showAllRoutesOnMap() {
 }
 function requireAccount(action = "use this feature") {
   if (S.user) return true;
-  toast(`Sign in to ${action}`);
-  S.page = "profile";
-  document.body.classList.add("panel-open");
-  render7();
+  const box = createChoiceModal("Sign in required", `<p>You need an account to ${escapeHtml(action)}.</p><button id="accountGoSignIn">Sign in</button><button id="accountNotNow">Not now</button>`);
+  box.querySelector("#accountGoSignIn").onclick = () => {
+    box.remove();
+    open("profile");
+  };
+  box.querySelector("#accountNotNow").onclick = () => box.remove();
   return false;
 }
 function accountCacheKey(kind) {
@@ -5975,17 +6586,36 @@ async function previewRoute3D() {
     step2();
   }, 80);
 }
-async function saveRouteByIndex(i) {
+async function updateOpenSavedRoute(i = S.selected) {
+  if (!requireAccount("save routes")) return false;
+  const item = (S.accountRoutes || []).find((x) => x.id === S.openSavedId);
+  const route = S.routes[i];
+  if (!item || !route) return false;
+  await putAccountItem("routes", { ...item, route: structuredClone(route), waypoints: structuredClone(S.waypoints), names: structuredClone(S.names), mode: S.mode, updatedAt: Date.now() });
+  route.savedName = item.name;
+  S.routeDirty = false;
+  S.routeUndo = [];
+  updateUndoButton();
+  updateEditBanner();
+  toast(`Saved changes to ${item.name || "your route"}`);
+  return true;
+}
+async function saveRouteByIndex(i, { asCopy = false } = {}) {
   if (!requireAccount("save routes")) return;
   const route = S.routes[i];
   if (!route) return;
+  if (!asCopy && S.openSavedId && i === S.selected && (S.accountRoutes || []).some((x) => x.id === S.openSavedId)) return updateOpenSavedRoute(i);
   if (!Array.isArray(route.requiredNavigationWaypoints)) route.requiredNavigationWaypoints = navigationWaypointSequence();
-  const name = prompt("Route name", S.mode === "loop" ? `${S.names[0] || "Adventure"} loop` : `${S.names[0] || "Start"} to ${S.names.at(-1) || "Finish"}`);
+  const shortPlace = (n) => String(n || "").split(",")[0].trim();
+  const from = isPlaceholderName(S.names[0]) ? "" : shortPlace(S.names[0]), to = isPlaceholderName(S.names.at(-1)) ? "" : shortPlace(S.names.at(-1));
+  const suggested = S.mode === "loop" ? `${from || "My"} loop` : from && to ? `${from} to ${to}` : from || to || "My route";
+  const name = prompt(asCopy ? "Name for the copy" : "Route name", asCopy && route.savedName ? `${route.savedName} (copy)` : suggested);
   if (!name?.trim()) return false;
   const savedItem = { id: crypto.randomUUID(), name: name.trim(), route: structuredClone(route), names: structuredClone(S.names), waypoints: structuredClone(S.waypoints), mode: S.mode, createdAt: Date.now() };
   await putAccountItem("routes", savedItem);
   if (S.selected === i) {
-    S.editingSavedId = savedItem.id;
+    S.openSavedId = savedItem.id;
+    S.routeDirty = false;
     if (S.route) S.route.savedName = savedItem.name;
   }
   S.routeUndo = [];
@@ -6015,11 +6645,12 @@ async function saveEditedSavedRoute() {
   if (!S.editingSavedId || !S.route) return toast("Open a saved route first");
   const item = S.accountRoutes.find((x) => x.id === S.editingSavedId);
   if (!item) return toast("Saved route could not be found");
-  await putAccountItem("routes", { ...item, route: structuredClone(S.route), waypoints: structuredClone(S.waypoints), names: structuredClone(S.names), mode: S.mode });
-  toast("Saved route updated on your account");
+  await putAccountItem("routes", { ...item, route: structuredClone(S.route), waypoints: structuredClone(S.waypoints), names: structuredClone(S.names), mode: S.mode, updatedAt: Date.now() });
+  S.routeDirty = false;
 }
 function pushRouteUndo() {
   if (S.route && S.selected !== null) {
+    S.routeDirty = true;
     S.routeUndo.push({ route: structuredClone(S.route), index: S.selected });
     if (S.routeUndo.length > 10) S.routeUndo.shift();
     updateUndoButton();
@@ -6063,31 +6694,44 @@ function savedRouteMiniChart(values, color) {
   return `<svg class="saved-mini-chart" viewBox="0 0 100 38" preserveAspectRatio="none" aria-hidden="true"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.2" vector-effect="non-scaling-stroke"/></svg>`;
 }
 function updateEditBanner() {
-  const box = $("#edit-banner"), label = $("#edit-banner-text"), action = $("#edit-done");
+  const box = $("#edit-banner"), label = $("#edit-banner-text"), action = $("#edit-done"), copy = $("#edit-copy");
   if (!box || !label || !action) return;
   const editable = !!S.route && S.selected !== null && !S.navState;
-  const library = editable && !!S.editingSavedId;
-  const unsavedEdit = editable && !S.editingSavedId && S.routeUndo.length > 0;
-  box.hidden = !(library || unsavedEdit);
+  const item = (S.accountRoutes || []).find((x) => x.id === (S.editingSavedId || S.openSavedId));
+  const name = item?.name || S.route?.savedName || "route";
+  const editing = editable && !!S.editingSavedId;
+  const changedSaved = editable && !S.editingSavedId && !!S.openSavedId && !!S.routeDirty;
+  const changedNew = editable && !S.openSavedId && (S.routeDirty || S.routeUndo.length > 0);
+  box.hidden = !(editing || changedSaved || changedNew);
+  if (copy) copy.hidden = !changedSaved;
   if (box.hidden) return;
-  box.dataset.mode = library ? "library" : "unsaved";
-  if (library) {
-    label.textContent = `Editing "${S.route.savedName || "saved route"}" \xB7 changes save automatically`;
+  if (editing) {
+    box.dataset.mode = "library";
+    label.textContent = `Editing "${name}" \xB7 changes save automatically`;
     action.textContent = "Done";
+  } else if (changedSaved) {
+    box.dataset.mode = "changed";
+    label.textContent = `"${name}" changed`;
+    action.textContent = "Save changes";
   } else {
-    label.textContent = "Route edited \xB7 not saved yet";
+    box.dataset.mode = "unsaved";
+    label.textContent = "New route \xB7 not saved yet";
     action.textContent = "Save route";
   }
 }
-function loadSavedRoute(x, edit = true) {
+function loadSavedRoute(x, edit = false) {
   S.route = structuredClone(x.route);
   S.routes = [S.route];
   S.selected = 0;
   S.waypoints = structuredClone(x.waypoints || []);
   S.names = structuredClone(x.names || []);
   S.mode = x.mode || "point";
-  S.editingSavedId = x.id || null;
+  S.openSavedId = x.id || null;
+  S.editingSavedId = edit ? x.id || null : null;
+  S.routeDirty = false;
+  S.routeUndo = [];
   S.route.savedName = x.name || "Saved route";
+  markers2();
   clearLines();
   line("chosen", S.route.geometry, colors[0], 8);
   fitMapToCoords(S.route.geometry?.coordinates);
@@ -6098,9 +6742,14 @@ function loadSavedRoute(x, edit = true) {
   }
   cards();
   if (edit) nodes();
+  else {
+    S.nodes.forEach((m) => m.remove());
+    S.nodes = [];
+  }
+  updateUndoButton();
   updateQuickNav();
   updateEditBanner();
-  toast(edit ? "Drag the blue handles to reshape \xB7 changes save automatically" : "Saved route opened");
+  toast(edit ? `Editing ${x.name || "route"} \xB7 drag the route or its stops` : `${x.name || "Route"} ready to ride`);
 }
 function exportSelectedRouteGpx() {
   if (!S.route) return toast("Select a route first");
@@ -6720,14 +7369,102 @@ function stars() {
     S.poiMarkers.push(new mapboxgl.Marker({ element: e }).setLngLat(r.poi.center).setPopup(new mapboxgl.Popup().setHTML(`<b>\u2605 ${r.poi.name}</b><br>Considered for option ${i + 1}`)).addTo(map));
   });
 }
+function stopLetter(i) {
+  return String.fromCharCode(65 + i);
+}
 function markers2() {
   S.markers.forEach((m) => m.remove());
   S.markers = [];
-  S.waypoints.filter(Boolean).forEach((p) => S.markers.push(new mapboxgl.Marker().setLngLat(p).addTo(map)));
+  if (S.mode === "loop") return;
+  const n = (S.waypoints || []).length;
+  (S.waypoints || []).forEach((p, i) => {
+    if (!Array.isArray(p)) return;
+    const el = document.createElement("div");
+    el.className = "stop-pin " + (i === 0 ? "start" : i === n - 1 ? "finish" : "via");
+    el.textContent = stopLetter(i);
+    el.title = S.names?.[i] || "";
+    const marker = new mapboxgl.Marker({ element: el, draggable: true, anchor: "bottom" }).setLngLat(p).addTo(map);
+    marker.on("dragend", () => moveStop(i, marker.getLngLat().toArray()));
+    S.markers.push(marker);
+  });
+}
+async function moveStop(i, lngLat) {
+  if (!Array.isArray(S.waypoints) || i < 0 || i >= S.waypoints.length) return;
+  S.waypoints[i] = lngLat;
+  S.routeDirty = true;
+  S.names[i] = "Finding address\u2026";
+  refreshPage(true);
+  const name = await getRecognisableLocationName(lngLat);
+  if (S.waypoints[i] === lngLat) S.names[i] = name;
+  markers2();
+  refreshPage(true);
+  if (S.waypoints.length >= 2 && S.waypoints.every(Array.isArray)) await pointRoutes(false);
+}
+function bestStopInsertion(points, p) {
+  let best = Math.max(1, points.length - 1), bestExtra = Infinity;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    if (!Array.isArray(a) || !Array.isArray(b)) continue;
+    let extra;
+    try {
+      extra = turf.distance(a, p) + turf.distance(p, b) - turf.distance(a, b);
+    } catch {
+      continue;
+    }
+    if (extra < bestExtra) {
+      bestExtra = extra;
+      best = i;
+    }
+  }
+  return best;
+}
+async function addStopFromMap(lngLat) {
+  if (S.mode === "loop") {
+    const entry = { coord: lngLat, name: "Finding address\u2026" };
+    S.adventureWaypoints.push(entry);
+    refreshPage(true);
+    entry.name = await getRecognisableLocationName(lngLat);
+    refreshPage(true);
+    toast(`Stop added \xB7 ${entry.name}`);
+    return;
+  }
+  if (!Array.isArray(S.waypoints)) S.waypoints = [];
+  if (!Array.isArray(S.names)) S.names = [];
+  while (S.waypoints.length < 2) S.waypoints.push(null);
+  while (S.names.length < S.waypoints.length) S.names.push("");
+  const empty = S.waypoints.findIndex((p) => !Array.isArray(p));
+  let at;
+  if (empty >= 0) {
+    at = empty;
+    S.waypoints[at] = lngLat;
+    S.names[at] = "Finding address\u2026";
+  } else {
+    at = bestStopInsertion(S.waypoints, lngLat);
+    S.waypoints.splice(at, 0, lngLat);
+    S.names.splice(at, 0, "Finding address\u2026");
+  }
+  S.routeDirty = true;
+  markers2();
+  refreshPage(true);
+  const name = await getRecognisableLocationName(lngLat);
+  const idx = S.waypoints.indexOf(lngLat);
+  if (idx >= 0) S.names[idx] = name;
+  markers2();
+  refreshPage(true);
+  toast(`Stop ${stopLetter(Math.max(0, idx))} added \xB7 ${name}`);
+  if (S.waypoints.length >= 2 && S.waypoints.every(Array.isArray)) await pointRoutes(false);
+}
+if ("ResizeObserver" in window) {
+  const bar = document.querySelector("#quick-nav");
+  if (bar) new ResizeObserver(() => document.documentElement.style.setProperty("--ride-bar-h", Math.round(bar.getBoundingClientRect().height) + "px")).observe(bar);
 }
 function updateQuickNav() {
   const box = $("#quick-nav"), quickStart = $("#quick-start"), live = $("#ride-live");
   if (!box || !quickStart || !live) return;
+  if (!S.navState) {
+    const strip = $("#nav-elev");
+    if (strip) strip.hidden = true;
+  }
   if (!box.dataset.detail) {
     box.dataset.detail = "collapsed";
     document.body.dataset.rideDetail = "collapsed";
@@ -7124,7 +7861,17 @@ async function useSavedActivityRoute(a) {
   S.routes = [S.route];
   S.selected = 0;
   S.mode = "point";
-  S.names = [a.name || "Activity route", a.name || "Finish"];
+  S.waypoints = [coords[0], coords.at(-1)];
+  S.names = ["Finding address\u2026", "Finding address\u2026"];
+  const opened = S.route;
+  Promise.all([getRecognisableLocationName(coords[0]), getRecognisableLocationName(coords.at(-1))]).then(([x, y]) => {
+    if (S.route === opened) {
+      S.names = [x, y];
+      markers2();
+      refreshPage(true);
+    }
+  }).catch(() => {
+  });
   clearLines();
   line("chosen", S.route.geometry, "#f28b30", 8);
   open("explore");
@@ -7358,14 +8105,22 @@ function updateLiveDashboard() {
   if (bar) bar.hidden = !S.navState;
   updateQuickNav();
 }
+var ZONE_COLOURS = ["#657186", "#139b66", "#f28b30", "#d94d4d", "#8b0000"];
+var ZONE_NAMES = ["Recovery", "Endurance", "Tempo", "Threshold", "Max"];
+function paintZones(host, zoneIndex, caption) {
+  if (host.children.length !== 6) host.innerHTML = ZONE_COLOURS.map((c) => `<span style="background:${c}"></span>`).join("") + '<em class="zone-caption"></em>';
+  [...host.children].forEach((el, i) => {
+    if (i < 5) el.classList.toggle("on", i === zoneIndex);
+  });
+  host.lastElementChild.textContent = caption;
+  host.hidden = false;
+}
 function updateEffortZones(r, hr) {
   const host = $("#hr-zones");
   if (!host) return;
   const age = +localStorage.getItem("profileAge") || null, z = heartRateZone(hr, age);
   if (z) {
-    const colors2 = ["#657186", "#139b66", "#f28b30", "#d94d4d", "#8b0000"];
-    if (host.children.length !== 5) host.innerHTML = colors2.map((c) => `<span style="background:${c}"></span>`).join("");
-    [...host.children].forEach((el, i) => el.classList.toggle("on", i === z - 1));
+    paintZones(host, z - 1, `Heart rate \xB7 Zone ${z} ${ZONE_NAMES[z - 1]} \xB7 ${Math.round(hr)} bpm`);
     return;
   }
   updatePowerZones(r);
@@ -7373,9 +8128,13 @@ function updateEffortZones(r, hr) {
 function updatePowerZones(r) {
   const host = $("#hr-zones");
   if (!host) return;
-  const ftp = Math.max(80, (profileData().weight || 70) * 2.4), last = r?.samples?.at(-1)?.estimatedPower || 0, ratio = last / ftp, zone = ratio < 0.55 ? 0 : ratio < 0.75 ? 1 : ratio < 0.9 ? 2 : ratio < 1.05 ? 3 : 4, colors2 = ["#657186", "#139b66", "#f28b30", "#d94d4d", "#8b0000"];
-  if (host.children.length !== 5) host.innerHTML = colors2.map((c) => `<span style="background:${c}"></span>`).join("");
-  [...host.children].forEach((el, i) => el.classList.toggle("on", i === zone));
+  const last = r?.samples?.at(-1)?.estimatedPower || 0;
+  if (!(last > 5)) {
+    host.hidden = true;
+    return;
+  }
+  const ftp = Math.max(80, (profileData().weight || 70) * 2.4), ratio = last / ftp, zone = ratio < 0.55 ? 0 : ratio < 0.75 ? 1 : ratio < 0.9 ? 2 : ratio < 1.05 ? 3 : 4;
+  paintZones(host, zone, `Estimated effort \xB7 Zone ${zone + 1} ${ZONE_NAMES[zone]} \xB7 ~${Math.round(last)} W`);
 }
 function displaySpeed(r) {
   return r.paused ? r.avgSpeed : r.speed * 3.6;
@@ -7533,10 +8292,122 @@ function speakNavigationCues(nav, stepIndex, step2, remainingInStep, instruction
   }
   voiceGuidance(stepIndex, instruction, remainingInStep);
 }
+function routeElevationProfile(route) {
+  if (route._profileFor === route.elev) return route._profile;
+  const elev = (Array.isArray(route.elev) ? route.elev : []).filter(Number.isFinite);
+  const km = (route.distance || 0) / 1e3;
+  route._profileFor = route.elev;
+  route._profile = elev.length >= 3 && km > 0 ? { elev, km, step: km / (elev.length - 1) } : null;
+  return route._profile;
+}
+function nextClimbAhead(profile, atKm) {
+  const { elev, step: step2 } = profile, metresPerStep = step2 * 1e3;
+  for (let i = Math.max(0, Math.floor(atKm / step2)); i < elev.length - 1; i++) {
+    if ((elev[i + 1] - elev[i]) / metresPerStep * 100 < 3) continue;
+    let j = i + 1;
+    while (j < elev.length - 1 && (elev[j + 1] - elev[j]) / metresPerStep * 100 >= 1.5) j++;
+    const rise = elev[j] - elev[i], lengthKm = (j - i) * step2;
+    if (rise < 8) continue;
+    return { inKm: Math.max(0, i * step2 - atKm), rise: Math.round(rise), lengthKm, grade: Math.round(rise / (lengthKm * 1e3) * 1e3) / 10 };
+  }
+  return null;
+}
+function ensureNavElevation(route) {
+  if (!route || !S.navState || routeElevationProfile(route)) return;
+  const job = S.navElevationJob;
+  if (job?.route === route && (job.status === "loading" || Date.now() < job.retryAt)) return;
+  const attempt = job?.route === route ? job.attempt + 1 : 1, current2 = { route, status: "loading", attempt, retryAt: 0 };
+  S.navElevationJob = current2;
+  loadRouteElevation(route).then((loaded) => {
+    if (loaded) {
+      if (S.navElevationJob === current2) S.navElevationJob = null;
+    } else {
+      current2.status = "failed";
+      current2.retryAt = Date.now() + Math.min(3e5, 45e3 * attempt);
+    }
+    if (S.route === route && S.navState) drawNavElevation(route, S.navState.travelledM || 0);
+  });
+}
+function drawNavElevation(route, travelledM) {
+  const box = $("#nav-elev"), canvas = $("#nav-elev-canvas"), label = $("#nav-climb");
+  if (!box || !canvas) return;
+  if (!route || !S.navState) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const profile = routeElevationProfile(route);
+  if (!profile) {
+    ensureNavElevation(route);
+    const job = S.navElevationJob, failed = job?.route === route && job.status === "failed";
+    box.dataset.state = failed ? "failed" : "loading";
+    if (label) label.textContent = failed ? navigator.onLine === false ? "Elevation unavailable offline \xB7 retrying when back online" : "Elevation unavailable \xB7 retrying shortly" : "Loading elevation profile\u2026";
+    return;
+  }
+  box.dataset.state = "ready";
+  const w = Math.max(1, Math.round(box.clientWidth)), h = 40, dpr = Math.min(3, devicePixelRatio || 1);
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const { elev, km, step: step2 } = profile;
+  let lo = Math.min(...elev), hi = Math.max(...elev);
+  if (hi - lo < 30) {
+    const mid = (hi + lo) / 2;
+    lo = mid - 15;
+    hi = mid + 15;
+  }
+  const n = elev.length - 1, X = (i) => i / n * w, Y = (v) => h - 3 - (v - lo) / (hi - lo) * (h - 8);
+  const frac = Math.max(0, Math.min(1, travelledM / 1e3 / km));
+  const k = Math.max(1, Math.round(75 / (step2 * 1e3)));
+  for (let i = 0; i < n; i++) {
+    const a2 = Math.max(0, i - k + 1), b2 = Math.min(n, i + k), g = (elev[b2] - elev[a2]) / ((b2 - a2) * step2 * 1e3) * 100;
+    ctx.fillStyle = g >= 8 ? "#d94d4d" : g >= 4 ? "#f28b30" : "#139b66";
+    ctx.beginPath();
+    ctx.moveTo(X(i), h);
+    ctx.lineTo(X(i), Y(elev[i]));
+    ctx.lineTo(X(i + 1) + 0.6, Y(elev[i + 1]));
+    ctx.lineTo(X(i + 1) + 0.6, h);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const at = frac * n, a = Math.floor(at), b = Math.min(n, a + 1), here = elev[a] + (elev[b] - elev[a]) * (at - a), mx = Math.max(5, Math.min(w - 5, frac * w));
+  if (frac > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = "source-atop";
+    ctx.fillStyle = "rgba(255,255,255,.68)";
+    ctx.fillRect(0, 0, frac * w, h);
+    ctx.restore();
+  }
+  ctx.strokeStyle = "#132238";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(mx, 2);
+  ctx.lineTo(mx, h);
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.strokeStyle = "#176bdb";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(mx, Y(here), 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  const climb = nextClimbAhead(profile, travelledM / 1e3);
+  if (label) label.textContent = !climb ? "No climbs ahead" : climb.inKm < 0.05 ? `Climbing \xB7 ${climb.rise} m at ${climb.grade}%` : `Climb in ${formatDistance(climb.inKm * 1e3)} \xB7 ${climb.rise} m at ${climb.grade}%`;
+}
 function updateNavigationGuidance(pos) {
   const n = S.navState, r = S.route;
-  if (!n || !r || n.paused || !n.steps?.length) return;
-  const lineString = turf.lineString(r.geometry.coordinates), snap = turf.nearestPointOnLine(lineString, turf.point(pos), { units: "kilometers" }), travelled = (snap.properties.location || 0) * 1e3, remaining = Math.max(0, (r.distance || 0) - travelled), at = maneuverDistances(n);
+  if (!n || !r || n.paused || !Array.isArray(pos) || !(r.geometry?.coordinates?.length >= 2)) return;
+  const lineString = turf.lineString(r.geometry.coordinates), snap = turf.nearestPointOnLine(lineString, turf.point(pos), { units: "kilometers" }), travelled = (snap.properties.location || 0) * 1e3, remaining = Math.max(0, (r.distance || 0) - travelled);
+  n.travelledM = travelled;
+  drawNavElevation(r, travelled);
+  if (!n.steps?.length) return;
+  const at = maneuverDistances(n);
   let current2 = 0;
   while (current2 + 1 < n.steps.length && at[current2 + 1] <= travelled + 1) current2++;
   n.index = current2;
@@ -7657,7 +8528,8 @@ async function recalculateFrom(pos) {
     route.qualityLabel = previous?.qualityLabel;
     route.rangeStatus = previous?.rangeStatus;
     route.savedName = previous?.savedName;
-    S.route = { ...route, elev: previous?.elev || [], wind: previous?.wind || [], ascent: previous?.ascent };
+    S.route = { ...route, elev: [], wind: previous?.wind || [], ascent: null };
+    S.navElevationJob = null;
     S.routes[S.selected ?? 0] = S.route;
     S.selected = S.selected ?? 0;
     nav.steps = route.legs?.flatMap((leg) => leg.steps || []) || [];
@@ -7751,20 +8623,33 @@ function stopRecording() {
 function endNavigation() {
   finishRecord(true);
 }
+async function areaName(p) {
+  if (!Array.isArray(p)) return "";
+  try {
+    const d = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${p[0]},${p[1]}.json?types=neighborhood,locality,place&limit=1&access_token=${MAPBOX_TOKEN}`).then((x) => x.json());
+    return d.features?.[0]?.text || "";
+  } catch {
+    return "";
+  }
+}
+async function rideName(startPos, endPos, startedAt) {
+  const hour = new Date(startedAt || Date.now()).getHours();
+  const when = hour < 5 ? "Night" : hour < 11 ? "Morning" : hour < 14 ? "Lunch" : hour < 18 ? "Afternoon" : hour < 22 ? "Evening" : "Night";
+  if (!Array.isArray(startPos)) return `${when} ride`;
+  const loop = !Array.isArray(endPos) || turf.distance(startPos, endPos, { units: "kilometers" }) < 0.4;
+  const [from, to] = await Promise.all([areaName(startPos), loop ? Promise.resolve("") : areaName(endPos)]);
+  if (loop) return from ? `${when} loop from ${from}` : `${when} loop`;
+  if (from && to && from !== to) return `${from} to ${to}`;
+  if (from || to) return `${when} ride in ${from || to}`;
+  return `${when} ride`;
+}
 async function finishRecord(endNav = true) {
   const r = S.record;
   if (!r) return;
   if (S.watch !== null) navigator.geolocation.clearWatch(S.watch);
   S.watch = null;
   const startPos = r.samples?.[0]?.pos, endPos = r.samples?.at(-1)?.pos;
-  let defaultName = S.names.length ? `${S.names[0]} to ${S.names.at(-1)}` : "Cycling activity";
-  if ((!S.names.length || defaultName === "Cycling activity") && startPos && endPos) {
-    try {
-      const names = await Promise.all([startPos, endPos].map((p) => fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${p.join(",")}.json?limit=1&access_token=${MAPBOX_TOKEN}`).then((x) => x.json()).then((d) => d.features?.[0]?.text || "Start")));
-      defaultName = `${names[0]} to ${names[1]}`;
-    } catch {
-    }
-  }
+  const defaultName = await rideName(startPos, endPos, r.started || r.samples?.[0]?.time || Date.now());
   const metrics = activityMetrics(r);
   const plannedCoords = S.route?.geometry?.coordinates;
   S.pendingActivity = { ...r, ...metrics, id: crypto.randomUUID(), routeId: S.route?.savedId || S.editingSavedId || null, plannedRoute: Array.isArray(plannedCoords) && plannedCoords.length >= 2 ? sample(plannedCoords, Math.min(60, plannedCoords.length)) : null, name: defaultName, ended: Date.now(), elapsed: r.movingMs, avgSpeed: r.movingMs > 0 ? r.distance / (r.movingMs / 36e5) : 0, photos: [] };
@@ -8075,16 +8960,6 @@ function openGoogleMapsLocation(lngLat, threeD = false) {
   const win = window.open(threeD ? threeDUrl : standard, "_blank", "noopener,noreferrer");
   if (!win) toast("Allow pop-ups to open Google Maps");
 }
-async function describePlace(lngLat) {
-  try {
-    const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat.join(",")}.json?limit=1&access_token=${MAPBOX_TOKEN}`);
-    if (!r.ok) return null;
-    const d = await r.json(), f = d.features?.[0];
-    return f?.place_name || f?.text || null;
-  } catch {
-    return null;
-  }
-}
 function revealRouteInPlace() {
   if (MAP_PAGES.includes(S.page)) open("explore");
   else {
@@ -8097,7 +8972,7 @@ function showMapLocationMenu(lngLat) {
   document.querySelector(".map-location-menu")?.remove();
   const box = document.createElement("div");
   box.className = "map-location-menu";
-  box.innerHTML = '<button class="popup-close" aria-label="Close">\xD7</button><b>Use this location</b><button id="setDestination">Set as destination</button><button id="navigateHere">Navigate from my location</button><button id="addMapWaypoint">Add as waypoint</button><button id="googleMapView">View in Google Maps</button><button id="googleMap3d">View in Google Maps 3D</button><button id="copyMapCoordinates">Copy coordinates</button>';
+  box.innerHTML = '<button class="popup-close" aria-label="Close">\xD7</button><b>Use this location</b><button id="setDestination">Set as destination</button><button id="addMapWaypoint">Add as a stop</button><button id="navigateHere">Navigate from my location</button><button id="googleMapView">View in Google Maps</button><button id="googleMap3d">View in Google Maps 3D</button><button id="copyMapCoordinates">Copy coordinates</button>';
   box.querySelector(".popup-close").onclick = () => box.remove();
   $("#map-wrap").appendChild(box);
   const close = () => box.remove();
@@ -8110,44 +8985,48 @@ function showMapLocationMenu(lngLat) {
     }
     if (!Array.isArray(S.waypoints) || S.waypoints.length < 2) {
       S.waypoints = [start2, lngLat];
-      S.names = [S.names?.[0] || "Start", "Dropped pin"];
+      S.names = [S.names?.[0] || "", "Finding address\u2026"];
     } else {
       S.waypoints[0] = start2;
       S.waypoints[S.waypoints.length - 1] = lngLat;
-      S.names[S.waypoints.length - 1] = "Dropped pin";
+      S.names[S.waypoints.length - 1] = "Finding address\u2026";
     }
     close();
     markers2();
+    const naming = Promise.all([
+      isPlaceholderName(S.names[0]) ? getRecognisableLocationName(start2) : Promise.resolve(S.names[0]),
+      getRecognisableLocationName(lngLat)
+    ]);
+    refreshPage(true);
     await pointRoutes(false);
     revealRouteInPlace();
-    const label = await describePlace(lngLat);
-    if (label) {
-      S.names[S.waypoints.length - 1] = label;
-      refreshPage();
-    }
+    const [startName, finishName] = await naming;
+    if (S.waypoints[0] === start2) S.names[0] = startName;
+    if (S.waypoints[S.waypoints.length - 1] === lngLat) S.names[S.waypoints.length - 1] = finishName;
+    markers2();
+    refreshPage(true);
   };
   $("#navigateHere").onclick = async () => {
     const start2 = S.pos || await current();
     if (!start2) return;
+    close();
     S.mode = "point";
     S.waypoints = [start2, lngLat];
-    S.names = ["Current location", "Dropped pin"];
+    S.names = ["Finding address\u2026", "Finding address\u2026"];
+    const naming = Promise.all([getRecognisableLocationName(start2), getRecognisableLocationName(lngLat)]);
+    markers2();
+    refreshPage(true);
     await pointRoutes(false);
     revealRouteInPlace();
-    close();
+    const [a, b] = await naming;
+    if (S.waypoints[0] === start2) S.names[0] = a;
+    if (S.waypoints[1] === lngLat) S.names[1] = b;
+    markers2();
+    refreshPage(true);
   };
   $("#addMapWaypoint").onclick = () => {
-    if (S.mode === "loop") {
-      S.adventureWaypoints.push({ coord: lngLat, name: "Dropped pin" });
-      toast("Adventure waypoint added");
-    } else {
-      if (S.waypoints.length < 2) S.waypoints = [S.waypoints[0] || null, S.waypoints[1] || null];
-      S.waypoints.splice(Math.max(1, S.waypoints.length - 1), 0, lngLat);
-      S.names.splice(Math.max(1, S.names.length - 1), 0, "Dropped pin");
-      toast("Waypoint added");
-    }
-    markers2();
     close();
+    addStopFromMap(lngLat);
   };
   $("#googleMapView").onclick = () => {
     openGoogleMapsLocation(lngLat, false);
@@ -8566,12 +9445,13 @@ map.on("load", () => {
   loadJourneyFromUrl();
   setTimeout(promptSessionRecovery, 250);
 });
-map.on("dragstart", () => {
-  if (S.navState) S.manualExploreUntil = Date.now() + 15e3;
-});
-map.on("zoomstart", () => {
-  if (S.navState) S.manualExploreUntil = Date.now() + 15e3;
-});
+var pauseFollowForGesture = (e) => {
+  if (S.navState && e?.originalEvent) S.manualExploreUntil = Date.now() + 15e3;
+};
+map.on("dragstart", pauseFollowForGesture);
+map.on("zoomstart", pauseFollowForGesture);
+map.on("rotatestart", pauseFollowForGesture);
+map.on("pitchstart", pauseFollowForGesture);
 map.on("moveend", scheduleWindRefresh);
 map.on("zoomend", scheduleWindRefresh);
 addEventListener("resize", () => {
@@ -8612,6 +9492,12 @@ var APP = {
   adventureRoutes,
   scheduleAdventureRebuild,
   select,
+  addStopFromMap,
+  updateOpenSavedRoute,
+  moveStop,
+  stopLetter,
+  isPlaceholderName,
+  getRecognisableLocationName,
   showAllRoutesOnMap,
   drawAll,
   cards,

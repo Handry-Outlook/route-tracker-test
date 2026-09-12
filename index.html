@@ -57,6 +57,10 @@
             <div class="stat"><b id="nav-remaining-time">—</b><small>time</small></div>
           </div>
         </div>
+        <div class="elev-strip" id="nav-elev" hidden>
+          <canvas id="nav-elev-canvas" aria-hidden="true"></canvas>
+          <span id="nav-climb" class="elev-climb"></span>
+        </div>
         <button id="ride-expand" class="ride-expand" type="button"
           aria-expanded="false" aria-controls="ride-detail" aria-label="Show ride stats">
           <span></span>
@@ -89,6 +93,7 @@
 
     <div id="edit-banner" hidden>
       <span id="edit-banner-text">Editing route</span>
+      <button id="edit-copy" type="button" hidden>Save as copy</button>
       <button id="edit-done" type="button">Done</button>
     </div>
     <button id="route-undo" hidden>↶ Undo route edit</button>

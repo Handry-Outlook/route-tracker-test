@@ -67,10 +67,11 @@ export function routeThumb(coords, w = 64, h = 64, { radius = 12, bg = '#eef2f6'
  * green under 4%, orange to 8%, red above. `elev` is metres, `distanceKm`
  * scales the gradient calculation.
  */
-export function elevationChart(elev, w = 358, h = 92, { distanceKm = 0, dark = false } = {}) {
+export function elevationChart(elev, w = 358, h = 92, { distanceKm = 0, dark = false, pending = false } = {}) {
   const vals = (elev || []).filter(Number.isFinite);
   if (vals.length < 2) {
-    return `<div style="height:${h}px;display:grid;place-items:center;border-radius:12px;background:var(--surface-muted);color:var(--muted);font-size:11px;font-weight:600">Elevation unavailable</div>`;
+    // "Unavailable" only once it has actually failed; before that it is on its way.
+    return `<div style="height:${h}px;display:grid;place-items:center;border-radius:12px;background:var(--surface-muted);color:var(--muted);font-size:11px;font-weight:600">${pending ? 'Loading elevation…' : 'Elevation unavailable right now'}</div>`;
   }
   const id = nextId('ev');
   const lo = Math.min(...vals), hi = Math.max(...vals);

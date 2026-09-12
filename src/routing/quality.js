@@ -152,9 +152,11 @@ export function whyThisRoute(route, others) {
   const infra = Number.isFinite(route.osmCycleScore) ? route.osmCycleScore : route.cycleScore;
   const km = (route.distance || 0) / 1000;
 
-  if (Number.isFinite(infra) && rest.length) {
-    const best = Math.max(...rest.map((r) => (Number.isFinite(r.osmCycleScore) ? r.osmCycleScore : r.cycleScore) ?? 0));
-    if (infra >= best) bits.push(`most cycle infrastructure (${infra}%)`);
+  // "Most" only when it is genuinely more. With nothing scored yet every route
+  // read 0%, and 0 >= 0 made each card claim to have the most infrastructure.
+  if (Number.isFinite(infra) && infra > 0 && !route.cycleScorePending && rest.length) {
+    const others = rest.map((r) => (Number.isFinite(r.osmCycleScore) ? r.osmCycleScore : r.cycleScore)).filter(Number.isFinite);
+    if (others.length === rest.length && infra > Math.max(...others)) bits.push(`most cycle infrastructure (${infra}%)`);
   }
   if (Number.isFinite(route.ascent) && rest.length) {
     const climbs = rest.map((r) => r.ascent).filter(Number.isFinite);
@@ -174,7 +176,24 @@ export function whyThisRoute(route, others) {
       else if (shortest - km > 3) bits.push(`${(shortest - km).toFixed(1)} km shorter`);
     }
   }
-  if (Number.isFinite(route.retrace) && route.retrace < 0.08) bits.push('almost no repeated road');
+  // Claimed only when measured. The old figure came from a coarse grid that
+  // missed short U-turns, so cards said "almost no repeated road" over loops
+  // that rode kilometres back the way they came.
+  const bt = route.backtrack;
+  const len = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+  if (bt && bt.longestDetourM > 100) {
+    // A turn-round detour is said plainly, and first, so it is not buried under
+    // the reasons to pick the loop.
+    bits.unshift(`turns back on itself for ${len(bt.longestDetourM)}`);
+  } else if (bt && bt.longestBacktrackM === 0 && bt.overlapM === 0) {
+    bits.push('no road ridden twice');
+  } else if (bt && bt.sharedBacktrackM >= 500) {
+    // Shared road is often unavoidable — a single bridge, one way out of town —
+    // but a rider should know it is there rather than read "no repeated road".
+    bits.push(`${len(bt.sharedBacktrackM)} on road ridden earlier`);
+  } else if (bt) {
+    bits.push('almost no repeated road');
+  }
   if (route.prefNotes?.length) bits.push(...route.prefNotes);
 
   if (!bits.length) return null;

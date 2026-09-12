@@ -76,7 +76,7 @@ export async function render() {
 
     <section>
       <div class="between" style="margin-bottom:6px"><span class="section-title">Elevation</span>${gradientLegend()}</div>
-      ${elevationChart(route.elev, 340, 92, { distanceKm: km })}
+      ${elevationChart(route.elev, 340, 92, { distanceKm: km, pending: !route.elev?.length && !route.elevUnavailable })}
     </section>
 
     ${hasWind ? `<section><div class="between" style="margin-bottom:6px"><span class="section-title">Wind along the route</span><span class="muted" style="font-size:11px;font-weight:700">tailwind + / headwind −</span></div><canvas id="routeWindChart" class="chart"></canvas></section>` : ''}

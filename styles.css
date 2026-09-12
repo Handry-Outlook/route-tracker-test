@@ -285,6 +285,80 @@ body.navigating #speed-limit.has-limit { display: inline-flex; }
 .map-location-menu p, .share-choice p { margin: 2px 0 4px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .map-location-menu button, .share-choice button { border: 0; border-radius: var(--radius-md); padding: 13px; background: var(--surface-muted); text-align: left; font-weight: 700; font-size: 14px; color: var(--text); }
 .map-location-menu button:nth-of-type(2), .share-choice button:nth-of-type(2) { background: var(--blue); color: #fff; }
+.iconbtn.danger { color: var(--red); }
+#edit-banner #edit-copy { background: transparent; border: 1px solid #ffffff55; }
+#edit-banner #edit-copy[hidden] { display: none; }
+
+/* ---- Elevation strip on the ride bar --------------------------------------
+   Small on purpose: 40 px of profile and one line of text. */
+.elev-strip {
+  background: var(--surface); border-radius: 14px; padding: 6px 10px 7px;
+  box-shadow: var(--shadow-soft); display: grid; gap: 3px;
+}
+.elev-strip[hidden] { display: none; }
+.elev-strip canvas { display: block; width: 100%; height: 40px; }
+/* Until the profile exists the strip is one line of text, not an empty box. */
+.elev-strip:not([data-state="ready"]) canvas { display: none; }
+.elev-strip[data-state="failed"] .elev-climb { color: var(--muted); }
+.elev-climb { font-size: 11px; font-weight: 800; color: var(--text); letter-spacing: .01em; }
+
+/* Effort zones: the caption is what makes the colours mean something. */
+.hr-zones { position: relative; row-gap: 6px; }
+.hr-zones[hidden] { display: none; }
+.hr-zones .zone-caption {
+  grid-column: 1 / -1; font-style: normal; font-size: 11px; font-weight: 700; color: #d8e5f0;
+}
+
+/* ---- Planner stop list ---------------------------------------------------
+   One row per stop. The letter matches the pin on the map. */
+.stops { display: flex; flex-direction: column; }
+.stop-row {
+  display: grid; grid-template-columns: 28px 28px 1fr 40px; align-items: center; gap: 6px;
+  padding: 5px 0; position: relative;
+}
+.stop-row + .stop-row::before {
+  /* The thread joining consecutive stops, through the badge column. */
+  content: ''; position: absolute; left: 47px; top: -10px; height: 20px; width: 2px;
+  background: var(--line); z-index: 0;
+}
+.stop-row.dragging { opacity: .45; }
+.stop-row.drop-above { box-shadow: 0 -2px 0 var(--blue); }
+.stop-grip {
+  width: 28px; height: 40px; border: 0; background: transparent; color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center; cursor: grab; touch-action: none;
+}
+.stop-grip:disabled { opacity: .25; cursor: default; }
+.stop-badge {
+  position: relative; z-index: 1; width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 12px; font-weight: 800; background: var(--navy);
+}
+.stop-badge.start { background: var(--accent); }
+.stop-badge.finish { background: var(--blue); }
+.stop-field { min-width: 0; }
+.stop-field .mapboxgl-ctrl-geocoder { width: 100% !important; max-width: none !important; min-width: 0 !important; }
+.stop-action { width: 40px; height: 40px; }
+.stops-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.stops-foot .muted { font-size: 12px; font-weight: 600; }
+
+/* Stop pins on the map: same letters and colours as the planner rows.
+   No transform on the element itself — Mapbox positions markers with an inline
+   transform, which would silently override a rotation set here. */
+.stop-pin {
+  --pin: var(--navy);
+  position: relative; width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--pin); border: 2px solid #fff; box-shadow: 0 2px 8px #10233d66;
+  color: #fff; font-size: 12px; font-weight: 800; line-height: 1; cursor: grab;
+  margin-bottom: 6px;
+}
+.stop-pin::after {
+  content: ''; position: absolute; left: 50%; top: 100%; margin-left: -6px; margin-top: 1px;
+  border: 6px solid transparent; border-top-color: var(--pin);
+}
+.stop-pin.start { --pin: var(--accent); }
+.stop-pin.finish { --pin: var(--blue); }
+
 /* ---- Saved-route picker (club rides) ----------------------------------
    Cards rather than a dropdown: the shape and the length are what tell you
    which route this is, and tapping one draws it on the map. */
@@ -609,11 +683,13 @@ body.navigating #speed-limit.has-limit { display: inline-flex; }
   body.navigating #quick-nav { bottom: 10px; max-height: 64%; }
   /* --sheet-height is stale while the sheet is hidden, so anchor the map tools
      to the ride bar instead, and get them out of the way when it opens. */
-  body.navigating .tools { bottom: min(160px, calc(100% - 210px)); }
+  /* --ride-bar-h is measured from the bar itself (see updateQuickNav), so the
+     tools clear it whether it holds the elevation strip, a banner or neither. */
+  body.navigating .tools { bottom: min(calc(var(--ride-bar-h, 150px) + 20px), calc(100% - 210px)); }
   body.navigating[data-ride-detail="open"] .tools { display: none; }
 
   body.navigating .tools {
-    max-height: calc(100% - 190px); flex-wrap: wrap-reverse;
+    max-height: calc(100% - var(--ride-bar-h, 150px) - 120px); flex-wrap: wrap-reverse;
     align-content: flex-end; gap: 8px;
   }
 
@@ -731,7 +807,14 @@ body.route-detail #quick-nav { display: none !important; }
     box-shadow: none; padding: 20px 22px;
   }
   .tools { right: 20px; bottom: 20px; }
-  #quick-nav { left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 80px)); }
+  /* Centred while the map has room, otherwise kept clear of the tool column
+     (20px inset + 47px buttons + 16px gap). Centring alone slid the ride bar
+     over the locate, share and weather buttons whenever the docked panel left
+     the map narrow — a laptop window at 850px, for one. */
+  #quick-nav {
+    left: max(16px, min(calc(50% - 280px), calc(100% - 643px)));
+    width: min(560px, calc(100% - 99px));
+  }
   #nav-guidance { left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 80px)); }
   #toast { bottom: 28px; }
 }
